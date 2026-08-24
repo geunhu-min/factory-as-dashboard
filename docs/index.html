@@ -1124,41 +1124,85 @@
         claimDashboardFrame: document.getElementById("claimDashboardFrame")
       };
 
-      // 브라우저 localStorage가 아니라 이 서버(factory-as-sample/server.js)의
-      // /api/config에 저장합니다 — 같은 서버에 접속하면 어떤 브라우저에서든
-      // 한 번 저장한 주소가 그대로 보입니다.
-      async function loadConfig() {
+      // 기본은 이 서버(factory-as-sample/server.js)의 /api/config에
+      // 저장합니다 — 같은 서버에 접속하면 어떤 브라우저에서든 한 번
+      // 저장한 주소가 그대로 보입니다. server.js가 없는 정적 호스팅(예:
+      // GitHub Pages)에서는 /api/config 요청이 실패하므로, 그때는 이
+      // 브라우저의 localStorage에 대신 저장합니다(그 경우엔 이 브라우저
+      // 에서만 보이고, 서버처럼 다른 사람과 공유되지 않습니다).
+      const LOCAL_CONFIG_STORAGE_KEY = "factoryAsSampleConfig";
+
+      function readLocalStorageConfig_() {
         try {
-          const response = await fetch("/api/config");
-          const saved = await response.json();
-          el.webappUrl.value = saved.url || "";
-          el.monthlyWebappUrl.value = saved.monthlyUrl || "";
-          el.recoveryCsvUrl.value = saved.recoveryCsvUrl || "";
-          el.claimDashboardWebappUrl.value = saved.claimDashboardUrl || "";
-          el.claimClosingArchiveWebappUrl.value = saved.claimClosingArchiveUrl || "";
-          el.monthlyClosingWebappUrl.value = saved.monthlyClosingUrl || "";
-          el.dailyPackagingWebappUrl.value = saved.dailyPackagingUrl || "";
-          el.dailyReceiptWebappUrl.value = saved.dailyReceiptUrl || "";
-          el.dailyReceiptStatusWebappUrl.value = saved.dailyReceiptStatusUrl || "";
-          el.dailyRecoveryWebappUrl.value = saved.dailyRecoveryUrl || "";
-          el.dailyRecoveryAccumulateWebappUrl.value = saved.dailyRecoveryAccumulateUrl || "";
-          dailyPackagingLastDate = saved.dailyPackagingLastDate || "";
-        } catch (_) {}
+          return JSON.parse(localStorage.getItem(LOCAL_CONFIG_STORAGE_KEY) || "{}") || {};
+        } catch (_) {
+          return {};
+        }
       }
 
-      async function saveConfigField_(partial, label, statusEl) {
-        const target = statusEl || el.statusLine;
+      // server.js(로컬 서버)가 있는지 여부 — "/api/google-published-csv"
+      // CORS 우회 프록시처럼 서버가 있어야만 되는 기능이 이 값을 보고
+      // 정적 호스팅(GitHub Pages 등)에서는 다른 방법을 쓰도록 갈라탑니다.
+      let hasLocalConfigServer_ = false;
 
+      async function readConfig_() {
         try {
-          await fetch("/api/config", {
+          const response = await fetch("/api/config");
+          if (!response.ok) throw new Error("no config server");
+          hasLocalConfigServer_ = true;
+          return await response.json();
+        } catch (_) {
+          hasLocalConfigServer_ = false;
+          return readLocalStorageConfig_();
+        }
+      }
+
+      async function postConfigPartial_(partial) {
+        try {
+          const response = await fetch("/api/config", {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(partial)
           });
-          target.textContent = label + " 연결 정보를 저장했습니다.";
+          if (!response.ok) throw new Error("no config server");
+          return { ok: true, usedFallback: false };
+        } catch (_) {
+          try {
+            const merged = Object.assign({}, readLocalStorageConfig_(), partial);
+            localStorage.setItem(LOCAL_CONFIG_STORAGE_KEY, JSON.stringify(merged));
+            return { ok: true, usedFallback: true };
+          } catch (storageError) {
+            return { ok: false, usedFallback: true, error: storageError };
+          }
+        }
+      }
+
+      async function loadConfig() {
+        const saved = await readConfig_();
+        el.webappUrl.value = saved.url || "";
+        el.monthlyWebappUrl.value = saved.monthlyUrl || "";
+        el.recoveryCsvUrl.value = saved.recoveryCsvUrl || "";
+        el.claimDashboardWebappUrl.value = saved.claimDashboardUrl || "";
+        el.claimClosingArchiveWebappUrl.value = saved.claimClosingArchiveUrl || "";
+        el.monthlyClosingWebappUrl.value = saved.monthlyClosingUrl || "";
+        el.dailyPackagingWebappUrl.value = saved.dailyPackagingUrl || "";
+        el.dailyReceiptWebappUrl.value = saved.dailyReceiptUrl || "";
+        el.dailyReceiptStatusWebappUrl.value = saved.dailyReceiptStatusUrl || "";
+        el.dailyRecoveryWebappUrl.value = saved.dailyRecoveryUrl || "";
+        el.dailyRecoveryAccumulateWebappUrl.value = saved.dailyRecoveryAccumulateUrl || "";
+        dailyPackagingLastDate = saved.dailyPackagingLastDate || "";
+      }
+
+      async function saveConfigField_(partial, label, statusEl) {
+        const target = statusEl || el.statusLine;
+        const result = await postConfigPartial_(partial);
+
+        if (result.ok) {
+          target.textContent = label + " 연결 정보를 저장했습니다." +
+            (result.usedFallback ? " (이 브라우저에만 저장됨)" : "");
           target.className = "status-line ok";
-        } catch (error) {
-          target.textContent = label + " 연결 정보 저장 실패: " + error.message;
+        } else {
+          target.textContent = label + " 연결 정보 저장 실패";
           target.className = "status-line error";
         }
       }
@@ -2823,13 +2867,10 @@
         if (!dateValue) return;
 
         dailyPackagingLastDate = dateValue;
-        // 다음에 보여줄 안내문 기준일로 쓰이므로 서버에도 저장해둡니다
-        // (실패해도 이번 화면 동작에는 지장이 없어 조용히 무시합니다).
-        fetch("/api/config", {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ dailyPackagingLastDate: dateValue })
-        }).catch(function() {});
+        // 다음에 보여줄 안내문 기준일로 쓰이므로 저장해둡니다(서버가 있으면
+        // 서버에, 없으면 postConfigPartial_이 이 브라우저에 대신 저장함 —
+        // 실패해도 이번 화면 동작에는 지장이 없어 결과는 신경 쓰지 않음).
+        postConfigPartial_({ dailyPackagingLastDate: dateValue });
 
         setDailyStatus_("포장실적상세 스프레드시트를 여는 중...", "");
 
@@ -3351,8 +3392,14 @@
         el.saveRowsBtn.disabled = true;
 
         try {
-          const proxyUrl = "/api/google-published-csv?url=" + encodeURIComponent(csvUrl);
-          const response = await fetch(proxyUrl);
+          // 로컬 서버가 없으면(정적 호스팅) CORS 우회 프록시도 없으므로
+          // 구글 게시 CSV 주소를 직접 요청합니다(구글이 이 요청에
+          // Access-Control-Allow-Origin을 허용해주는 경우에만 됩니다 —
+          // 안 되면 아래 catch에서 에러로 안내).
+          const requestUrl = hasLocalConfigServer_
+            ? "/api/google-published-csv?url=" + encodeURIComponent(csvUrl)
+            : csvUrl;
+          const response = await fetch(requestUrl);
           const text = await response.text();
 
           if (!response.ok) {

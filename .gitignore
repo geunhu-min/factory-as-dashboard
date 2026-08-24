@@ -1,5 +1,5 @@
 # Runtime data / logs (may contain real internal Google Sheet URLs and business data)
-factory-as-sample/data/
+docs/data/
 *.log
 
 # Local tool settings
