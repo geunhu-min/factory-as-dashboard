@@ -53,6 +53,11 @@
       }
       .page-view[hidden] { display: none; }
 
+      /* 공개 배포판: 웹앱 URL을 코드에 고정해두고(DEPLOYED_CONFIG_ 참고)
+         입력/저장 UI 자체를 숨깁니다. 로컬(factory-as-sample)에는 이
+         규칙이 없어서 그 버전은 평소처럼 설정 화면이 보입니다. */
+      .config-panel { display: none !important; }
+
       .config-panel {
         display: flex;
         flex-direction: column;
@@ -1140,12 +1145,35 @@
         }
       }
 
+      // 공개 배포판(GitHub Pages) 전용 — 웹앱 URL을 화면에서 입력받지
+      // 않고 여기에 고정해둡니다. 값이 바뀌면 로컬(quality-claim-dashboard/
+      // factory-as-sample)에서 새 URL로 확인/테스트한 뒤, 여기 값을
+      // 고쳐서 이 저장소(factory-as-dashboard/docs)에 다시 배포해주세요.
+      // 연결 설정 입력칸/저장 버튼은 CSS로 숨겨져 있어 화면에는 안 보입니다.
+      const DEPLOYED_CONFIG_ = {
+        url: "https://script.google.com/macros/s/AKfycbwe1nUakn8k9EX9uLUXDWtXkkoBk1bS054EAgnPw-gINjadfSVw6pObJW2Imji1lD1xjg/exec",
+        monthlyUrl: "https://script.google.com/macros/s/AKfycbx2CLgt5cyHjLzw2PJBWCj5OHEszXcuxJJG6RHdKLIhZ3qL39zhIAyw5E52hOr25QotRg/exec",
+        recoveryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJOpWk8wtnXoLsfUYV5caj7XgGYclLzMq9tOGoj8X-Znu8Pyh6ny9dCVb9Us9ENqW2dkzUUi8VeUmK/pub?gid=1332104412&single=true&output=csv",
+        claimDashboardUrl: "https://script.google.com/macros/s/AKfycbxwrmUU-4oyOLhdcVNXCCXyRAR8wNiVlPFIgMoYUhYw1TziuJ6jqL5h8WQIjplq1J9C/exec",
+        claimClosingArchiveUrl: "https://script.google.com/macros/s/AKfycbzkhRq1szTTz6X-XcgGihEgV67Unrc2Cs5lSRie-RRoCZF-b9iimfBQHtBzOLAoHTsM/exec",
+        monthlyClosingUrl: "https://script.google.com/macros/s/AKfycbw29lo_8VefQNFXj601fU7fJ6Lcyd95yPNadsG-NsJ4WgTnGmmUoxhsBrPXjXIU0Y7e/exec",
+        dailyPackagingUrl: "https://script.google.com/macros/s/AKfycby7RKggqjlqwrdgd_yYznCOzDMuSvh58nMNBP4-___VewBSD4fKWCrzf-JPTIvTTIIs/exec",
+        dailyReceiptUrl: "https://script.google.com/macros/s/AKfycbzRwzbe3xhti31H-TqNkMUH9Gf87rmpBPu6-gas_TDMUUqzPVvnV4urMOirr90lwSBZIg/exec",
+        dailyReceiptStatusUrl: "https://script.google.com/macros/s/AKfycbyLRGjTVZDrmCRu4lydLA99Oa0PbB4BqmzjAfVFTMDh-cmSq6v4FTuAc8w-i5ySP1jw3Q/exec",
+        dailyRecoveryUrl: "https://script.google.com/macros/s/AKfycbxylHVinZ-L-L9OicVpAbvrvUf9W_m-Tl9SP8SLF96-zYathIueS-2PrCcmbpdLCZtC/exec",
+        dailyRecoveryAccumulateUrl: "https://script.google.com/macros/s/AKfycbwu8zhmB2Y-M0xD6rRgGs6o-I0YrtQcCiolu1rNeM50hMcQhF-jn6FpxN75t6czfKhF/exec"
+      };
+
       // server.js(로컬 서버)가 있는지 여부 — "/api/google-published-csv"
       // CORS 우회 프록시처럼 서버가 있어야만 되는 기능이 이 값을 보고
       // 정적 호스팅(GitHub Pages 등)에서는 다른 방법을 쓰도록 갈라탑니다.
+      // 공개 배포판은 항상 서버가 없는 쪽으로 갈라탑니다.
       let hasLocalConfigServer_ = false;
 
       async function readConfig_() {
+        return DEPLOYED_CONFIG_;
+        // 아래 코드는 로컬 서버/localStorage를 쓰던 예전 경로입니다
+        // (공개 배포판에서는 위 return으로 대체되어 실행되지 않음).
         try {
           const response = await fetch("/api/config");
           if (!response.ok) throw new Error("no config server");
