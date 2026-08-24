@@ -1,0 +1,4651 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>클레임 개인업무</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg-page: #ffffff;
+        --text: #1c1f24;
+        --text-muted: #666666;
+        --border: #d9dde3;
+        --bg-soft: #f6f7f9;
+        --surface: #ffffff;
+        --accent: #2f6fed;
+        --accent-text: #ffffff;
+        --danger: #d64545;
+        --success: #1a8a4c;
+        --dirty: #fff4d6;
+        --warning-btn: #b8590f;
+        --table-header-bg: #eef1f5;
+        --conflict-bg: #ffe1e1;
+        --focus-bg: #eaf1ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+        color: var(--text);
+        background: var(--bg-page);
+        padding: 24px;
+      }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      p.sub { margin: 0 0 20px; color: var(--text-muted); font-size: 13px; }
+
+      .page-nav {
+        display: flex;
+        gap: 6px;
+        margin: 10px 0 18px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 10px;
+      }
+      .page-nav-btn {
+        background: var(--bg-soft);
+        color: var(--text);
+        font-weight: 600;
+      }
+      .page-nav-btn.active {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+      }
+      .page-view[hidden] { display: none; }
+
+      .config-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--bg-soft);
+        margin-bottom: 18px;
+      }
+      .config-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: end;
+      }
+      .config-panel-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .config-panel-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .config-panel-body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .config-panel-body[hidden] { display: none; }
+      .config-panel label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .config-panel input, .config-panel select {
+        padding: 6px 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 13px;
+        min-width: 160px;
+        color: var(--text);
+        background: var(--surface);
+      }
+      .config-panel input#webappUrl { min-width: 340px; }
+
+      button {
+        padding: 7px 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+      }
+      button.warning {
+        background: var(--warning-btn);
+        border-color: var(--warning-btn);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button:hover { filter: brightness(0.97); }
+
+      .factory-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+      .factory-tabs .tabs-spacer { flex: 1; }
+      .factory-tabs button {
+        background: var(--bg-soft);
+        color: var(--text);
+      }
+      .factory-tabs button.active {
+        background: var(--accent);
+        color: var(--accent-text);
+        border-color: var(--accent);
+      }
+
+      .run-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 3px 9px;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+      .run-badge::before {
+        content: "";
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+      .run-badge.running {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 15%, transparent);
+      }
+      .run-badge.running::before { animation: run-badge-pulse 1s ease-in-out infinite; }
+      .run-badge.done {
+        color: var(--success);
+        background: color-mix(in srgb, var(--success) 15%, transparent);
+      }
+      @keyframes run-badge-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+
+      .status-line {
+        font-size: 13px;
+        margin: 6px 0 14px;
+        min-height: 18px;
+      }
+      .status-line.error { color: var(--danger); }
+      .status-line.ok { color: var(--success); }
+
+      .monthly-counts-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg-soft);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .monthly-counts-bar[hidden] { display: none; }
+      .monthly-counts-bar .count-label { color: var(--text-muted); font-weight: 400; margin-right: 4px; }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 70vh;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .claim-dashboard-viewer {
+        height: 80vh;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .claim-dashboard-viewer[hidden] { display: none; }
+      .claim-dashboard-viewer iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+        white-space: nowrap;
+      }
+      /* table-layout:auto(기본값)에서는 열에 폭을 지정해도 그냥 참고값일
+         뿐이라, 남는 공간이 있으면 브라우저가 지정한 폭보다 더 넓게
+         벌려버려서(칸 안에 빈 공간이 생김) 의도한 대로 줄지 않습니다.
+         이런 식으로 폭을 열마다 딱 맞춰 지정하는 표(정리결과 등)에는
+         이 클래스를 붙여서 지정한 폭이 실제로 지켜지게 합니다. */
+      #dailyTable.fixed-layout {
+        table-layout: fixed;
+      }
+      thead th {
+        position: sticky;
+        top: 0;
+        background: var(--table-header-bg);
+        border-bottom: 1px solid var(--border);
+        padding: 6px 8px;
+        text-align: left;
+        z-index: 1;
+      }
+      tbody td {
+        border-bottom: 1px solid var(--border);
+        padding: 0;
+      }
+      tbody td[contenteditable="true"] {
+        padding: 5px 8px;
+        outline: none;
+        cursor: text;
+      }
+      tbody td[contenteditable="true"]:focus {
+        background: var(--focus-bg);
+      }
+      tbody td.seq-cell {
+        padding: 5px 8px;
+        text-align: right;
+        color: var(--text-muted);
+        background: var(--bg-soft);
+        cursor: default;
+      }
+      #dailyTable thead th.seq-header-cell,
+      #dailyTable tbody td.seq-cell {
+        width: 44px;
+        max-width: 44px;
+      }
+      tbody td.narrow-hover-cell {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      tbody td.brand-detail-cell { cursor: pointer; }
+      tbody td.brand-detail-cell:hover { filter: brightness(0.95); }
+      tbody td.seq-value-cell { text-align: center; }
+
+      thead th.sortable-col { cursor: pointer; user-select: none; }
+      thead th.sortable-col:hover { filter: brightness(0.95); }
+      thead th .sort-arrow { color: var(--accent); font-weight: 700; }
+
+      thead th.filterable-col { position: relative; }
+      .daily-filter-btn {
+        margin-left: 4px;
+        padding: 0 4px;
+        font-size: 11px;
+        background: transparent;
+        border: none;
+        color: inherit;
+        cursor: pointer;
+      }
+      .daily-filter-btn.active { color: var(--accent); font-weight: 700; }
+      .daily-filter-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 50;
+        min-width: 140px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        padding: 6px;
+        text-align: left;
+        font-weight: 400;
+      }
+      .daily-filter-options {
+        max-height: 240px;
+        overflow-y: auto;
+      }
+      .daily-filter-option {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .daily-filter-option:hover { background: var(--bg-soft); }
+      .daily-filter-confirm-btn {
+        display: block;
+        width: 100%;
+        margin-top: 6px;
+        padding: 5px 0;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .daily-filter-confirm-btn:hover { filter: brightness(1.05); }
+
+      tr.row-active td { background: #dbe9ff; }
+      tr.dirty td { background: var(--dirty); }
+      tr.dirty td[contenteditable="true"]:focus { filter: brightness(0.95); }
+      tr.conflict td { background: var(--conflict-bg); }
+      tr.daily-summary-row td { background: #fff4d6; font-weight: 700; }
+
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .toolbar .spacer { flex: 1; }
+
+      .factory-actions {
+        display: none;
+        align-items: center;
+        gap: 6px;
+      }
+      .factory-actions.visible { display: flex; }
+      .factory-actions button.active {
+        background: var(--accent);
+        color: var(--accent-text);
+        border-color: var(--accent);
+      }
+      .dirty-count { font-size: 12px; color: var(--warning-btn); }
+
+      .added-entries-tabs {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .added-entries-tabs.visible { display: flex; }
+      .added-entries-tabs button.active {
+        background: var(--accent);
+        color: var(--accent-text);
+        border-color: var(--accent);
+      }
+      .added-entries-tabs .tabs-spacer { flex: 1; }
+
+      .week-picker-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 22, 26, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+      }
+      .week-picker-overlay[hidden] {
+        display: none;
+      }
+      .week-picker-box {
+        background: var(--surface);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 20px 22px;
+        min-width: 280px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      .week-picker-title {
+        font-size: 14px;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 14px;
+      }
+      .week-picker-buttons {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        margin-bottom: 12px;
+      }
+      .week-picker-buttons button {
+        min-width: 46px;
+        background: var(--bg-soft);
+      }
+      .week-picker-buttons button:hover {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--accent-text);
+      }
+      .week-picker-cancel { width: 100%; }
+      .recovery-date-input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        font-size: 14px;
+        margin-bottom: 14px;
+        color: var(--text);
+        background: var(--surface);
+        border: 1px solid var(--border);
+      }
+      .recovery-date-confirm {
+        width: 100%;
+        margin-bottom: 8px;
+        background: var(--accent);
+        color: var(--accent-text);
+        border-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>클레임 개인업무</h1>
+
+    <div class="page-nav">
+      <button type="button" class="page-nav-btn active" data-page="daily">일일업무</button>
+      <button type="button" class="page-nav-btn" data-page="weekly">주간업무</button>
+      <button type="button" class="page-nav-btn" data-page="monthly">월간업무</button>
+    </div>
+
+    <div id="dailyPage" class="page-view">
+      <div class="config-panel">
+        <div class="config-panel-header">
+          <span class="config-panel-title">일일현황관리 데이터</span>
+          <button id="dailyConfigPanelToggleBtn" type="button">상세</button>
+        </div>
+        <div id="dailyConfigPanelBody" class="config-panel-body" hidden>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyPackagingWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyPackagingConfigBtn">포장실적상세 연결</button>
+          </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyReceiptWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyReceiptConfigBtn">접수데이터 연결</button>
+          </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyReceiptStatusWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyReceiptStatusConfigBtn">일일접수현황 연결</button>
+          </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyRecoveryWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyRecoveryConfigBtn">반납내역서 정리 연결</button>
+          </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyRecoveryAccumulateWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyRecoveryAccumulateConfigBtn">회수데이터 연결</button>
+          </div>
+          <div id="dailyPageStatusLine" class="status-line"></div>
+        </div>
+      </div>
+
+      <div class="factory-tabs">
+        <button type="button" id="dailyReceiptStatusToggleBtn">일일접수현황</button>
+        <button type="button" id="dailyRecoveryStatusToggleBtn">일일회수현황</button>
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyManualBtn">메뉴얼</button>
+      </div>
+
+      <div id="dailyReceiptStatusActions" class="toolbar factory-actions">
+        <button type="button" id="dailyReceiptStatusReplaceBtn">유형별내역교체</button>
+        <button type="button" id="dailyReceiptStatusCheckAddedBtn">추가건 확인</button>
+        <button type="button" id="dailyMeetingMaterialViewBtn">회의자료</button>
+        <button type="button" id="dailyPackagingDateCheckToggleBtn">포장일자확인</button>
+      </div>
+
+      <div id="dailyRecoveryStatusActions" class="toolbar factory-actions">
+        <button type="button" id="dailyRecoveryViewBtn">반납내역서</button>
+        <button type="button" id="dailyRecoveryReplaceBtn">반납내역서 정리 교체</button>
+        <button type="button" id="dailyRecoveryCleanRunBtn">반납내역서 정리실행</button>
+        <button type="button" id="dailyRecoveryResultViewBtn">정리결과</button>
+      </div>
+
+      <div id="dailyCheckAddedConfirmRow" class="toolbar factory-actions">
+        <button type="button" id="dailyCheckAddedConfirmBtn">추가건 분석</button>
+      </div>
+
+      <div id="dailyPackagingActions" class="toolbar factory-actions">
+        <button type="button" id="dailyPackagingReplaceBtn">포장실적상세 데이터 교체</button>
+        <button type="button" id="dailyPackagingDateCheckBtn">포장일확인</button>
+        <button id="dailyPackagingDownloadBtn">포장일엑셀다운로드</button>
+      </div>
+
+      <div id="dailyStatusLine" class="status-line"></div>
+
+      <div id="dailyAddedEntriesTabs" class="added-entries-tabs">
+        <button type="button" data-sheet="추가건" data-factory="퍼시스">추가건</button>
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyShowOnlyMaterialBtn">자재만보기</button>
+        <button type="button" id="dailyHideMaterialBtn">자재가리기</button>
+        <button type="button" id="dailyMoveToSavedBtn">회의자료 저장</button>
+      </div>
+
+      <div id="dailyMeetingMaterialActions" class="added-entries-tabs">
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyMeetingMaterialDeletePreviousBtn" class="warning">전일자료 삭제</button>
+        <button type="button" id="dailyMeetingMaterialDeleteBtn" class="warning">삭제</button>
+        <button type="button" id="dailyMeetingMaterialSaveBtn">저장</button>
+        <button type="button" id="dailyMeetingMaterialDownloadBtn">회의자료 엑셀 다운로드</button>
+        <button type="button" id="dailyReceiptAccumulateBtn">접수데이터 누적저장</button>
+      </div>
+
+      <div id="dailyRecoveryResultActions" class="added-entries-tabs">
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyRecoveryResultSaveBtn">저장</button>
+        <button type="button" id="dailyRecoveryResultDownloadBtn">정리결과엑셀다운로드</button>
+        <button type="button" id="dailyRecoveryAccumulateBtn">회수데이터 누적저장</button>
+      </div>
+
+      <div id="dailyTableWrap" class="table-wrap">
+        <table id="dailyTable">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div id="dailyPackagingDatePickerOverlay" class="week-picker-overlay" hidden>
+        <div class="week-picker-box">
+          <div id="dailyPackagingDatePickerTitle" class="week-picker-title">어떤 접수일자를 확인할까요?</div>
+          <input type="date" id="dailyPackagingDateInput" class="recovery-date-input" />
+          <button type="button" id="dailyPackagingDatePickerConfirmBtn" class="recovery-date-confirm">확인</button>
+          <button type="button" id="dailyPackagingDatePickerCancelBtn" class="week-picker-cancel">취소</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="weeklyPage" class="page-view" hidden>
+    <div class="config-panel">
+      <div class="config-panel-header">
+        <span class="config-panel-title">주간현황관리 데이터</span>
+        <button id="configPanelToggleBtn" type="button">상세</button>
+      </div>
+      <div id="configPanelBody" class="config-panel-body" hidden>
+        <div class="config-row">
+          <label>
+            웹 앱 URL
+            <input id="webappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <button id="saveConfigBtn">주간 정리파일</button>
+        </div>
+        <div class="config-row">
+          <label>
+            웹 앱 URL
+            <input id="monthlyWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <button id="saveMonthlyConfigBtn">월현황(주간)</button>
+        </div>
+        <div class="config-row">
+          <label>
+            웹에 게시 주소 (CSV)
+            <input id="recoveryCsvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" />
+          </label>
+          <button id="saveRecoveryConfigBtn">회수누적</button>
+        </div>
+        <div class="config-row">
+          <label>
+            웹 앱 URL
+            <input id="claimDashboardWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <button id="saveClaimDashboardConfigBtn">월현황 누적표</button>
+        </div>
+        <div class="config-row">
+          <label>
+            웹 앱 URL
+            <input id="claimClosingArchiveWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <button id="saveClaimClosingArchiveConfigBtn">26년 마감자료</button>
+        </div>
+        <div id="monthlyStatusLine" class="status-line"></div>
+      </div>
+    </div>
+
+    <div class="factory-tabs">
+      <button type="button" data-sheet="__recovery_match__">회수누적/누적데이터 매칭</button>
+      <button type="button" data-sheet="__open_as_sheet__">금주현황변경</button>
+      <button type="button" data-sheet="1공장삭제건">1공장삭제건</button>
+      <button type="button" data-sheet="2공장삭제건">2공장삭제건</button>
+      <button id="archiveWeekBtn" class="warning">현황시트반영</button>
+      <span id="archiveWeekRunBadge" class="run-badge" hidden></span>
+      <span class="tabs-spacer"></span>
+      <button type="button" data-sheet="__monthly_summary__">월현황</button>
+      <button type="button" data-sheet="__monthly_closing__">마감</button>
+      <button type="button" data-sheet="__monthly_rawdata__">로데이터</button>
+      <button type="button" data-sheet="__monthly_week_1__">1주</button>
+      <button type="button" data-sheet="__monthly_week_2__">2주</button>
+      <button type="button" data-sheet="__monthly_week_3__">3주</button>
+      <button type="button" data-sheet="__monthly_week_4__">4주</button>
+      <button type="button" data-sheet="__monthly_week_5__">5주</button>
+      <button type="button" data-sheet="__recovery__">회수누적</button>
+      <button type="button" data-sheet="__claim_dashboard__">월현황누적표</button>
+    </div>
+
+    <div id="weekPickerOverlay" class="week-picker-overlay" hidden>
+      <div class="week-picker-box">
+        <div class="week-picker-title">몇 주차에 저장하시겠습니까?</div>
+        <div class="week-picker-buttons">
+          <button type="button" data-week="1">1주</button>
+          <button type="button" data-week="2">2주</button>
+          <button type="button" data-week="3">3주</button>
+          <button type="button" data-week="4">4주</button>
+          <button type="button" data-week="5">5주</button>
+        </div>
+        <button type="button" id="weekPickerCancelBtn" class="week-picker-cancel">취소</button>
+      </div>
+    </div>
+
+    <div id="recoveryDatePickerOverlay" class="week-picker-overlay" hidden>
+      <div class="week-picker-box">
+        <div class="week-picker-title">몇 일자부터 가져와서 바꿀까요?</div>
+        <input type="date" id="recoveryDateInput" class="recovery-date-input" />
+        <button type="button" id="recoveryDatePickerConfirmBtn" class="recovery-date-confirm">확인</button>
+        <button type="button" id="recoveryDatePickerCancelBtn" class="week-picker-cancel">취소</button>
+      </div>
+    </div>
+
+
+    <div class="toolbar">
+      <button id="reloadBtn">새로고침</button>
+      <button id="recoveryMatchToolbarBtn" class="warning" style="display:none;">회수데이터 매칭</button>
+      <button id="accumulatedMatchToolbarBtn" class="warning" style="display:none;">1,2공장 누적데이터 매칭</button>
+      <button id="openAsSheetToolbarBtn" class="warning" style="display:none;">현황변경하기</button>
+      <button id="cleanupBothToolbarBtn" class="warning" style="display:none;">1,2공장 정리실행</button>
+      <button id="removeDeletedToolbarBtn" class="warning" style="display:none;">삭제건 제거</button>
+      <button id="claimUpdateWeeklyBtn" class="warning" style="display:none;">이번달 주간 데이터 채우기</button>
+      <button id="claimReshapeMonthBtn" class="warning" style="display:none;">다음달로 표 넘기기</button>
+      <button id="runCleanupBtn" class="warning">정리 실행 (매크로)</button>
+      <span class="spacer"></span>
+      <button id="downloadFullBtn">월현황엑셀다운로드</button>
+      <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
+      <span id="dirtyCount" class="dirty-count"></span>
+      <button id="saveRowsBtn" class="primary" disabled>변경사항 저장</button>
+    </div>
+
+    <div id="statusLine" class="status-line"></div>
+
+    <div id="monthlyCountsBar" class="monthly-counts-bar" hidden></div>
+
+    <div id="tableWrap" class="table-wrap">
+      <table id="dataTable">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="claimDashboardViewer" class="claim-dashboard-viewer" hidden>
+      <iframe id="claimDashboardFrame" title="클레임 대시보드"></iframe>
+    </div>
+    </div>
+
+    <div id="monthlyPage" class="page-view" hidden>
+      <div class="config-panel">
+        <div class="config-panel-header">
+          <span class="config-panel-title">월간업무 데이터</span>
+          <button id="monthlyConfigPanelToggleBtn" type="button">상세</button>
+          <button id="monthlyRegularTaskManualBtn" type="button">월간업무 정기업무(중요)</button>
+        </div>
+        <div id="monthlyConfigPanelBody" class="config-panel-body" hidden>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="monthlyClosingWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveMonthlyClosingConfigBtn">충주2유상마감 연결</button>
+          </div>
+          <div id="monthlyPageStatusLine" class="status-line"></div>
+        </div>
+      </div>
+
+      <div class="factory-tabs">
+        <button type="button" id="monthlyClosingFactory2Btn">2공장유상마감</button>
+        <span class="tabs-spacer"></span>
+        <button type="button" class="monthly-closing-tab" data-monthly-sheet="정리">정리시트</button>
+        <button type="button" class="monthly-closing-tab" data-monthly-sheet="퍼시스">퍼시스</button>
+        <button type="button" class="monthly-closing-tab" data-monthly-sheet="일룸">일룸</button>
+        <button type="button" class="monthly-closing-tab" data-monthly-sheet="퍼시스내역서">퍼시스내역서</button>
+        <button type="button" class="monthly-closing-tab" data-monthly-sheet="일룸내역서">일룸내역서</button>
+      </div>
+
+      <div class="toolbar">
+        <div id="monthlyClosingFactory2Actions" class="factory-actions">
+          <button type="button" id="monthlyClosingOpenSheetBtn">이번달데이터변경</button>
+          <button type="button" id="monthlyClosingCleanupAddedBtn">추가건정리</button>
+          <button type="button" id="monthlyClosingCleanupByBrandBtn" class="warning">브랜드별정리</button>
+          <span id="monthlyClosingCleanupByBrandRunBadge" class="run-badge" hidden></span>
+        </div>
+        <span class="spacer"></span>
+        <button id="monthlyClosingDownloadBtn">유상마감다운로드</button>
+        <button id="monthlyClosingDownloadDetailBtn">유상마감내역서다운로드</button>
+      </div>
+
+      <div id="monthlyClosingStatusLine" class="status-line"></div>
+
+      <div class="toolbar">
+        <span class="spacer"></span>
+        <button id="monthlyClosingSaveBtn" style="display:none;">저장</button>
+      </div>
+
+      <div id="monthlyClosingTableWrap" class="table-wrap">
+        <table id="monthlyClosingTable">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const KEY_COLUMN_INDEX = 3; // D열: 접수번호 (gas/factory-as-webapp.gs의 keyColumn과 동일해야 함)
+
+      // AS현황 스프레드시트(1공장/2공장 금주AS현황분석시트가 있는 원본 파일) 바로가기
+      const AS_SPREADSHEET_EDIT_URL =
+        "https://docs.google.com/spreadsheets/d/1ojKHospTSYSfKWlidRwvqyWhuHGfnsrLWRqVpn2SFBU/edit";
+      const MONTHLY_SUMMARY_KEY = "__monthly_summary__"; // 월현황(주간) 웹앱의 종합(N) 시트, 읽기 전용
+      const MONTHLY_CLOSING_KEY = "__monthly_closing__"; // 월현황(주간) 웹앱의 마감 시트, 읽기 전용
+      const MONTHLY_RAW_DATA_KEY = "__monthly_rawdata__"; // 월현황(주간) 웹앱의 로데이터 시트, 읽기 전용
+      const MONTHLY_WEEK_KEY_PREFIX = "__monthly_week_"; // 월현황(주간) 웹앱의 N주(N) 시트, 읽기 전용
+
+      function getMonthlyWeekNumber(sheetName) {
+        if (typeof sheetName !== "string" || sheetName.indexOf(MONTHLY_WEEK_KEY_PREFIX) !== 0) return null;
+        const n = Number(sheetName.slice(MONTHLY_WEEK_KEY_PREFIX.length).replace(/_+$/, ""));
+        return Number.isInteger(n) ? n : null;
+      }
+
+      const RECOVERY_KEY = "__recovery__"; // 회수누적, 웹에 게시 CSV로 읽어오는 읽기 전용 탭
+      const RECOVERY_MATCH_KEY = "__recovery_match__"; // 회수누적/누적데이터 매칭, 정리파일의 '회수내역' 시트를 보여줌
+      const RECOVERY_MATCH_SHEET_NAME = "회수내역";
+      const OPEN_AS_SHEET_KEY = "__open_as_sheet__"; // 금주현황변경, 1/2공장 금주AS현황분석시트를 합쳐 보여줌
+      const DELETE_SHEET_NAMES = ["1공장삭제건", "2공장삭제건"]; // 참고용 읽기 전용 탭
+      const CLAIM_DASHBOARD_KEY = "__claim_dashboard__"; // 클레임대시보드, 별도 스프레드시트의 마감자료 표를 보여줌
+
+      function isRecoveryTab() {
+        return state.currentSheet === RECOVERY_KEY;
+      }
+
+      function isClaimDashboardTab() {
+        return state.currentSheet === CLAIM_DASHBOARD_KEY;
+      }
+
+      function isRecoveryMatchTab() {
+        return state.currentSheet === RECOVERY_MATCH_KEY;
+      }
+
+      function isOpenAsSheetTab() {
+        return state.currentSheet === OPEN_AS_SHEET_KEY;
+      }
+
+      function isDeleteSheetTab() {
+        return DELETE_SHEET_NAMES.indexOf(state.currentSheet) !== -1;
+      }
+
+      // 아주 단순한 CSV 파서 (따옴표로 묶인 값, 콤마, 줄바꿈 처리)
+      function parseCsv(text) {
+        const rows = [];
+        let row = [];
+        let field = "";
+        let inQuotes = false;
+
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+
+          if (inQuotes) {
+            if (ch === '"') {
+              if (text[i + 1] === '"') { field += '"'; i++; }
+              else { inQuotes = false; }
+            } else {
+              field += ch;
+            }
+          } else if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ",") {
+            row.push(field);
+            field = "";
+          } else if (ch === "\n" || ch === "\r") {
+            if (ch === "\r" && text[i + 1] === "\n") i++;
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+          } else {
+            field += ch;
+          }
+        }
+
+        if (field.length || row.length) {
+          row.push(field);
+          rows.push(row);
+        }
+
+        return rows.filter(function(r) { return r.length > 1 || r[0] !== ""; });
+      }
+
+      // 한국 시간(Asia/Seoul) 기준 날짜만 표시할 컬럼
+      const DATE_COLUMN_LABELS = ["최종조치일", "반납일자", "회수날짜", "회수 날짜"];
+
+      // 접수번호 컬럼 너비에 맞춰 좁히고, 호버로 전체 내용을 보여줄 컬럼
+      const NARROW_COLUMN_LABELS = ["고객명", "부품명", "조치결과", "서비스요구내역", "변경사유", "특이사항", "요구내역", "출고예정일", "최종조치일", "품목명칭"];
+      const NARROW_WIDTH_REFERENCE_LABEL = "접수번호";
+      const NARROW_FALLBACK_WIDTH = 110;
+
+      // "하자내역"은 회의자료 표에서만 나오는(직접 입력하는) 칸이라
+      // 다른 칸들보다 넉넉하게 보이도록 최소 너비를 줌
+      const DEFECT_DETAIL_COLUMN_LABEL = "하자내역";
+      const DEFECT_DETAIL_COLUMN_MIN_WIDTH = 220;
+
+      // "정리결과" 표처럼 내용이 짧은 칸들은 실제 내용 폭에 딱 맞춰
+      // 줄여서, 남는 공간을 조치결과특이사항 같은 긴 칸이 가져가게 함
+      const CONTENT_FIT_COLUMN_LABELS = ["접수번호", "품목코드", "칼라", "제품공급업체", "결과현상"];
+
+      // 화면에 보이지 않는 곳에 텍스트를 그려서 실제 필요한 폭(px)만
+      // 재는 용도 — td.scrollWidth는 셀이 이미 넓게 늘어나 있으면 그
+      // 늘어난 폭을 그대로 돌려줘서(내용이 넘치지 않는 한) 못 씁니다.
+      let contentWidthMeasureEl_ = null;
+      // 같은 문자열(칼라/접수번호 등)이 여러 행에 반복되는 경우가 많아서,
+      // 한 번 잰 폭은 캐싱해서 재사용합니다(폰트가 고정이라 같은 문자열은
+      // 항상 같은 폭이므로 안전 — 실제 측정값을 바꾸지 않고 반복 측정만 줄임).
+      const measureTextWidthCache_ = new Map();
+      function measureTextWidth_(text) {
+        const key = String(text === null || text === undefined ? "" : text);
+        const cached = measureTextWidthCache_.get(key);
+        if (cached !== undefined) return cached;
+
+        if (!contentWidthMeasureEl_) {
+          contentWidthMeasureEl_ = document.createElement("span");
+          contentWidthMeasureEl_.style.position = "absolute";
+          contentWidthMeasureEl_.style.visibility = "hidden";
+          contentWidthMeasureEl_.style.whiteSpace = "nowrap";
+          contentWidthMeasureEl_.style.fontSize = "12.5px";
+          contentWidthMeasureEl_.style.fontFamily = "Pretendard, 'Malgun Gothic', system-ui, sans-serif";
+          document.body.appendChild(contentWidthMeasureEl_);
+        }
+        contentWidthMeasureEl_.textContent = key;
+        const width = contentWidthMeasureEl_.getBoundingClientRect().width;
+        measureTextWidthCache_.set(key, width);
+        return width;
+      }
+
+      // <colgroup>에 열마다 폭(px)을 적어두면, table-layout:fixed에서
+      // th/td에 준 width보다도 더 확실하게 그 폭이 지켜집니다(고정 헤더
+      // 등으로 th 자체의 폭 계산이 흔들릴 수 있는 경우에도 안전). plan은
+      // {colIndex(LEADING_COLUMNS 포함): widthPx} 형태이고, plan에 없는
+      // 열은 <col>에 폭을 지정하지 않아(자동) 남는 공간을 가져갑니다.
+      function syncDailyColgroup_(tableEl, columnCount, plan) {
+        let colgroup = tableEl.querySelector("colgroup");
+        if (!colgroup) {
+          colgroup = document.createElement("colgroup");
+          tableEl.insertBefore(colgroup, tableEl.firstChild);
+        }
+        colgroup.innerHTML = "";
+        for (let i = 0; i < columnCount; i++) {
+          const col = document.createElement("col");
+          if (plan[i]) col.style.width = plan[i] + "px";
+          colgroup.appendChild(col);
+        }
+      }
+
+      // colLabels로 찾은 각 열을, 그 열의 실제 내용(헤더+모든 행) 중
+      // 가장 넓은 너비에 딱 맞게 줄입니다(다른 칸과의 공통 너비를 맞추는
+      // applyNarrowColumnWidths_와 달리, 각 열이 자기 내용 크기를 그대로 씀).
+      function applyContentFitColumnWidths_(headerList, colLabels, theadRowEl, tbodyEl, widthPlan) {
+        const headerCells = theadRowEl.querySelectorAll("th");
+
+        colLabels.forEach(function(label) {
+          const colIndex = findHeaderIndex_(headerList, label);
+          if (colIndex === -1) return;
+
+          const th = headerCells[colIndex + LEADING_COLUMNS];
+          if (!th) return;
+
+          const tds = tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")");
+
+          let width = measureTextWidth_(th.textContent);
+          tds.forEach(function(td) {
+            const cellWidth = measureTextWidth_(td.textContent);
+            if (cellWidth > width) width = cellWidth;
+          });
+          width += 24; // 셀 좌우 여백 + 여유 폭
+
+          th.style.width = width + "px";
+          th.style.maxWidth = width + "px";
+          tds.forEach(function(td) {
+            td.style.width = width + "px";
+            td.style.maxWidth = width + "px";
+          });
+
+          if (widthPlan) widthPlan[colIndex + LEADING_COLUMNS] = width;
+        });
+      }
+
+      // targetLabel 열의 너비를, referenceLabel 열의 실제 내용 폭(위
+      // applyContentFitColumnWidths_와 같은 방식으로 측정) × multiplier로
+      // 맞춥니다. referenceLabel 열이 이미 줄여져 있는지와 상관없이
+      // 항상 그 열의 실제 내용을 직접 다시 재서 계산하므로, 이 함수를
+      // 호출하는 순서는 상관없습니다.
+      function applyContentFitRelativeWidth_(headerList, targetLabel, referenceLabel, multiplier, theadRowEl, tbodyEl, widthPlan) {
+        const targetIndex = findHeaderIndex_(headerList, targetLabel);
+        const referenceIndex = findHeaderIndex_(headerList, referenceLabel);
+        if (targetIndex === -1 || referenceIndex === -1) return;
+
+        const headerCells = theadRowEl.querySelectorAll("th");
+        const refTh = headerCells[referenceIndex + LEADING_COLUMNS];
+        if (!refTh) return;
+
+        let refWidth = measureTextWidth_(refTh.textContent);
+        tbodyEl.querySelectorAll("td:nth-child(" + (referenceIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+          const cellWidth = measureTextWidth_(td.textContent);
+          if (cellWidth > refWidth) refWidth = cellWidth;
+        });
+        refWidth += 24;
+
+        const targetWidth = Math.round(refWidth * multiplier);
+        const targetTh = headerCells[targetIndex + LEADING_COLUMNS];
+        if (targetTh) {
+          targetTh.style.width = targetWidth + "px";
+          targetTh.style.maxWidth = targetWidth + "px";
+        }
+
+        tbodyEl.querySelectorAll("td:nth-child(" + (targetIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+          td.style.width = targetWidth + "px";
+          td.style.maxWidth = targetWidth + "px";
+        });
+
+        if (widthPlan) widthPlan[targetIndex + LEADING_COLUMNS] = targetWidth;
+      }
+
+      function applyMinColumnWidth_(colIndex, minWidthPx, theadRowEl, tbodyEl) {
+        const headerCells = theadRowEl.querySelectorAll("th");
+        const th = headerCells[colIndex + LEADING_COLUMNS];
+        if (th) th.style.minWidth = minWidthPx + "px";
+
+        tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+          td.style.minWidth = minWidthPx + "px";
+        });
+      }
+
+      function formatDateKST(value) {
+        if (value === null || value === undefined || value === "") return "";
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return String(value);
+        return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(date);
+      }
+
+      // Apps Script가 Date 셀을 JSON으로 보낼 때 나오는 형식("2026-06-25T15:00:00.000Z")인지
+      // 확인합니다. 열 이름이 DATE_COLUMN_LABELS에 없어도 이 형식이면 날짜로 보고
+      // 한국시간 기준 연-월-일까지만 표시합니다(그 외 텍스트/숫자 값은 건드리지 않음).
+      function looksLikeIsoDateTime_(value) {
+        return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+      }
+
+      // 천단위 구분 기호(,)를 넣어서 표시할 금액 컬럼 — 이 대시보드의 모든 표에서
+      // 기본으로 적용됩니다(새 표를 추가할 때도 이 목록에 이름만 추가하면 됩니다).
+      const AMOUNT_COLUMN_LABELS = ["금액", "매입단가"];
+
+      function formatAmount_(value) {
+        if (value === null || value === undefined || value === "") return "";
+        const num = Number(String(value).replace(/,/g, ""));
+        if (isNaN(num)) return String(value);
+        return num.toLocaleString("ko-KR");
+      }
+
+      // 편집 가능한 셀에 저장할 때는 화면에 넣어둔 콤마를 다시 빼서 순수 숫자로
+      // 저장합니다(시트에 "1,000" 같은 문자열이 그대로 들어가지 않도록).
+      function stripAmountFormatting_(text) {
+        return text.replace(/,/g, "");
+      }
+
+      const state = {
+        currentSheet: "", // 처음엔 활성 탭 없음 — 탭을 눌러야 그때 불러옴(로딩 시간 절약)
+        header: [],
+        rows: [],       // { rowIndex, loaded: [...], current: [...] }
+        loading: false
+      };
+
+      const el = {
+        webappUrl: document.getElementById("webappUrl"),
+        saveConfigBtn: document.getElementById("saveConfigBtn"),
+        monthlyWebappUrl: document.getElementById("monthlyWebappUrl"),
+        saveMonthlyConfigBtn: document.getElementById("saveMonthlyConfigBtn"),
+        archiveWeekBtn: document.getElementById("archiveWeekBtn"),
+        archiveWeekRunBadge: document.getElementById("archiveWeekRunBadge"),
+        downloadFullBtn: document.getElementById("downloadFullBtn"),
+        downloadClaimDashboardBtn: document.getElementById("downloadClaimDashboardBtn"),
+        monthlyStatusLine: document.getElementById("monthlyStatusLine"),
+        weekPickerOverlay: document.getElementById("weekPickerOverlay"),
+        weekPickerCancelBtn: document.getElementById("weekPickerCancelBtn"),
+        recoveryDatePickerOverlay: document.getElementById("recoveryDatePickerOverlay"),
+        recoveryDateInput: document.getElementById("recoveryDateInput"),
+        recoveryDatePickerConfirmBtn: document.getElementById("recoveryDatePickerConfirmBtn"),
+        recoveryDatePickerCancelBtn: document.getElementById("recoveryDatePickerCancelBtn"),
+        recoveryCsvUrl: document.getElementById("recoveryCsvUrl"),
+        saveRecoveryConfigBtn: document.getElementById("saveRecoveryConfigBtn"),
+        claimDashboardWebappUrl: document.getElementById("claimDashboardWebappUrl"),
+        saveClaimDashboardConfigBtn: document.getElementById("saveClaimDashboardConfigBtn"),
+        claimClosingArchiveWebappUrl: document.getElementById("claimClosingArchiveWebappUrl"),
+        saveClaimClosingArchiveConfigBtn: document.getElementById("saveClaimClosingArchiveConfigBtn"),
+        claimUpdateWeeklyBtn: document.getElementById("claimUpdateWeeklyBtn"),
+        claimReshapeMonthBtn: document.getElementById("claimReshapeMonthBtn"),
+        configPanelToggleBtn: document.getElementById("configPanelToggleBtn"),
+        configPanelBody: document.getElementById("configPanelBody"),
+        monthlyClosingWebappUrl: document.getElementById("monthlyClosingWebappUrl"),
+        saveMonthlyClosingConfigBtn: document.getElementById("saveMonthlyClosingConfigBtn"),
+        monthlyConfigPanelToggleBtn: document.getElementById("monthlyConfigPanelToggleBtn"),
+        monthlyRegularTaskManualBtn: document.getElementById("monthlyRegularTaskManualBtn"),
+        monthlyConfigPanelBody: document.getElementById("monthlyConfigPanelBody"),
+        monthlyPageStatusLine: document.getElementById("monthlyPageStatusLine"),
+        dailyPackagingWebappUrl: document.getElementById("dailyPackagingWebappUrl"),
+        saveDailyPackagingConfigBtn: document.getElementById("saveDailyPackagingConfigBtn"),
+        dailyReceiptWebappUrl: document.getElementById("dailyReceiptWebappUrl"),
+        saveDailyReceiptConfigBtn: document.getElementById("saveDailyReceiptConfigBtn"),
+        dailyReceiptStatusWebappUrl: document.getElementById("dailyReceiptStatusWebappUrl"),
+        saveDailyReceiptStatusConfigBtn: document.getElementById("saveDailyReceiptStatusConfigBtn"),
+        dailyRecoveryWebappUrl: document.getElementById("dailyRecoveryWebappUrl"),
+        saveDailyRecoveryConfigBtn: document.getElementById("saveDailyRecoveryConfigBtn"),
+        dailyRecoveryAccumulateWebappUrl: document.getElementById("dailyRecoveryAccumulateWebappUrl"),
+        saveDailyRecoveryAccumulateConfigBtn: document.getElementById("saveDailyRecoveryAccumulateConfigBtn"),
+        dailyConfigPanelToggleBtn: document.getElementById("dailyConfigPanelToggleBtn"),
+        dailyConfigPanelBody: document.getElementById("dailyConfigPanelBody"),
+        dailyPageStatusLine: document.getElementById("dailyPageStatusLine"),
+        dailyReceiptStatusToggleBtn: document.getElementById("dailyReceiptStatusToggleBtn"),
+        dailyRecoveryStatusToggleBtn: document.getElementById("dailyRecoveryStatusToggleBtn"),
+        dailyManualBtn: document.getElementById("dailyManualBtn"),
+        dailyReceiptStatusActions: document.getElementById("dailyReceiptStatusActions"),
+        dailyRecoveryStatusActions: document.getElementById("dailyRecoveryStatusActions"),
+        dailyRecoveryViewBtn: document.getElementById("dailyRecoveryViewBtn"),
+        dailyRecoveryReplaceBtn: document.getElementById("dailyRecoveryReplaceBtn"),
+        dailyRecoveryCleanRunBtn: document.getElementById("dailyRecoveryCleanRunBtn"),
+        dailyRecoveryResultViewBtn: document.getElementById("dailyRecoveryResultViewBtn"),
+        dailyRecoveryResultActions: document.getElementById("dailyRecoveryResultActions"),
+        dailyRecoveryResultSaveBtn: document.getElementById("dailyRecoveryResultSaveBtn"),
+        dailyRecoveryResultDownloadBtn: document.getElementById("dailyRecoveryResultDownloadBtn"),
+        dailyRecoveryAccumulateBtn: document.getElementById("dailyRecoveryAccumulateBtn"),
+        dailyReceiptStatusReplaceBtn: document.getElementById("dailyReceiptStatusReplaceBtn"),
+        dailyReceiptStatusCheckAddedBtn: document.getElementById("dailyReceiptStatusCheckAddedBtn"),
+        dailyMeetingMaterialViewBtn: document.getElementById("dailyMeetingMaterialViewBtn"),
+        dailyMeetingMaterialActions: document.getElementById("dailyMeetingMaterialActions"),
+        dailyMeetingMaterialDeletePreviousBtn: document.getElementById("dailyMeetingMaterialDeletePreviousBtn"),
+        dailyMeetingMaterialSaveBtn: document.getElementById("dailyMeetingMaterialSaveBtn"),
+        dailyMeetingMaterialDeleteBtn: document.getElementById("dailyMeetingMaterialDeleteBtn"),
+        dailyMeetingMaterialDownloadBtn: document.getElementById("dailyMeetingMaterialDownloadBtn"),
+        dailyReceiptAccumulateBtn: document.getElementById("dailyReceiptAccumulateBtn"),
+        dailyCheckAddedConfirmRow: document.getElementById("dailyCheckAddedConfirmRow"),
+        dailyCheckAddedConfirmBtn: document.getElementById("dailyCheckAddedConfirmBtn"),
+        dailyAddedEntriesTabs: document.getElementById("dailyAddedEntriesTabs"),
+        dailyShowOnlyMaterialBtn: document.getElementById("dailyShowOnlyMaterialBtn"),
+        dailyHideMaterialBtn: document.getElementById("dailyHideMaterialBtn"),
+        dailyMoveToSavedBtn: document.getElementById("dailyMoveToSavedBtn"),
+        dailyPackagingDateCheckToggleBtn: document.getElementById("dailyPackagingDateCheckToggleBtn"),
+        dailyPackagingActions: document.getElementById("dailyPackagingActions"),
+        dailyPackagingReplaceBtn: document.getElementById("dailyPackagingReplaceBtn"),
+        dailyPackagingDateCheckBtn: document.getElementById("dailyPackagingDateCheckBtn"),
+        dailyPackagingDownloadBtn: document.getElementById("dailyPackagingDownloadBtn"),
+        dailyStatusLine: document.getElementById("dailyStatusLine"),
+        dailyTableWrap: document.getElementById("dailyTableWrap"),
+        dailyTable: document.getElementById("dailyTable"),
+        dailyThead: document.querySelector("#dailyTable thead tr"),
+        dailyTbody: document.querySelector("#dailyTable tbody"),
+        dailyPackagingDatePickerOverlay: document.getElementById("dailyPackagingDatePickerOverlay"),
+        dailyPackagingDatePickerTitle: document.getElementById("dailyPackagingDatePickerTitle"),
+        dailyPackagingDateInput: document.getElementById("dailyPackagingDateInput"),
+        dailyPackagingDatePickerConfirmBtn: document.getElementById("dailyPackagingDatePickerConfirmBtn"),
+        dailyPackagingDatePickerCancelBtn: document.getElementById("dailyPackagingDatePickerCancelBtn"),
+        monthlyClosingFactory2Btn: document.getElementById("monthlyClosingFactory2Btn"),
+        monthlyClosingFactory2Actions: document.getElementById("monthlyClosingFactory2Actions"),
+        monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
+        monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
+        monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
+        monthlyClosingOpenSheetBtn: document.getElementById("monthlyClosingOpenSheetBtn"),
+        monthlyClosingCleanupAddedBtn: document.getElementById("monthlyClosingCleanupAddedBtn"),
+        monthlyClosingCleanupByBrandBtn: document.getElementById("monthlyClosingCleanupByBrandBtn"),
+        monthlyClosingCleanupByBrandRunBadge: document.getElementById("monthlyClosingCleanupByBrandRunBadge"),
+        monthlyClosingTabs: Array.from(document.querySelectorAll(".monthly-closing-tab")),
+        monthlyClosingStatusLine: document.getElementById("monthlyClosingStatusLine"),
+        monthlyClosingTableWrap: document.getElementById("monthlyClosingTableWrap"),
+        monthlyClosingThead: document.querySelector("#monthlyClosingTable thead tr"),
+        monthlyClosingTbody: document.querySelector("#monthlyClosingTable tbody"),
+        tabs: Array.from(document.querySelectorAll(".factory-tabs button[data-sheet]")),
+        recoveryMatchToolbarBtn: document.getElementById("recoveryMatchToolbarBtn"),
+        accumulatedMatchToolbarBtn: document.getElementById("accumulatedMatchToolbarBtn"),
+        openAsSheetToolbarBtn: document.getElementById("openAsSheetToolbarBtn"),
+        cleanupBothToolbarBtn: document.getElementById("cleanupBothToolbarBtn"),
+        removeDeletedToolbarBtn: document.getElementById("removeDeletedToolbarBtn"),
+        reloadBtn: document.getElementById("reloadBtn"),
+        runCleanupBtn: document.getElementById("runCleanupBtn"),
+        saveRowsBtn: document.getElementById("saveRowsBtn"),
+        dirtyCount: document.getElementById("dirtyCount"),
+        statusLine: document.getElementById("statusLine"),
+        monthlyCountsBar: document.getElementById("monthlyCountsBar"),
+        tableWrap: document.getElementById("tableWrap"),
+        table: document.getElementById("dataTable"),
+        thead: document.querySelector("#dataTable thead tr"),
+        tbody: document.querySelector("#dataTable tbody"),
+        claimDashboardViewer: document.getElementById("claimDashboardViewer"),
+        claimDashboardFrame: document.getElementById("claimDashboardFrame")
+      };
+
+      // 브라우저 localStorage가 아니라 이 서버(factory-as-sample/server.js)의
+      // /api/config에 저장합니다 — 같은 서버에 접속하면 어떤 브라우저에서든
+      // 한 번 저장한 주소가 그대로 보입니다.
+      async function loadConfig() {
+        try {
+          const response = await fetch("/api/config");
+          const saved = await response.json();
+          el.webappUrl.value = saved.url || "";
+          el.monthlyWebappUrl.value = saved.monthlyUrl || "";
+          el.recoveryCsvUrl.value = saved.recoveryCsvUrl || "";
+          el.claimDashboardWebappUrl.value = saved.claimDashboardUrl || "";
+          el.claimClosingArchiveWebappUrl.value = saved.claimClosingArchiveUrl || "";
+          el.monthlyClosingWebappUrl.value = saved.monthlyClosingUrl || "";
+          el.dailyPackagingWebappUrl.value = saved.dailyPackagingUrl || "";
+          el.dailyReceiptWebappUrl.value = saved.dailyReceiptUrl || "";
+          el.dailyReceiptStatusWebappUrl.value = saved.dailyReceiptStatusUrl || "";
+          el.dailyRecoveryWebappUrl.value = saved.dailyRecoveryUrl || "";
+          el.dailyRecoveryAccumulateWebappUrl.value = saved.dailyRecoveryAccumulateUrl || "";
+          dailyPackagingLastDate = saved.dailyPackagingLastDate || "";
+        } catch (_) {}
+      }
+
+      async function saveConfigField_(partial, label, statusEl) {
+        const target = statusEl || el.statusLine;
+
+        try {
+          await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(partial)
+          });
+          target.textContent = label + " 연결 정보를 저장했습니다.";
+          target.className = "status-line ok";
+        } catch (error) {
+          target.textContent = label + " 연결 정보 저장 실패: " + error.message;
+          target.className = "status-line error";
+        }
+      }
+
+      function saveConfig() {
+        saveConfigField_({ url: el.webappUrl.value.trim() }, "정리파일");
+      }
+
+      function saveMonthlyConfig() {
+        saveConfigField_({ monthlyUrl: el.monthlyWebappUrl.value.trim() }, "월현황(주간)");
+      }
+
+      function saveRecoveryConfig() {
+        saveConfigField_({ recoveryCsvUrl: el.recoveryCsvUrl.value.trim() }, "회수누적");
+      }
+
+      function saveClaimDashboardConfig() {
+        saveConfigField_({ claimDashboardUrl: el.claimDashboardWebappUrl.value.trim() }, "클레임 대시보드");
+      }
+
+      function saveClaimClosingArchiveConfig() {
+        saveConfigField_(
+          { claimClosingArchiveUrl: el.claimClosingArchiveWebappUrl.value.trim() },
+          "26년 마감자료"
+        );
+      }
+
+      function saveMonthlyClosingConfig() {
+        saveConfigField_(
+          { monthlyClosingUrl: el.monthlyClosingWebappUrl.value.trim() },
+          "충주2유상마감",
+          el.monthlyPageStatusLine
+        );
+        loadMonthlyClosingData();
+      }
+
+      function saveDailyPackagingConfig() {
+        saveConfigField_(
+          { dailyPackagingUrl: el.dailyPackagingWebappUrl.value.trim() },
+          "포장실적상세",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveDailyReceiptConfig() {
+        saveConfigField_(
+          { dailyReceiptUrl: el.dailyReceiptWebappUrl.value.trim() },
+          "접수데이터",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveDailyReceiptStatusConfig() {
+        saveConfigField_(
+          { dailyReceiptStatusUrl: el.dailyReceiptStatusWebappUrl.value.trim() },
+          "일일접수현황",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveDailyRecoveryConfig() {
+        saveConfigField_(
+          { dailyRecoveryUrl: el.dailyRecoveryWebappUrl.value.trim() },
+          "반납내역서 정리",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveDailyRecoveryAccumulateConfig() {
+        saveConfigField_(
+          { dailyRecoveryAccumulateUrl: el.dailyRecoveryAccumulateWebappUrl.value.trim() },
+          "회수데이터",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function setDailyStatus_(message, kind) {
+        el.dailyStatusLine.textContent = message || "";
+        el.dailyStatusLine.className = "status-line" + (kind ? " " + kind : "");
+      }
+
+      // 일일접수현황/포장일자확인 중 선택을 바꾸면, 이전 선택에서 보던
+      // 표/체크 상태/추가건 확인 진행 상태가 그대로 남아있지 않도록
+      // 아래쪽 표 영역을 전부 비웁니다.
+      function resetDailyTableView_() {
+        el.dailyThead.innerHTML = "";
+        el.dailyTbody.innerHTML = "";
+        el.dailyAddedEntriesTabs.classList.remove("visible");
+        el.dailyCheckAddedConfirmRow.classList.remove("visible");
+        el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
+        el.dailyMeetingMaterialViewBtn.classList.remove("active");
+        el.dailyMeetingMaterialActions.classList.remove("visible");
+        el.dailyRecoveryViewBtn.classList.remove("active");
+        el.dailyRecoveryResultViewBtn.classList.remove("active");
+        el.dailyRecoveryResultActions.classList.remove("visible");
+        dailyCheckedRowPositions = new Set();
+        dailyCurrentRows = [];
+        dailyCurrentAddedFactory = "";
+        setDailyStatus_("", "");
+      }
+
+      // 접수데이터/포장실적상세 두 스프레드시트 모두 이 이름의 탭을 씁니다.
+      const DAILY_SOURCE_SHEET_NAME = "시트1";
+
+      // 다음 두 번의 화면 그리기 프레임까지 기다립니다. hidden 속성을 바꾼
+      // 직후 window.confirm/alert 같은 동기 다이얼로그를 바로 띄우면 그
+      // 변경이 화면에 반영되기 전에 다이얼로그가 떠서, 방금 숨긴 요소가
+      // 그 밑에 그대로 남아 보이는 문제를 막기 위해 씁니다.
+      function waitForRepaint_() {
+        return new Promise(function(resolve) {
+          requestAnimationFrame(function() {
+            requestAnimationFrame(resolve);
+          });
+        });
+      }
+
+      // 이 모달은 하나뿐인데(dailyPackagingDatePickerOverlay 공유) 서로 다른
+      // 두 버튼(데이터교체/포장일확인)에서 각각 호출할 수 있어서, 첫 번째
+      // 요청에 응답하기 전에 두 번째 요청이 들어오면 confirm/cancel
+      // 버튼에 리스너가 두 벌 쌓여 한 번 클릭에 두 요청이 동시에
+      // 풀리는 문제가 있었습니다. 그래서 새 요청이 오면 이전에 대기
+      // 중이던 요청을 먼저 취소 처리(cleanup+resolve(null))합니다.
+      let dailyPackagingDatePickerCancelPending_ = null;
+
+      function pickDailyPackagingDate(title, defaultToToday) {
+        return new Promise(function(resolve) {
+          if (dailyPackagingDatePickerCancelPending_) {
+            dailyPackagingDatePickerCancelPending_();
+          }
+
+          el.dailyPackagingDatePickerTitle.textContent = title || "";
+          el.dailyPackagingDateInput.value = defaultToToday ? formatDateKST(new Date()) : "";
+
+          function cleanup() {
+            el.dailyPackagingDatePickerOverlay.hidden = true;
+            el.dailyPackagingDatePickerConfirmBtn.removeEventListener("click", onConfirm);
+            el.dailyPackagingDatePickerCancelBtn.removeEventListener("click", onCancel);
+            dailyPackagingDatePickerCancelPending_ = null;
+          }
+
+          function onConfirm() {
+            const value = el.dailyPackagingDateInput.value;
+            if (!value) return; // 날짜를 고르지 않으면 무시
+            cleanup();
+            resolve(value);
+          }
+
+          function onCancel() {
+            cleanup();
+            resolve(null);
+          }
+
+          dailyPackagingDatePickerCancelPending_ = function() {
+            cleanup();
+            resolve(null);
+          };
+
+          el.dailyPackagingDatePickerConfirmBtn.addEventListener("click", onConfirm);
+          el.dailyPackagingDatePickerCancelBtn.addEventListener("click", onCancel);
+
+          el.dailyPackagingDatePickerOverlay.hidden = false;
+        });
+      }
+
+      // "2026-07-21" -> "26년7월21일" (안내창 문구용)
+      function formatKoreanShortDate_(dateStr) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+        if (!match) return dateStr;
+        return match[1].slice(2) + "년" + Number(match[2]) + "월" + Number(match[3]) + "일";
+      }
+
+      // 추가건 표에서 체크박스로 선택된 행 번호(rowPos, dailyCurrentRows 안의
+      // 위치) 집합 — renderDailyTable_로 새로 불러올 때마다 비워짐
+      let dailyCheckedRowPositions = new Set();
+      let dailyCurrentRows = [];
+      let dailyCurrentHeader = [];
+      let dailyTableOptions_ = { checkable: false, editable: false };
+      let dailySelectAllCheckboxEl_ = null;
+
+      // 부품명 정렬 상태
+      let dailySortColIndex = -1;
+      let dailySortDirection = ""; // "asc" | "desc"
+
+      // 열별 필터 상태 — colIndex -> 허용값 Set. 여러 열(회사/구분 등)에
+      // 동시에 각자 필터를 걸어둘 수 있도록 열마다 따로 관리함. 어떤
+      // colIndex가 이 Map에 없으면 그 열은 필터 없음(전체 표시)
+      let dailyColumnFilters = new Map();
+      let dailyFilterDropdownColIndex = -1; // 필터 드롭다운이 열려있는 열, -1이면 닫힘
+      // 필터 드롭다운에서 "확인"을 누르기 전까지 임시로 들고 있는
+      // 선택값 — 체크박스를 누를 때마다 표를 다시 그리면 드롭다운이 매번
+      // 깜빡이며 모양이 깨지는 문제가 있어서, 확인 버튼을 눌러야 실제
+      // 필터(dailyColumnFilters)에 반영되도록 분리해둠
+      let dailyFilterPendingValues = null;
+
+      // "자재가리기"/"자재만보기" 버튼 상태 — 구분 열 값이 "자재"인 행을
+      // 각각 숨기거나 그것만 남기고 걸러냄. 서로 반대되는 필터라 동시에
+      // 켜질 수 없고(한쪽을 켜면 다른쪽은 꺼짐), renderDailyTable_로 새로
+      // 불러올 때마다 둘 다 꺼짐으로 초기화됨
+      let dailyHideMaterialActive = false;
+      let dailyShowOnlyMaterialActive = false;
+
+      // 마지막으로 마우스로 클릭한 행(rowPos), 상세 팝업으로 보고 있는
+      // 행(rowPos) — 체크박스로 선택된 행과 함께 파란색 "활성 행"
+      // 표시 대상. renderDailyTable_로 새로 불러올 때마다 초기화됨
+      let dailyActiveRowPos = -1;
+      let dailyDetailPopupRowPos = -1;
+      // rowPos -> 그 행의 <tr> 엘리먼트. 클릭/체크/팝업으로 활성 표시만
+      // 바꿀 때 표 전체를 다시 그리지 않고(편집 중 포커스가 끊기지 않도록)
+      // 그 행의 클래스만 토글하기 위해 씀 — redrawDailyTable_이 새로 채움
+      let dailyRowTrByPos_ = {};
+
+      function isDailyRowDirty_(row) {
+        for (let i = 0; i < row.loaded.length; i++) {
+          if (String(row.loaded[i] ?? "") !== String(row.values[i] ?? "")) return true;
+        }
+        return false;
+      }
+
+      // 하자내역처럼 줄바꿈이 있는 값을 표에 넣을 때, td.textContent에
+      // "\n"을 그대로 넣으면 화면에는 (nowrap 때문에) 한 줄로 뭉개져
+      // 보입니다. 실제 <br>로 줄을 나눠 넣어야 편집 중에도, 새로고침
+      // 후에도 항상 여러 줄로 보입니다.
+      function setDailyCellText_(td, value) {
+        td.textContent = "";
+        const lines = String(value === null || value === undefined ? "" : value).split("\n");
+        lines.forEach(function(line, idx) {
+          if (idx > 0) td.appendChild(document.createElement("br"));
+          td.appendChild(document.createTextNode(line));
+        });
+      }
+
+      // 편집 가능한 칸(contenteditable)에 포커스가 갈 때(클릭 또는 Tab
+      // 이동 둘 다 focus 이벤트) 내용 전체를 선택 상태로 만듭니다.
+      function selectAllTextInCell_(el) {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+
+      function dailyCompareValues_(a, b) {
+        return String(a ?? "").localeCompare(String(b ?? ""), "ko", { numeric: true });
+      }
+
+      // 현재 필터/정렬 상태를 반영해서, 화면에 보여줄 dailyCurrentRows의
+      // 위치(인덱스) 목록을 계산합니다. 체크박스/수정 상태는 항상 이
+      // 위치(rowPos)를 기준으로 저장되므로, 정렬/필터를 바꿔도 어긋나지 않습니다.
+      function dailyDisplayedPositions_() {
+        let positions = dailyCurrentRows.map(function(_, i) { return i; });
+
+        dailyColumnFilters.forEach(function(allowedValues, colIndex) {
+          positions = positions.filter(function(pos) {
+            const value = String(dailyCurrentRows[pos].values[colIndex] ?? "");
+            return allowedValues.has(value);
+          });
+        });
+
+        if (dailyHideMaterialActive || dailyShowOnlyMaterialActive) {
+          const categoryColIndex = findHeaderIndex_(dailyCurrentHeader, "구분");
+
+          if (categoryColIndex !== -1) {
+            positions = positions.filter(function(pos) {
+              const isMaterial = String(dailyCurrentRows[pos].values[categoryColIndex] ?? "") === "자재";
+              return dailyShowOnlyMaterialActive ? isMaterial : !isMaterial;
+            });
+          }
+        }
+
+        if (dailySortColIndex !== -1 && dailySortDirection) {
+          const dir = dailySortDirection === "asc" ? 1 : -1;
+          positions = positions.slice().sort(function(a, b) {
+            const result = dailyCompareValues_(
+              dailyCurrentRows[a].values[dailySortColIndex],
+              dailyCurrentRows[b].values[dailySortColIndex]
+            );
+            return dir * result;
+          });
+        }
+
+        return positions;
+      }
+
+      function renderDailyTable_(header, rows, options) {
+        dailyCurrentHeader = header;
+        dailyCurrentRows = rows.map(function(row) {
+          return { rowIndex: row.rowIndex, values: row.values.slice(), loaded: row.values.slice() };
+        });
+        dailyCheckedRowPositions = new Set();
+        dailyTableOptions_ = {
+          checkable: !!(options && options.checkable),
+          editable: !!(options && options.editable),
+          sortFilterEnabled: !!(options && options.sortFilterEnabled)
+        };
+        dailySortColIndex = -1;
+        dailySortDirection = "";
+        dailyColumnFilters = new Map();
+        dailyFilterDropdownColIndex = -1;
+        dailyFilterPendingValues = null;
+        dailyHideMaterialActive = false;
+        dailyShowOnlyMaterialActive = false;
+        if (el.dailyHideMaterialBtn) el.dailyHideMaterialBtn.classList.remove("active");
+        if (el.dailyShowOnlyMaterialBtn) el.dailyShowOnlyMaterialBtn.classList.remove("active");
+        dailyActiveRowPos = -1;
+        dailyDetailPopupRowPos = -1;
+
+        redrawDailyTable_();
+      }
+
+      // 부품명 정렬 화살표 클릭칸 만들기
+      function buildDailySortableHeaderCell_(label, colIndex) {
+        const th = document.createElement("th");
+        th.classList.add("sortable-col");
+
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = label;
+        th.appendChild(labelSpan);
+
+        if (dailySortColIndex === colIndex && dailySortDirection) {
+          const arrow = document.createElement("span");
+          arrow.className = "sort-arrow";
+          arrow.textContent = dailySortDirection === "asc" ? " ▲" : " ▼";
+          th.appendChild(arrow);
+        }
+
+        th.addEventListener("click", function() {
+          if (dailySortColIndex !== colIndex) {
+            dailySortColIndex = colIndex;
+            dailySortDirection = "asc";
+          } else if (dailySortDirection === "asc") {
+            dailySortDirection = "desc";
+          } else {
+            dailySortColIndex = -1;
+            dailySortDirection = "";
+          }
+          redrawDailyTable_();
+        });
+
+        return th;
+      }
+
+      // 구분 필터 버튼 + 드롭다운 칸 만들기
+      function buildDailyFilterableHeaderCell_(label, colIndex) {
+        const th = document.createElement("th");
+        th.classList.add("filterable-col");
+
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = label;
+        th.appendChild(labelSpan);
+
+        const filterBtn = document.createElement("button");
+        filterBtn.type = "button";
+        filterBtn.className = "daily-filter-btn" + (dailyColumnFilters.has(colIndex) ? " active" : "");
+        filterBtn.textContent = "▾";
+        filterBtn.addEventListener("click", function(event) {
+          event.stopPropagation();
+          dailyFilterDropdownColIndex = dailyFilterDropdownColIndex === colIndex ? -1 : colIndex;
+          // 열거나(이전 선택 새로 시작) 닫을 때(확인 없이 취소) 모두, 아직
+          // 확인하지 않은 임시 선택은 버림
+          dailyFilterPendingValues = null;
+          redrawDailyTable_();
+        });
+        th.appendChild(filterBtn);
+
+        if (dailyFilterDropdownColIndex === colIndex) {
+          const distinctValues = Array.from(new Set(dailyCurrentRows.map(function(row) {
+            return String(row.values[colIndex] ?? "");
+          }))).sort(dailyCompareValues_);
+
+          if (!dailyFilterPendingValues) {
+            // 이 열을 이미 필터링해둔 상태로 다시 열면 그 선택을 이어받고,
+            // 처음 여는 거면 전체 선택(=필터 없음) 상태로 시작
+            dailyFilterPendingValues = dailyColumnFilters.has(colIndex)
+              ? new Set(dailyColumnFilters.get(colIndex))
+              : new Set(distinctValues);
+          }
+
+          const dropdown = document.createElement("div");
+          dropdown.className = "daily-filter-dropdown";
+          dropdown.addEventListener("click", function(event) { event.stopPropagation(); });
+
+          const optionsWrap = document.createElement("div");
+          optionsWrap.className = "daily-filter-options";
+
+          distinctValues.forEach(function(value) {
+            const optionLabel = document.createElement("label");
+            optionLabel.className = "daily-filter-option";
+
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = dailyFilterPendingValues.has(value);
+            checkbox.addEventListener("change", function() {
+              // 여기서는 표를 다시 그리지 않음 — 체크할 때마다 드롭다운을
+              // 다시 그리면 모양이 깨지는 문제가 있어서, "확인"을 눌러야
+              // 실제로 반영되도록 임시 선택값만 갱신함
+              if (checkbox.checked) dailyFilterPendingValues.add(value);
+              else dailyFilterPendingValues.delete(value);
+            });
+
+            optionLabel.appendChild(checkbox);
+            optionLabel.appendChild(document.createTextNode(value === "" ? "(빈 값)" : value));
+            optionsWrap.appendChild(optionLabel);
+          });
+
+          dropdown.appendChild(optionsWrap);
+
+          const confirmBtn = document.createElement("button");
+          confirmBtn.type = "button";
+          confirmBtn.className = "daily-filter-confirm-btn";
+          confirmBtn.textContent = "확인";
+          confirmBtn.addEventListener("click", function(event) {
+            event.stopPropagation();
+            dailyColumnFilters.set(colIndex, new Set(dailyFilterPendingValues));
+            dailyFilterDropdownColIndex = -1;
+            dailyFilterPendingValues = null;
+            redrawDailyTable_();
+          });
+          dropdown.appendChild(confirmBtn);
+
+          th.appendChild(dropdown);
+        }
+
+        return th;
+      }
+
+      // "일일합계" 요약행은 실제 건이 아니므로 선택/전체선택 대상에서 제외
+      function dailyIsSummaryRowPos_(pos) {
+        return dailyCurrentRows[pos].values[0] === MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+      }
+
+      // 마우스로 클릭했거나, 체크박스가 선택됐거나, 상세 팝업으로 보고
+      // 있는 행인지 — 셋 중 하나라도 해당하면 파란색 "활성 행"으로 표시
+      function dailyIsRowActive_(pos) {
+        return pos === dailyActiveRowPos ||
+          dailyCheckedRowPositions.has(pos) ||
+          pos === dailyDetailPopupRowPos;
+      }
+
+      // 표 전체를 다시 그리지 않고, 그 행의 <tr>에만 활성 표시 클래스를
+      // 다시 계산해서 반영합니다(편집 중 포커스/커서 유지 목적).
+      function dailyUpdateRowActiveClass_(pos) {
+        const tr = dailyRowTrByPos_[pos];
+        if (!tr) return;
+        tr.classList.toggle("row-active", !dailyIsSummaryRowPos_(pos) && dailyIsRowActive_(pos));
+      }
+
+      function updateDailySelectAllState_(displayedPositions) {
+        if (!dailySelectAllCheckboxEl_) return;
+        const selectablePositions = displayedPositions.filter(function(pos) { return !dailyIsSummaryRowPos_(pos); });
+        const allChecked = selectablePositions.length > 0 &&
+          selectablePositions.every(function(pos) { return dailyCheckedRowPositions.has(pos); });
+        const someChecked = selectablePositions.some(function(pos) { return dailyCheckedRowPositions.has(pos); });
+        dailySelectAllCheckboxEl_.checked = allChecked;
+        dailySelectAllCheckboxEl_.indeterminate = !allChecked && someChecked;
+      }
+
+      // 현재 상태(dailyCurrentRows/정렬/필터/체크 상태)를 기준으로 헤더+표를
+      // 다시 그립니다. 서버에서 새로 불러오지 않으므로, 정렬/필터/체크박스를
+      // 바꿀 때는 이 함수만 다시 부르면 됩니다(renderDailyTable_은 새 데이터를
+      // 불러왔을 때만 사용 — 상태를 초기화함).
+      function redrawDailyTable_() {
+        const header = dailyCurrentHeader;
+        const checkable = dailyTableOptions_.checkable;
+        const editable = dailyTableOptions_.editable;
+        const dailyColumnWidthPlan_ = {};
+
+        el.dailyThead.innerHTML = "";
+
+        const leadTh = document.createElement("th");
+        leadTh.classList.add("seq-header-cell");
+        dailySelectAllCheckboxEl_ = null;
+
+        if (checkable) {
+          const selectAllCheckbox = document.createElement("input");
+          selectAllCheckbox.type = "checkbox";
+          selectAllCheckbox.addEventListener("change", function() {
+            // 표 전체를 다시 그리지 않고(폭 재계산까지 포함된 무거운
+            // 작업), 이미 그려진 행의 체크박스/활성 표시만 직접 갱신합니다
+            // — dailyUpdateRowActiveClass_와 같은 "가벼운 경로" 방식.
+            const displayedPositions = dailyDisplayedPositions_()
+              .filter(function(pos) { return !dailyIsSummaryRowPos_(pos); });
+
+            displayedPositions.forEach(function(pos) {
+              if (selectAllCheckbox.checked) dailyCheckedRowPositions.add(pos);
+              else dailyCheckedRowPositions.delete(pos);
+
+              const tr = dailyRowTrByPos_[pos];
+              const checkbox = tr ? tr.querySelector('input[type="checkbox"]') : null;
+              if (checkbox) checkbox.checked = selectAllCheckbox.checked;
+              dailyUpdateRowActiveClass_(pos);
+            });
+          });
+          leadTh.appendChild(selectAllCheckbox);
+          dailySelectAllCheckboxEl_ = selectAllCheckbox;
+        }
+
+        el.dailyThead.appendChild(leadTh);
+
+        const sortFilterEnabled = dailyTableOptions_.sortFilterEnabled;
+        header.forEach(function(label, colIndex) {
+          let th;
+          if (sortFilterEnabled && (label.includes("부품명") || label.includes("접수번호"))) {
+            th = buildDailySortableHeaderCell_(label, colIndex);
+          } else if (sortFilterEnabled && (label.includes("구분") || label.includes("회사"))) {
+            th = buildDailyFilterableHeaderCell_(label, colIndex);
+          } else {
+            th = document.createElement("th");
+            th.textContent = label;
+          }
+          el.dailyThead.appendChild(th);
+        });
+
+        const dateColIndexes = DATE_COLUMN_LABELS
+          .map(function(label) { return findHeaderIndex_(header, label); })
+          .filter(function(i) { return i !== -1; });
+
+        // "조치결과특이사항" 칸은 "조치결과"/"특이사항"이 그 글자를 부분
+        // 포함하고 있어서(findHeaderIndex_가 부분 일치도 찾음)
+        // NARROW_COLUMN_LABELS에 잘못 걸립니다 — 정리결과 표에서 이 칸은
+        // 좁히거나 말줄임 처리하지 않고 남는 폭을 다 가져가는 자유 열로
+        // 남겨둬야 해서 처음부터 제외합니다.
+        const actionResultDetailColIndex = findHeaderIndex_(header, "조치결과특이사항");
+        const narrowColIndexes = NARROW_COLUMN_LABELS
+          .map(function(label) { return findHeaderIndex_(header, label); })
+          .filter(function(i) { return i !== -1 && i !== actionResultDetailColIndex; });
+
+        // 접수번호 칸에 마우스를 올리면 같은 행의 요구내역이 호버로 보이게
+        // (정렬 화살표 등 부가 기호가 헤더 글자에 붙어있어도 찾도록 부분 일치로 검색)
+        const accessionColIndex = findHeaderIndex_(header, "접수번호");
+        const requirementColIndex = findHeaderIndex_(header, "요구내역");
+
+        // 브랜드 칸을 더블클릭하면 접수번호/순번/고객명/요구내역 팝업이 뜨게
+        const brandColIndex = findHeaderIndex_(header, "브랜드");
+        const customerColIndex = findHeaderIndex_(header, "고객명");
+        const sequenceColIndex = findHeaderIndex_(header, "순번");
+
+        // 회사/구분 칸은 값이 짧은 분류값이라 가운데 정렬이 더 보기 좋음
+        const companyColIndex = findHeaderIndex_(header, "회사");
+        const categoryColIndex = findHeaderIndex_(header, "구분");
+
+        // 부품명 칸은 부품코드 칸 너비에 맞추고, 나머지 narrow 칸은 접수번호
+        // 칸 너비에 맞춤(applyNarrowColumnWidths_ 참고). 품목명칭 칸은
+        // 접수번호 칸의 2배 너비로 따로 맞춤(applyContentFitRelativeWidth_ 참고).
+        // (조치결과특이사항은 위에서 narrowColIndexes를 만들 때 이미 제외함)
+        const partNameColIndex = findHeaderIndex_(header, "부품명");
+        const itemNameColIndex = findHeaderIndex_(header, "품목명칭");
+        const genericNarrowColIndexes = narrowColIndexes.filter(function(i) {
+          return i !== partNameColIndex && i !== itemNameColIndex;
+        });
+
+        const displayedPositions = dailyDisplayedPositions_();
+
+        el.dailyTbody.innerHTML = "";
+        dailyRowTrByPos_ = {};
+        displayedPositions.forEach(function(rowPos, displayIndex) {
+          const row = dailyCurrentRows[rowPos];
+          const isSummaryRow = row.values[0] === MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+          const tr = document.createElement("tr");
+          if (isSummaryRow) tr.classList.add("daily-summary-row");
+          if (!isSummaryRow) tr.classList.toggle("row-active", dailyIsRowActive_(rowPos));
+          dailyRowTrByPos_[rowPos] = tr;
+
+          if (!isSummaryRow) {
+            // 행 어디를 클릭하든(체크박스 포함) 그 행을 "마지막으로 클릭한
+            // 행"으로 표시 — 표 전체를 다시 그리지 않아 편집 중 포커스가
+            // 끊기지 않음
+            tr.addEventListener("click", function() {
+              const previous = dailyActiveRowPos;
+              dailyActiveRowPos = rowPos;
+              if (previous !== -1 && previous !== rowPos) dailyUpdateRowActiveClass_(previous);
+              dailyUpdateRowActiveClass_(rowPos);
+            });
+          }
+
+          const leadTd = document.createElement("td");
+          leadTd.classList.add("seq-cell");
+
+          if (checkable && !isSummaryRow) {
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = dailyCheckedRowPositions.has(rowPos);
+            checkbox.addEventListener("change", function() {
+              if (checkbox.checked) dailyCheckedRowPositions.add(rowPos);
+              else dailyCheckedRowPositions.delete(rowPos);
+              dailyUpdateRowActiveClass_(rowPos);
+              updateDailySelectAllState_(displayedPositions);
+            });
+            leadTd.appendChild(checkbox);
+          } else if (!checkable) {
+            leadTd.textContent = String(displayIndex + 1);
+            leadTd.contentEditable = "false";
+          }
+
+          tr.appendChild(leadTd);
+
+          row.values.forEach(function(cellValue, colIndex) {
+            const td = document.createElement("td");
+            const isCellEditable = editable && !isSummaryRow;
+            td.contentEditable = isCellEditable ? "true" : "false";
+
+            const isDateCol = dateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
+            const isNarrowCol = narrowColIndexes.indexOf(colIndex) !== -1;
+            const displayValue = isDateCol
+              ? formatDateKST(cellValue)
+              : (cellValue === null || cellValue === undefined ? "" : cellValue);
+
+            // 줄바꿈을 실제 <br>로 살려주는 건 "직접 입력하는" 칸(회의자료의
+            // 하자내역 등)에만 적용합니다. 추가건/유형별 같은 읽기전용
+            // 좁은 칸(요구내역 등)은 원본에 줄바꿈이 많이 들어있어서, 이걸
+            // 다 살리면 행 높이가 과도하게 늘어나 표를 보기 어려워집니다
+            // (그 칸들은 nowrap+말줄임으로 한 줄만 보여주고 호버로 전체를
+            // 보여주는 게 원래 의도).
+            if (isCellEditable) {
+              setDailyCellText_(td, displayValue);
+            } else {
+              td.textContent = displayValue;
+            }
+
+            if (isNarrowCol) {
+              td.classList.add("narrow-hover-cell");
+              td.title = String(displayValue);
+            }
+
+            if (colIndex === sequenceColIndex || colIndex === companyColIndex || colIndex === categoryColIndex) {
+              td.classList.add("seq-value-cell");
+            }
+
+            if (colIndex === accessionColIndex && requirementColIndex !== -1) {
+              const requirementValue = row.values[requirementColIndex];
+              td.title = String(requirementValue === null || requirementValue === undefined ? "" : requirementValue);
+            }
+
+            if (colIndex === brandColIndex) {
+              td.classList.add("brand-detail-cell");
+              td.addEventListener("dblclick", function() {
+                showDailyRowDetail_(
+                  rowPos,
+                  accessionColIndex !== -1 ? row.values[accessionColIndex] : "",
+                  sequenceColIndex !== -1 ? row.values[sequenceColIndex] : "",
+                  customerColIndex !== -1 ? row.values[customerColIndex] : "",
+                  requirementColIndex !== -1 ? row.values[requirementColIndex] : ""
+                );
+              });
+            }
+
+            if (editable && !isSummaryRow) {
+              td.addEventListener("input", function() {
+                // textContent는 <br>/줄바꿈을 무시하고 그냥 이어붙여버려서
+                // (예: "상판 세척불량- 7월23일 시공"처럼 붙어버림),
+                // 화면에 보이는 줄바꿈 그대로 가져오는 innerText를 씁니다.
+                row.values[colIndex] = td.innerText;
+                tr.classList.toggle("dirty", isDailyRowDirty_(row));
+              });
+
+              // 클릭해서 들어가거나 Tab으로 다음 칸으로 넘어가도(둘 다
+              // focus 이벤트가 뜸) 내용 전체가 선택되게 해서, 바로
+              // 타이핑하면 기존 내용이 새 내용으로 바뀌게 함(직접 지우고
+              // 다시 쓸 필요 없이)
+              td.addEventListener("focus", function() {
+                selectAllTextInCell_(td);
+              });
+            }
+
+            tr.appendChild(td);
+          });
+
+          el.dailyTbody.appendChild(tr);
+        });
+
+        if (genericNarrowColIndexes.length) {
+          applyNarrowColumnWidths_(header, genericNarrowColIndexes, el.dailyThead, el.dailyTbody, undefined, dailyColumnWidthPlan_);
+        }
+        if (partNameColIndex !== -1) {
+          applyNarrowColumnWidths_(header, [partNameColIndex], el.dailyThead, el.dailyTbody, "부품코드", dailyColumnWidthPlan_);
+        }
+
+        const defectDetailColIndex = findHeaderIndex_(header, DEFECT_DETAIL_COLUMN_LABEL);
+        if (defectDetailColIndex !== -1) {
+          applyMinColumnWidth_(defectDetailColIndex, DEFECT_DETAIL_COLUMN_MIN_WIDTH, el.dailyThead, el.dailyTbody);
+        }
+
+        // table-layout:auto에서는 열 폭 지정(width)이 그냥 참고값이라,
+        // 표 전체 폭(100%)에 남는 공간이 있으면 브라우저가 지정한 폭보다
+        // 더 넓게 벌려버립니다. "품목명칭"(정리결과)/"바로스"(반납내역서
+        // 시트1 원본) 열은 그 표에만 있는 열 이름이라, 이 표들을 보고
+        // 있을 때만 table-layout:fixed로 바꾸고 <colgroup>에 열마다
+        // 폭을 명시해서 지정한 폭이 실제로 지켜지게 합니다(다른 표는
+        // 항상 colgroup을 지워서 기존 방식 그대로 둠).
+        const barosColIndex = findHeaderIndex_(header, "바로스");
+        const fixedLayoutActive = itemNameColIndex !== -1 || barosColIndex !== -1;
+        if (el.dailyTable) el.dailyTable.classList.toggle("fixed-layout", fixedLayoutActive);
+
+        applyContentFitColumnWidths_(header, CONTENT_FIT_COLUMN_LABELS, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+
+        if (itemNameColIndex !== -1) {
+          applyContentFitRelativeWidth_(header, "품목명칭", "접수번호", 2, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+        }
+
+        if (barosColIndex !== -1) {
+          applyContentFitColumnWidths_(header, ["번호", "0", "바로스"], el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+        }
+
+        if (el.dailyTable) {
+          if (fixedLayoutActive) {
+            dailyColumnWidthPlan_[0] = 44; // 맨 앞 순번 칸
+            const totalColumns = LEADING_COLUMNS + header.length;
+
+            // table-layout:fixed라도, 지정한 폭의 합이 표 전체 폭(100%)보다
+            // 작으면 브라우저가 남는 만큼을 "모든" 열에 비례해서 더
+            // 늘려버립니다(지정 안 한 열만 늘어나는 게 아님) — 그래서
+            // 조치결과특이사항처럼 폭을 지정하지 않은 열에, 남는 폭을
+            // 직접 계산해서 명시적으로 채워 넣어 합이 정확히 100%가
+            // 되게 만들어서 더 늘어날 여지를 없앱니다.
+            const unplannedIndexes = [];
+            for (let i = 0; i < totalColumns; i++) {
+              if (!dailyColumnWidthPlan_[i]) unplannedIndexes.push(i);
+            }
+            if (unplannedIndexes.length) {
+              const specifiedSum = Object.keys(dailyColumnWidthPlan_).reduce(function(sum, key) {
+                return sum + dailyColumnWidthPlan_[key];
+              }, 0);
+              const wrapWidth = el.dailyTableWrap ? el.dailyTableWrap.clientWidth : 0;
+              const minShare = 120;
+              const remaining = Math.max(wrapWidth - specifiedSum, unplannedIndexes.length * minShare);
+              const share = Math.floor(remaining / unplannedIndexes.length);
+              unplannedIndexes.forEach(function(idx) { dailyColumnWidthPlan_[idx] = share; });
+            }
+
+            syncDailyColgroup_(el.dailyTable, totalColumns, dailyColumnWidthPlan_);
+          } else {
+            const existingColgroup = el.dailyTable.querySelector("colgroup");
+            if (existingColgroup) existingColgroup.remove();
+          }
+        }
+
+        updateDailySelectAllState_(displayedPositions);
+      }
+
+      // 구분 필터 드롭다운이 열려있을 때, 그 바깥을 클릭하면 확인하지 않은
+      // 임시 선택은 버리고 닫히게 함
+      document.addEventListener("click", function() {
+        if (dailyFilterDropdownColIndex !== -1) {
+          dailyFilterDropdownColIndex = -1;
+          dailyFilterPendingValues = null;
+          redrawDailyTable_();
+        }
+      });
+
+      function escapeHtmlDaily_(value) {
+        return String(value === null || value === undefined ? "" : value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      // 브랜드 칸 더블클릭 시 접수번호/순번/고객명/요구내역을 별도 창(진짜
+      // 브라우저 팝업 창)으로 보여줌 — OS 창 그대로라 크기 조정/위치 이동이
+      // 기본으로 되고, 화면 가운데에 뜨게 좌표를 계산해서 넘깁니다.
+      // ESC 키로도 닫힘.
+      function showDailyRowDetail_(rowPos, accessionValue, sequenceValue, customerValue, requirementValue) {
+        const accession = String(accessionValue === null || accessionValue === undefined ? "" : accessionValue);
+        const sequence = String(sequenceValue === null || sequenceValue === undefined ? "" : sequenceValue);
+        const customer = String(customerValue === null || customerValue === undefined ? "" : customerValue);
+        const requirement = String(requirementValue === null || requirementValue === undefined ? "" : requirementValue);
+
+        const width = 420;
+        const height = 400;
+        const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+        const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+
+        const popup = window.open(
+          "",
+          "dailyRowDetail_" + Date.now(),
+          "popup=yes,width=" + width + ",height=" + height + ",left=" + left + ",top=" + top +
+            ",menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+        );
+        if (!popup) return;
+
+        popup.document.write(`<!doctype html>
+          <html lang="ko">
+            <head>
+              <meta charset="utf-8" />
+              <title>상세 내용</title>
+              <style>
+                body { margin:0; font-family:"Malgun Gothic","Segoe UI",Arial,sans-serif; color:#0f172a; background:#f7f7f7; }
+                header { position:relative; padding:16px 40px 16px 20px; border-bottom:1px solid #dde3ea; background:#fff; }
+                h1 { margin:0; font-size:18px; }
+                .close { position:absolute; right:12px; top:10px; border:0; background:#fff; font-size:22px; font-weight:900; cursor:pointer; }
+                .body { padding:20px; }
+                .field-row { display:flex; gap:16px; }
+                .field { margin-bottom:16px; }
+                .field-row .field { flex: 1; }
+                .field label { display:block; font-size:12px; color:#687482; margin-bottom:4px; }
+                .field span { font-size:15px; word-break:break-word; }
+              </style>
+            </head>
+            <body>
+              <header><button class="close" onclick="window.close()">&times;</button><h1>상세 내용</h1></header>
+              <div class="body">
+                <div class="field-row">
+                  <div class="field"><label>접수번호</label><span>${escapeHtmlDaily_(accession)}</span></div>
+                  <div class="field"><label>순번</label><span>${escapeHtmlDaily_(sequence)}</span></div>
+                </div>
+                <div class="field"><label>고객명</label><span>${escapeHtmlDaily_(customer)}</span></div>
+                <div class="field"><label>요구내역</label><span>${escapeHtmlDaily_(requirement)}</span></div>
+              </div>
+            </body>
+          </html>`);
+        popup.document.close();
+
+        try {
+          popup.document.addEventListener("keydown", function(event) {
+            if (event.key === "Escape") popup.close();
+          });
+        } catch (_) {}
+
+        // 이 팝업이 열려있는 동안은 그 행을 파란색 "활성 행"으로 표시하고,
+        // 팝업이 닫히면(× 버튼/ESC/창 닫기 전부 포함) 다시 풀어줍니다.
+        const previousPopupRowPos = dailyDetailPopupRowPos;
+        dailyDetailPopupRowPos = rowPos;
+        if (previousPopupRowPos !== -1 && previousPopupRowPos !== rowPos) {
+          dailyUpdateRowActiveClass_(previousPopupRowPos);
+        }
+        dailyUpdateRowActiveClass_(rowPos);
+
+        const popupCloseCheckTimer = setInterval(function() {
+          if (!popup.closed) return;
+          clearInterval(popupCloseCheckTimer);
+          if (dailyDetailPopupRowPos === rowPos) {
+            dailyDetailPopupRowPos = -1;
+            dailyUpdateRowActiveClass_(rowPos);
+          }
+        }, 400);
+      }
+
+      // 일일업무 페이지 "메뉴얼" 버튼 — 일일접수현황/포장일자확인 사용법을
+      // 브랜드 상세 팝업(showDailyRowDetail_)과 같은 방식(가운데 뜨는 별도
+      // 창, ESC로 닫힘)으로 보여줍니다.
+      function showDailyManual_() {
+        const width = 560;
+        const height = 680;
+        const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+        const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+
+        const popup = window.open(
+          "",
+          "dailyManual_" + Date.now(),
+          "popup=yes,width=" + width + ",height=" + height + ",left=" + left + ",top=" + top +
+            ",menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+        );
+        if (!popup) return;
+
+        popup.document.write(`<!doctype html>
+          <html lang="ko">
+            <head>
+              <meta charset="utf-8" />
+              <title>일일업무 메뉴얼</title>
+              <style>
+                body { margin:0; font-family:"Malgun Gothic","Segoe UI",Arial,sans-serif; color:#0f172a; background:#f7f7f7; }
+                header { position:relative; padding:16px 40px 16px 20px; border-bottom:1px solid #dde3ea; background:#fff; }
+                h1 { margin:0; font-size:18px; }
+                .close { position:absolute; right:12px; top:10px; border:0; background:#fff; font-size:22px; font-weight:900; cursor:pointer; }
+                .body { padding:20px 24px 28px; }
+                h2 { font-size:15px; margin:22px 0 10px; color:#1d4ed8; }
+                h2:first-child { margin-top:0; }
+                ol { margin:0 0 4px; padding-left:20px; }
+                ol > li { font-size:14px; font-weight:700; margin-bottom:10px; }
+                ul { margin:4px 0 0; padding-left:18px; }
+                ul li { font-size:13px; font-weight:400; color:#334155; margin-bottom:4px; line-height:1.5; }
+              </style>
+            </head>
+            <body>
+              <header><button class="close" onclick="window.close()">&times;</button><h1>일일업무 메뉴얼</h1></header>
+              <div class="body">
+                <h2>&lt;일일접수현황&gt;</h2>
+                <ol>
+                  <li>유형별내역교체
+                    <ul>
+                      <li>ERP '유형별하자내역조회'에서 회사 '퍼시스,일룸' 선택, 유/무상 '무상' 선택, 접수일자 체크, 날짜 D-5~D+1 선택(예 : 오늘 7월28일, 접수일자 7월23~29일)</li>
+                      <li>조회 클릭 후 제품공급업체 필터 '퍼시스충주1, 퍼시스충주2', 이후 접수번호▲ 정렬. 꼭 필터이후 정렬해야 합니다.</li>
+                      <li>클레임 개인업무 페이지 유형별내역교체 클릭, 일일접수현황 유형별자료 시트 내용 교체 후 닫기</li>
+                    </ul>
+                  </li>
+                  <li>추가건 확인
+                    <ul>
+                      <li>추가건 분석(추가건 자동 비교됨)</li>
+                      <li>브랜드 더블클릭시 상세내용 확인 가능, ERP 'AS 요청접수/점검' 접수번호or고객명 검색 상세내용/사진 확인 가능</li>
+                      <li>번호 앞 체크박스 선택 후 회의자료 저장 버튼 누루면 회의자료 쪽으로 해당건 저장됨</li>
+                    </ul>
+                  </li>
+                  <li>회의자료
+                    <ul>
+                      <li>생산로트, 원인처, 포장처, 유형, 하자내역, 미결구분 자료 입력 가능</li>
+                      <li>하자내역은 ERP 'AS 요청접수/점검' 상세내용 확인 후 입력</li>
+                    </ul>
+                  </li>
+                </ol>
+
+                <h2>&lt;포장일자확인&gt;</h2>
+                <ol>
+                  <li>포장실적상세 데이터 교체
+                    <ul>
+                      <li>클릭시 기존 누적데이터 일자 확인 가능</li>
+                      <li>ERP 생산일지(포장실적상세) 페이지에서 기준일자 선택(누적데이터 일자~어제까지) 생산처 '생산4라인' 선택</li>
+                      <li>자료 변환 후 스프레드시트 맨아래 데이터 연결해서 붙여넣기.</li>
+                    </ul>
+                  </li>
+                  <li>포장일확인
+                    <ul>
+                      <li>금일 접수된 일자 선택 확인시 로트번호 들어간 접수건은 자동으로 포장일자 확인 가능</li>
+                    </ul>
+                  </li>
+                  <li>포장일엑셀다운로드
+                    <ul>
+                      <li>포장일자 확인된 자료 다운로드 받아 실험실 포장일지 확인 사진촬영</li>
+                    </ul>
+                  </li>
+                </ol>
+              </div>
+            </body>
+          </html>`);
+        popup.document.close();
+
+        try {
+          popup.document.addEventListener("keydown", function(event) {
+            if (event.key === "Escape") popup.close();
+          });
+        } catch (_) {}
+      }
+
+      function showMonthlyRegularTaskManual_() {
+        const width = 560;
+        const height = 680;
+        const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+        const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+
+        const popup = window.open(
+          "",
+          "monthlyRegularTaskManual_" + Date.now(),
+          "popup=yes,width=" + width + ",height=" + height + ",left=" + left + ",top=" + top +
+            ",menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+        );
+        if (!popup) return;
+
+        popup.document.write(`<!doctype html>
+          <html lang="ko">
+            <head>
+              <meta charset="utf-8" />
+              <title>월간업무 정기업무(중요)</title>
+              <style>
+                body { margin:0; font-family:"Malgun Gothic","Segoe UI",Arial,sans-serif; color:#0f172a; background:#f7f7f7; }
+                header { position:relative; padding:16px 40px 16px 20px; border-bottom:1px solid #dde3ea; background:#fff; }
+                h1 { margin:0; font-size:18px; }
+                .close { position:absolute; right:12px; top:10px; border:0; background:#fff; font-size:22px; font-weight:900; cursor:pointer; }
+                .body { padding:20px 24px 28px; }
+                h2 { font-size:15px; margin:22px 0 10px; color:#1d4ed8; }
+                h2:first-child { margin-top:0; }
+                ol { margin:0 0 4px; padding-left:20px; }
+                ol > li { font-size:14px; font-weight:700; margin-bottom:10px; }
+              </style>
+            </head>
+            <body>
+              <header><button class="close" onclick="window.close()">&times;</button><h1>월간업무 정기업무(중요)</h1></header>
+              <div class="body">
+                <h2>&lt;클레임월마감&gt;</h2>
+                <ol>
+                  <li>내작클레임 문서보고 -&gt; 전표작성</li>
+                  <li>외작클레임 반제품/제품 내용정리 메일발송 -&gt; 1주일 후 보고서 작성</li>
+                  <li>외작클레임 자재 내용정리 -&gt; 충주_as자재_수급및이슈_공유방 내역서 공유</li>
+                  <li>외작클레임 반제품/제품/자재 ERP 고객클레임 정보 확정 -&gt; 클레임 정보조회(전체) 클레임확정</li>
+                </ol>
+
+                <h2>&lt;일룸통보서&gt;</h2>
+                <ol>
+                  <li>일룸고객클레임 통보서 내역확인(메일), 퍼시스고객클레임 통보서 내역확인(채팅)</li>
+                  <li>일룸고객클레임 통보서 회신(메일) -&gt; 인감 결제</li>
+                  <li>일룸결품클레임 통보서 회신(채팅)</li>
+                  <li>일룸 고객/결품클레임 통보서 인감 확인 후 전표작성, 1,500만 이상 중역결제 진행</li>
+                </ol>
+
+                <h2>&lt;무상재공마감&gt;</h2>
+                <ol>
+                  <li>퍼시스 무상재공 조치건 월마감, ERP 유형별하자내역조회 -&gt; 전표작성</li>
+                </ol>
+
+                <h2>&lt;2공장 유상마감&gt;</h2>
+                <ol>
+                  <li>ERP A/S자재 입고계획확정 2공장 퍼시스,일룸 재공 유상 마감자료 작성</li>
+                  <li>물류 조용선님 전달 품의 작성 -&gt; 단품마스터 JJX12,JJX22 금액변경 결제</li>
+                  <li>거래명세서 작성 후 채팅 as-사업장-자재_유상-월마감 명세서 공유</li>
+                </ol>
+              </div>
+            </body>
+          </html>`);
+        popup.document.close();
+
+        try {
+          popup.document.addEventListener("keydown", function(event) {
+            if (event.key === "Escape") popup.close();
+          });
+        } catch (_) {}
+      }
+
+      async function replaceDailyReceiptStatusData() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const proceed = window.confirm(
+          "퍼시스 유형별하자내역 조회에서 회사, 유/무상, 접수일자 선택 후 제품공급업체를 퍼시스충주1,2공장으로 필터해서 자료변환 하세요."
+        );
+        if (!proceed) return;
+
+        setDailyStatus_("일일접수현황 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setDailyStatus_("일일접수현황 스프레드시트를 새 탭에서 열었습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("일일접수현황 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      // "유형별자료" 시트를 "이전데이터" 시트와 대조해서 새로 추가된
+      // 건만 "추가건" 시트에 써두고, 비교 기준(이전데이터 시트)도
+      // 최신 상태로 갱신합니다.
+      async function checkDailyAddedEntries() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const proceed = window.confirm(
+          "이전데이터 시트가 유형별자료 시트로 덮어 써집니다.\n" +
+          "유형별자료 시트 데이터를 교체하셨는지 확인해주세요."
+        );
+        if (!proceed) return;
+
+        setDailyStatus_("추가건 확인 중...", "");
+        el.dailyCheckAddedConfirmBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "checkAddedEntries" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const summary = (data.results || [])
+            .map(function(r) { return r.factory + " " + r.addedCount + "건"; })
+            .join(", ");
+          setDailyStatus_("추가건 확인 완료: " + summary, "ok");
+
+          el.dailyAddedEntriesTabs.classList.add("visible");
+          const firstTab = el.dailyAddedEntriesTabs.querySelector("button[data-sheet]");
+          if (firstTab) await selectDailyAddedEntriesTab_(firstTab);
+        } catch (error) {
+          setDailyStatus_("추가건 확인 실패: " + error.message, "error");
+          if (error.message.includes("1행이 비어있으면")) alert(error.message);
+        } finally {
+          el.dailyCheckAddedConfirmBtn.disabled = false;
+        }
+      }
+
+      // 현재 표에 보이는 추가건이 어느 회사(FACTORY_GROUPS의 label) 것인지 —
+      // "삭제" 버튼이 어느 회사로 지울지 판단하는 데 씀. 탭 버튼의
+      // data-factory 속성에서 그대로 가져옴(시트 이름에 회사명이 더 이상
+      // 들어있지 않아서 문자열로 유추할 수 없음).
+      let dailyCurrentAddedFactory = "";
+
+      async function selectDailyAddedEntriesTab_(tabBtn) {
+        el.dailyAddedEntriesTabs.querySelectorAll("button[data-sheet]").forEach(function(b) {
+          b.classList.remove("active");
+        });
+        tabBtn.classList.add("active");
+
+        const sheetName = tabBtn.dataset.sheet;
+        dailyCurrentAddedFactory = tabBtn.dataset.factory || "";
+
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+        if (!url) return;
+
+        setDailyStatus_(sheetName + " 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent(sheetName);
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, sortFilterEnabled: true });
+          setDailyStatus_(sheetName + " " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // 탭 전환 실패 시 이전 탭의 표 내용이 새 탭이 활성화된 채로
+          // 화면에 남아 헷갈리지 않도록 표만 비웁니다(탭 바 자체는 유지).
+          el.dailyThead.innerHTML = "";
+          el.dailyTbody.innerHTML = "";
+          dailyCurrentRows = [];
+          dailyCheckedRowPositions = new Set();
+          setDailyStatus_(sheetName + " 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "회의자료" 시트 — 접수일자/번호/구분/접수번호/순번/부품코드/색상/
+      // 생산로트/고객명/원인처/포장처/유형/하자내역/미결구분/수량/금액/
+      // 패널티 헤더가 이미 시트에 들어가 있음. 조회 시에는 그 헤더를
+      // 절대 지우지 않고, 빈칸(생산로트/원인처/포장처/유형/하자내역/
+      // 미결구분)에 표에서 직접 입력한 뒤 "저장"으로 반영할 수 있음.
+      const MEETING_MATERIAL_SHEET_NAME = "회의자료";
+      // 백엔드가 자동 계산해서 맨 아래에 붙이는 "일일합계" 요약행의
+      // 접수일자 칸에 들어가는 표시 문자열 — 이 값과 같은 행은 실제
+      // 건이 아니므로 체크박스/선택전체/수정을 적용하지 않습니다.
+      const MEETING_MATERIAL_SUMMARY_LABEL_TEXT = "일일합계";
+
+      async function viewDailyMeetingMaterial_() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent(MEETING_MATERIAL_SHEET_NAME);
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, editable: true });
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // 실패했는데 표는 이전 화면(다른 시트) 내용 그대로 남고 이
+          // 버튼만 활성화된 것처럼 보이면 헷갈리므로, 화면을 완전히
+          // 초기화해서 "현재 아무 표도 안 보이는" 상태로 되돌립니다.
+          resetDailyTableView_();
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "반납내역서" 버튼 — 연결한 스프레드시트의 시트1을 접수현황처럼
+      // 표로 그대로 불러와 보여줍니다(읽기 전용).
+      async function viewDailyRecoveryDoc_() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("반납내역서 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("시트1");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, sortFilterEnabled: true });
+          setDailyStatus_("반납내역서 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          resetDailyTableView_();
+          setDailyStatus_("반납내역서 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "반납내역서 정리실행" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
+      // 실행해서 "정리결과" 시트를 지우고 새 정리 결과로 덮어씁니다.
+      async function runDailyRecoveryClean() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!window.confirm("정리를 실행하시겠습니까?")) return;
+
+        setDailyStatus_("반납내역서 정리실행 중...", "");
+        el.dailyRecoveryCleanRunBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "clean" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_("반납내역서 정리실행 완료: " + data.processedCount + "건 처리했습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("반납내역서 정리실행 실패: " + error.message, "error");
+        } finally {
+          el.dailyRecoveryCleanRunBtn.disabled = false;
+        }
+      }
+
+      const RECOVERY_RESULT_SHEET_NAME = "정리결과";
+
+      // "정리결과" 버튼 — 연결한 스프레드시트의 "정리결과" 시트를 표로
+      // 불러와 보여줍니다(직접 수정 가능).
+      async function viewDailyRecoveryResult_() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_(RECOVERY_RESULT_SHEET_NAME + " 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent(RECOVERY_RESULT_SHEET_NAME);
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, editable: true });
+          setDailyStatus_(RECOVERY_RESULT_SHEET_NAME + " " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          resetDailyTableView_();
+          setDailyStatus_(RECOVERY_RESULT_SHEET_NAME + " 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "정리결과" 표에서 직접 수정한 행들을 정리결과 시트에 저장합니다.
+      async function saveDailyRecoveryResultEdits() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const dirtyRows = dailyCurrentRows.filter(isDailyRowDirty_);
+
+        if (!dirtyRows.length) {
+          setDailyStatus_("변경된 내용이 없습니다.", "error");
+          return;
+        }
+
+        setDailyStatus_("저장 중...", "");
+        el.dailyRecoveryResultSaveBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "save",
+              sheet: RECOVERY_RESULT_SHEET_NAME,
+              rows: dirtyRows.map(function(row) {
+                return { rowIndex: row.rowIndex, loaded: row.loaded, values: row.values };
+              })
+            })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, editable: true });
+
+          const conflictCount = (data.conflicts || []).length;
+          const message = data.updatedCount + "건 저장했습니다." +
+            (conflictCount ? " (" + conflictCount + "건은 그 사이 다른 곳에서 바뀌어 충돌 — 덮어쓰지 않음)" : "");
+          setDailyStatus_(message, conflictCount ? "error" : "ok");
+        } catch (error) {
+          setDailyStatus_("저장 실패: " + error.message, "error");
+        } finally {
+          el.dailyRecoveryResultSaveBtn.disabled = false;
+        }
+      }
+
+      // "정리결과엑셀다운로드" 버튼 — 정리결과 시트만 담은 엑셀을 내려받습니다.
+      async function downloadDailyRecoveryResultExcel() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("정리결과 엑셀다운로드 중...", "");
+        el.dailyRecoveryResultDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportResult" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setDailyStatus_("정리결과 엑셀다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setDailyStatus_("정리결과 엑셀다운로드 실패: " + error.message, "error");
+        } finally {
+          el.dailyRecoveryResultDownloadBtn.disabled = false;
+        }
+      }
+
+      // "회수데이터 누적저장" 버튼 — 지금은 실제 누적저장 로직 없이,
+      // 연결한 "회수데이터"(주간업무 회수누적 원본데이터) 스프레드시트를
+      // 새 탭으로 열어주기만 합니다(유형별내역교체와 같은 방식).
+      async function openDailyRecoveryAccumulateSheet() {
+        const url = el.dailyRecoveryAccumulateWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("회수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("회수데이터 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setDailyStatus_("회수데이터 스프레드시트를 새 탭에서 열었습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("회수데이터 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      // "반납내역서 정리 교체" 버튼 — 시트1 내용을 정리할 내용으로 바꾸도록
+      // 안내한 뒤, 연결한 스프레드시트를 새 탭에서 열어줍니다(유형별내역교체와
+      // 같은 방식 — 실제 교체는 그 스프레드시트에서 직접 함).
+      async function replaceDailyRecoveryData() {
+        const url = el.dailyRecoveryWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const proceed = window.confirm("시트1번 반납내역서 내용을 정리할 내용으로 바꾸시겠습니까?");
+        if (!proceed) return;
+
+        setDailyStatus_("반납내역서 정리 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setDailyStatus_("반납내역서 정리 스프레드시트를 새 탭에서 열었습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("반납내역서 정리 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      // 회의자료 표에서 수정한(칸을 직접 고친) 행들을 저장합니다.
+      async function saveDailyMeetingMaterialEdits() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const dirtyRows = dailyCurrentRows.filter(isDailyRowDirty_);
+
+        if (!dirtyRows.length) {
+          setDailyStatus_("변경된 내용이 없습니다.", "error");
+          return;
+        }
+
+        setDailyStatus_("저장 중...", "");
+        el.dailyMeetingMaterialSaveBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "save",
+              sheet: MEETING_MATERIAL_SHEET_NAME,
+              rows: dirtyRows.map(function(row) {
+                return { rowIndex: row.rowIndex, loaded: row.loaded, values: row.values };
+              })
+            })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, editable: true });
+
+          const conflictCount = (data.conflicts || []).length;
+          const message = data.updatedCount + "건 저장했습니다." +
+            (conflictCount ? " (" + conflictCount + "건은 그 사이 다른 곳에서 바뀌어 충돌 — 덮어쓰지 않음)" : "");
+          setDailyStatus_(message, conflictCount ? "error" : "ok");
+        } catch (error) {
+          setDailyStatus_("저장 실패: " + error.message, "error");
+        } finally {
+          el.dailyMeetingMaterialSaveBtn.disabled = false;
+        }
+      }
+
+      // 회의자료 표에서 체크된 행들을 회의자료 시트에서 지웁니다
+      // (실제 시트 행 번호(rowIndex)로 정확히 지정해서 지움).
+      async function deleteDailyMeetingMaterialCheckedRows() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const checkedPositions = Array.from(dailyCheckedRowPositions).sort(function(a, b) { return a - b; });
+        const checkedRowIndexes = checkedPositions.map(function(pos) { return dailyCurrentRows[pos].rowIndex; });
+
+        if (!checkedRowIndexes.length) {
+          setDailyStatus_("삭제할 항목을 체크하세요.", "error");
+          return;
+        }
+
+        if (!window.confirm("선택건을 삭제하시겠습니까?")) return;
+
+        setDailyStatus_("삭제 중...", "");
+        el.dailyMeetingMaterialDeleteBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "deleteMeetingMaterialEntries", rowIndexes: checkedRowIndexes })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + "에서 " + data.deletedCount + "건 삭제했습니다.", "ok");
+
+          // 삭제 후 일일합계 요약행이 서버에서 다시 계산되므로, 화면도
+          // 최신 상태로 맞추기 위해 다시 불러옴
+          await viewDailyMeetingMaterial_();
+        } catch (error) {
+          setDailyStatus_("삭제 실패: " + error.message, "error");
+        } finally {
+          el.dailyMeetingMaterialDeleteBtn.disabled = false;
+        }
+      }
+
+      // "전일자료 삭제" 버튼 — 회의자료 시트에서 접수일자가 오늘보다
+      // 이전인 행을 모두 지웁니다(체크박스 선택과 무관하게 전체 대상).
+      async function deletePreviousDaysMeetingMaterial() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const today = new Date();
+        const todayLabel = today.getFullYear() + "-" +
+          String(today.getMonth() + 1).padStart(2, "0") + "-" +
+          String(today.getDate()).padStart(2, "0");
+
+        if (!window.confirm(todayLabel + " 이전 자료를 모두 삭제하시겠습니까?")) return;
+
+        setDailyStatus_("전일자료 삭제 중...", "");
+        el.dailyMeetingMaterialDeletePreviousBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "deletePreviousDaysMeetingMaterial" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + "에서 전일자료 " + data.deletedCount + "건 삭제했습니다.", "ok");
+
+          await viewDailyMeetingMaterial_();
+        } catch (error) {
+          setDailyStatus_("전일자료 삭제 실패: " + error.message, "error");
+        } finally {
+          el.dailyMeetingMaterialDeletePreviousBtn.disabled = false;
+        }
+      }
+
+      // "회의자료" 시트 전체를 xlsx로 내려받습니다.
+      async function downloadMeetingMaterialExcel() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("회의자료 엑셀다운로드 중...", "");
+        el.dailyMeetingMaterialDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportMeetingMaterial" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setDailyStatus_("회의자료 엑셀다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setDailyStatus_("회의자료 엑셀다운로드 실패: " + error.message, "error");
+        } finally {
+          el.dailyMeetingMaterialDownloadBtn.disabled = false;
+        }
+      }
+
+      // "접수데이터 누적저장" 버튼 — 현재 화면(회의자료 보기)에 이미
+      // 불러와져 있는 dailyCurrentRows를 그대로(헤더 없이, 맨 아래
+      // "일일합계" 요약행 제외) "접수데이터" 스프레드시트(시트1) 맨
+      // 아래에 이어 붙입니다. 회의자료의 18개 열(접수일자~일일합계)이
+      // 시트1의 A~R열과 순서가 그대로 같아서 매핑 없이 그대로 복사.
+      async function accumulateDailyReceiptData() {
+        const receiptUrl = el.dailyReceiptWebappUrl.value.trim();
+
+        if (!receiptUrl) {
+          setDailyStatus_("접수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const rows = dailyCurrentRows
+          .filter(function(row) { return row.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT; })
+          .map(function(row) { return row.values; });
+
+        if (!rows.length) {
+          setDailyStatus_("누적저장할 회의자료 내용이 없습니다.", "error");
+          return;
+        }
+
+        if (!window.confirm(
+          "접수데이터 누적데이터에 저장됩니다. 일접수 마감이 맞는지 꼭 확인 후 저장해주세요."
+        )) return;
+
+        setDailyStatus_("접수데이터에 누적저장 중...", "");
+        el.dailyReceiptAccumulateBtn.disabled = true;
+
+        try {
+          const response = await fetch(receiptUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "appendReceiptRows", rows: rows })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const updatedNote = data.updatedCount ? ", 하자내역 변경 " + data.updatedCount + "건 수정" : "";
+          const skippedNote = data.skippedCount ? " (중복 " + data.skippedCount + "건 제외)" : "";
+          setDailyStatus_("접수데이터에 " + data.addedCount + "건 누적저장했습니다" + updatedNote + "." + skippedNote, "ok");
+        } catch (error) {
+          setDailyStatus_("접수데이터 누적저장 실패: " + error.message, "error");
+        } finally {
+          el.dailyReceiptAccumulateBtn.disabled = false;
+        }
+      }
+
+      // 체크된 추가건 행들을 회의자료 형식으로 바꿔서 "회의자료" 시트에
+      // 바로 저장합니다(예전에는 접수저장건을 거쳐야 했지만, 그 중간
+      // 시트가 필요 없어져서 이제 추가건에서 바로 감). 원본 추가건
+      // 시트는 그대로 두고, 회의자료에 아직 없는 건만 뒤에 추가합니다.
+      async function saveDailyAddedEntriesToMeetingMaterial() {
+        const url = el.dailyReceiptStatusWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!dailyCurrentAddedFactory) {
+          setDailyStatus_("먼저 추가건 탭을 선택하세요.", "error");
+          return;
+        }
+
+        const checkedPositions = Array.from(dailyCheckedRowPositions).sort(function(a, b) { return a - b; });
+        const checkedRows = checkedPositions.map(function(pos) { return dailyCurrentRows[pos].values; });
+
+        if (!checkedRows.length) {
+          setDailyStatus_("회의자료로 저장할 항목을 체크하세요.", "error");
+          return;
+        }
+
+        if (!window.confirm("회의자료에 저장하시겠습니까?")) return;
+
+        setDailyStatus_("회의자료로 저장 중...", "");
+        el.dailyMoveToSavedBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "generateMeetingMaterial", rows: checkedRows })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + "에 " + data.addedCount + "건 추가했습니다.", "ok");
+
+          // 원본 추가건 시트는 지우지 않으므로(새로고침해도 방금 처리한
+          // 행이 그대로 보여야 헷갈리지 않음), 표에서 행을 걸러내지 않고
+          // 그대로 둔 채 체크만 풀어줍니다.
+          checkedPositions.forEach(function(pos) { dailyCheckedRowPositions.delete(pos); });
+          redrawDailyTable_();
+        } catch (error) {
+          setDailyStatus_("회의자료 저장 실패: " + error.message, "error");
+        } finally {
+          el.dailyMoveToSavedBtn.disabled = false;
+        }
+      }
+
+      // 포장실적상세 데이터를 마지막으로 입력한 날짜(서버에 저장되어
+      // 브라우저가 달라도 같은 값을 봄). 최초 한 번은 안내문 없이 그냥
+      // 날짜만 물어보고, 그 다음부터는 이 값을 안내문에 넣어서 보여줍니다.
+      let dailyPackagingLastDate = "";
+
+      async function replaceDailyPackagingData() {
+        const packagingUrl = el.dailyPackagingWebappUrl.value.trim();
+
+        if (!packagingUrl) {
+          setDailyStatus_("포장실적상세 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const title = dailyPackagingLastDate
+          ? (formatKoreanShortDate_(dailyPackagingLastDate) + "까지 포장실적상세 데이터를 입력하셨습니다.\n몇일까지 추가로 입력하시겠어요?")
+          : "어떤 날짜까지 포장실적상세 데이터를 입력하셨나요?";
+
+        const dateValue = await pickDailyPackagingDate(title, false);
+        if (!dateValue) return;
+
+        dailyPackagingLastDate = dateValue;
+        // 다음에 보여줄 안내문 기준일로 쓰이므로 서버에도 저장해둡니다
+        // (실패해도 이번 화면 동작에는 지장이 없어 조용히 무시합니다).
+        fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ dailyPackagingLastDate: dateValue })
+        }).catch(function() {});
+
+        setDailyStatus_("포장실적상세 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = packagingUrl + (packagingUrl.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setDailyStatus_(
+            formatKoreanShortDate_(dateValue) + "까지 데이터 입력을 위해 포장실적상세 스프레드시트를 새 탭에서 열었습니다.",
+            "ok"
+          );
+        } catch (error) {
+          setDailyStatus_("포장실적상세 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      async function checkDailyPackagingDate() {
+        const receiptUrl = el.dailyReceiptWebappUrl.value.trim();
+        const packagingUrl = el.dailyPackagingWebappUrl.value.trim();
+
+        if (!receiptUrl) {
+          setDailyStatus_("접수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!packagingUrl) {
+          setDailyStatus_("포장실적상세 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const dateValue = await pickDailyPackagingDate("어떤 접수일자를 확인할까요?", true);
+        if (!dateValue) return;
+
+        setDailyStatus_(dateValue + " 기준 포장 실적 확인 중...", "");
+        el.dailyPackagingDateCheckBtn.disabled = true;
+
+        try {
+          // 1) 접수데이터 웹앱에서 그 날짜에 해당하는 부품코드/색상/생산로트/
+          //    하자내역만 가볍게 받아옵니다(시트 전체를 내려받지 않음 —
+          //    접수데이터가 누적되면서 매우 커져도 이 응답은 그날 건수만큼만).
+          const keysRequestUrl = receiptUrl + (receiptUrl.includes("?") ? "&" : "?") +
+            "action=packagingKeys&sheet=" + encodeURIComponent(DAILY_SOURCE_SHEET_NAME) +
+            "&date=" + encodeURIComponent(dateValue);
+          const keysResponse = await fetch(keysRequestUrl);
+          const keysData = await keysResponse.json();
+          if (keysData.error) throw new Error("접수데이터: " + keysData.error);
+
+          // 2) 그 키 목록을 포장실적상세 웹앱에 그대로 넘겨서, 대조/정렬/
+          //    시트2 쓰기까지 전부 그 서버 쪽에서 한 번에 처리합니다
+          //    (포장실적상세 시트1 전체를 화면으로 내려받지 않아도 됨).
+          const checkResponse = await fetch(packagingUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "checkPackagingDate",
+              sheet: DAILY_SOURCE_SHEET_NAME,
+              keys: keysData.keys || []
+            })
+          });
+          const checkData = await checkResponse.json();
+          if (checkData.error) throw new Error("포장실적상세: " + checkData.error);
+
+          renderDailyTable_(checkData.header || [], checkData.rows || []);
+          setDailyStatus_(dateValue + " 기준 " + (checkData.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // 실패했는데 이전 날짜 조회 결과가 표에 그대로 남아있으면 이번
+          // 날짜의 결과처럼 헷갈릴 수 있어서, 실패 시 표를 비웁니다.
+          el.dailyThead.innerHTML = "";
+          el.dailyTbody.innerHTML = "";
+          dailyCurrentRows = [];
+          dailyCheckedRowPositions = new Set();
+          setDailyStatus_("포장일확인 실패: " + error.message, "error");
+        } finally {
+          el.dailyPackagingDateCheckBtn.disabled = false;
+        }
+      }
+
+      async function downloadDailyPackagingExcel() {
+        const packagingUrl = el.dailyPackagingWebappUrl.value.trim();
+
+        if (!packagingUrl) {
+          setDailyStatus_("포장실적상세 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("포장일엑셀다운로드 중...", "");
+        el.dailyPackagingDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(packagingUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportSheet2" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setDailyStatus_("포장일엑셀다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setDailyStatus_("포장일엑셀다운로드 실패: " + error.message, "error");
+        } finally {
+          el.dailyPackagingDownloadBtn.disabled = false;
+        }
+      }
+
+      // 버튼 옆 실행중/실행완료 표시. badgeEl이 없으면 아무 것도 안 함.
+      function setRunBadge_(badgeEl, phase) {
+        if (!badgeEl) return;
+
+        if (phase === "running") {
+          badgeEl.hidden = false;
+          badgeEl.className = "run-badge running";
+          badgeEl.textContent = "실행 중";
+        } else if (phase === "done") {
+          badgeEl.hidden = false;
+          badgeEl.className = "run-badge done";
+          badgeEl.textContent = "실행완료";
+        } else if (phase === "error") {
+          badgeEl.hidden = false;
+          badgeEl.className = "run-badge running";
+          badgeEl.textContent = "실패";
+        } else {
+          badgeEl.hidden = true;
+        }
+      }
+
+      function setMonthlyClosingStatus_(message, kind) {
+        el.monthlyClosingStatusLine.textContent = message || "";
+        el.monthlyClosingStatusLine.className = "status-line" + (kind ? " " + kind : "");
+      }
+
+      // "정리시트" 탭(원본 "정리" 시트)만 표에서 직접 수정할 수 있게 함
+      const MONTHLY_CLEANUP_SHEET_NAME = "정리";
+      let monthlyClosingCurrentRows = []; // { rowIndex, loaded: [...], current: [...] } — 정리시트 탭일 때만 씀
+
+      function isMonthlyClosingRowDirty_(row) {
+        for (let i = 0; i < row.loaded.length; i++) {
+          if (String(row.loaded[i] ?? "") !== String(row.current[i] ?? "")) return true;
+        }
+        return false;
+      }
+
+      function updateMonthlyClosingDirtyState_(rowPos, tr) {
+        tr.classList.toggle("dirty", isMonthlyClosingRowDirty_(monthlyClosingCurrentRows[rowPos]));
+      }
+
+      function renderMonthlyClosingTable_(header, rows) {
+        const editable = monthlyClosingCurrentSheet === MONTHLY_CLEANUP_SHEET_NAME;
+
+        const dateColIndexes = DATE_COLUMN_LABELS
+          .map(function(label) { return header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        // 발주일자/입고요청일 등 날짜 열은 서버가 Date 셀을 JSON으로 보낼 때
+        // ISO 문자열("2026-05-27T15:00:00.000Z")로 오는데, 편집하지 않은
+        // 날짜 칸도 저장할 때 이 원본 문자열이 그대로 다시 써지면 시트의
+        // 날짜 서식이 그 형식을 못 알아봐서 이상한 텍스트로 남습니다.
+        // 그래서 불러올 때부터 화면에 보이는 것과 같은 "yyyy-MM-dd"로
+        // 정리해서 loaded/current에 담아둡니다.
+        function normalizeRowForEdit_(values) {
+          return values.map(function(cellValue, colIndex) {
+            const isDateCol = dateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
+            return isDateCol ? formatDateKST(cellValue) : cellValue;
+          });
+        }
+
+        monthlyClosingCurrentRows = rows.map(function(row) {
+          const normalized = normalizeRowForEdit_(row.values);
+          return { rowIndex: row.rowIndex, loaded: normalized.slice(), current: normalized.slice() };
+        });
+
+        el.monthlyClosingThead.innerHTML = "";
+
+        const seqTh = document.createElement("th");
+        el.monthlyClosingThead.appendChild(seqTh);
+
+        header.forEach(function(label) {
+          const th = document.createElement("th");
+          th.textContent = label;
+          el.monthlyClosingThead.appendChild(th);
+        });
+
+        const narrowColIndexes = NARROW_COLUMN_LABELS
+          .map(function(label) { return header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        const amountColIndexes = AMOUNT_COLUMN_LABELS
+          .map(function(label) { return header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        el.monthlyClosingTbody.innerHTML = "";
+        monthlyClosingCurrentRows.forEach(function(row, rowPos) {
+          const tr = document.createElement("tr");
+
+          const seqTd = document.createElement("td");
+          seqTd.textContent = String(rowPos + 1);
+          seqTd.contentEditable = "false";
+          seqTd.classList.add("seq-cell");
+          tr.appendChild(seqTd);
+
+          row.current.forEach(function(cellValue, colIndex) {
+            const td = document.createElement("td");
+            td.contentEditable = editable ? "true" : "false";
+
+            const isDateCol = dateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
+            const isNarrowCol = narrowColIndexes.indexOf(colIndex) !== -1;
+            const isAmountCol = amountColIndexes.indexOf(colIndex) !== -1;
+            const displayValue = isDateCol
+              ? formatDateKST(cellValue)
+              : isAmountCol
+                ? formatAmount_(cellValue)
+                : (cellValue === null || cellValue === undefined ? "" : cellValue);
+
+            td.textContent = displayValue;
+
+            if (isNarrowCol) {
+              td.classList.add("narrow-hover-cell");
+              td.title = String(displayValue);
+            }
+
+            if (editable) {
+              td.addEventListener("input", function() {
+                row.current[colIndex] = isAmountCol ? stripAmountFormatting_(td.textContent) : td.textContent;
+                if (isNarrowCol) td.title = td.textContent;
+                updateMonthlyClosingDirtyState_(rowPos, tr);
+              });
+            }
+
+            tr.appendChild(td);
+          });
+
+          el.monthlyClosingTbody.appendChild(tr);
+        });
+
+        if (narrowColIndexes.length) {
+          applyNarrowColumnWidths_(header, narrowColIndexes, el.monthlyClosingThead, el.monthlyClosingTbody);
+        }
+      }
+
+      // 표에서 고친 내용을 원본 "정리" 시트에 그대로 저장합니다.
+      // 정리시트 탭이 아닐 때는(퍼시스/일룸/내역서는 읽기 전용) 저장하지 않습니다.
+      async function saveMonthlyClosingCleanupSheet() {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (monthlyClosingCurrentSheet !== MONTHLY_CLEANUP_SHEET_NAME) {
+          setMonthlyClosingStatus_("정리시트 탭에서만 저장할 수 있습니다.", "error");
+          return;
+        }
+
+        const dirtyRows = monthlyClosingCurrentRows.filter(isMonthlyClosingRowDirty_);
+
+        if (!dirtyRows.length) {
+          setMonthlyClosingStatus_("변경된 내용이 없습니다.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("저장 중...", "");
+        el.monthlyClosingSaveBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "save",
+              sheet: MONTHLY_CLEANUP_SHEET_NAME,
+              rows: dirtyRows.map(function(row) {
+                return { rowIndex: row.rowIndex, loaded: row.loaded, values: row.current };
+              })
+            })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+
+          if (data.conflicts && data.conflicts.length) {
+            setMonthlyClosingStatus_(
+              data.updatedCount + "건 저장, " + data.conflicts.length +
+              "건 충돌(다른 곳에서 먼저 수정됨) - 최신 값으로 갱신했습니다.",
+              "error"
+            );
+          } else {
+            setMonthlyClosingStatus_(data.updatedCount + "건 저장 완료.", "ok");
+          }
+        } catch (error) {
+          setMonthlyClosingStatus_("저장 실패: " + error.message, "error");
+        } finally {
+          el.monthlyClosingSaveBtn.disabled = false;
+        }
+      }
+
+      const MONTHLY_CLOSING_SPREADSHEET_ID = "1havLRI8jserbdVfcETda0a_4y7UdVpaV5knviKIanQg";
+      let monthlyClosingCurrentSheet = ""; // 처음엔 활성 탭 없음 — 탭을 눌러야 그때 불러옴
+
+      async function loadMonthlyClosingData() {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!monthlyClosingCurrentSheet) {
+          setMonthlyClosingStatus_("먼저 탭을 선택하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("불러오는 중...", "");
+
+        try {
+          const actionQuery = "action=read&sheet=" + encodeURIComponent(monthlyClosingCurrentSheet);
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + actionQuery;
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+          setMonthlyClosingStatus_((data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // 실패했는데 이전 탭 표 내용이 그대로 남아있으면 지금 선택된
+          // 탭(monthlyClosingCurrentSheet)의 데이터인 것처럼 헷갈릴 수
+          // 있어서, 실패 시 표를 비웁니다.
+          renderMonthlyClosingTable_([], []);
+          setMonthlyClosingStatus_("불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "추가건정리" 버튼 — 이번달/전월을 비교해 추가된 건만 골라
+      // "정리" 시트를 덮어쓰는 것까지만 합니다(퍼시스/일룸 등 브랜드별
+      // 분리는 하지 않음 — "브랜드별정리" 버튼에서 이어서 처리).
+      async function cleanupAddedItems() {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "이번달/전월을 비교해 추가된 건만 골라 '정리'시트를 덮어씁니다."
+        )) return;
+
+        setMonthlyClosingStatus_("추가건정리 실행 중...", "");
+        el.monthlyClosingCleanupAddedBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "cleanupAddedItems" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setMonthlyClosingStatus_("추가건정리 완료: 정리 " + data.newRowCount + "건", "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_("추가건정리 실패: " + error.message, "error");
+        } finally {
+          el.monthlyClosingCleanupAddedBtn.disabled = false;
+        }
+      }
+
+      // "브랜드별정리" 버튼 — "정리" 시트(추가건정리로 이미 만들어져
+      // 있어야 함)를 접수번호 앞글자 기준으로 나눠 퍼시스/일룸/
+      // 퍼시스내역서/일룸내역서 시트에 각각 덮어씁니다.
+      async function cleanupByBrand() {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "브랜드별 정리를 시작합니다.\n" +
+          "정리시트의 진행상태가 '입고완료'인지 금액부분 누락이 없는지 확인 후 진행해주세요."
+        )) return;
+
+        setMonthlyClosingStatus_("브랜드별정리 실행 중...", "");
+        el.monthlyClosingCleanupByBrandBtn.disabled = true;
+        setRunBadge_(el.monthlyClosingCleanupByBrandRunBadge, "running");
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "cleanupByBrand" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const vendorCounts = data.vendorCounts || {};
+          const vendorSummary = Object.keys(vendorCounts)
+            .map(function(name) { return name + " " + vendorCounts[name] + "건"; })
+            .join(", ");
+
+          setMonthlyClosingStatus_("브랜드별정리 완료: " + vendorSummary, "ok");
+          setRunBadge_(el.monthlyClosingCleanupByBrandRunBadge, "done");
+
+          await loadMonthlyClosingData();
+        } catch (error) {
+          setMonthlyClosingStatus_("브랜드별정리 실패: " + error.message, "error");
+          setRunBadge_(el.monthlyClosingCleanupByBrandRunBadge, "error");
+        } finally {
+          el.monthlyClosingCleanupByBrandBtn.disabled = false;
+        }
+      }
+
+      async function downloadMonthlyClosingSubset_(action, buttonEl, label) {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_(label + " 다운로드 중...", "");
+        buttonEl.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: action })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setMonthlyClosingStatus_(label + " 다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_(label + " 다운로드 실패: " + error.message, "error");
+        } finally {
+          buttonEl.disabled = false;
+        }
+      }
+
+      function downloadPaidClosing() {
+        return downloadMonthlyClosingSubset_("exportPaidClosing", el.monthlyClosingDownloadBtn, "유상마감");
+      }
+
+      function downloadPaidClosingDetail() {
+        return downloadMonthlyClosingSubset_("exportPaidClosingDetail", el.monthlyClosingDownloadDetailBtn, "유상마감내역서");
+      }
+
+      function setStatus(message, kind) {
+        el.statusLine.textContent = message || "";
+        el.statusLine.className = "status-line" + (kind ? " " + kind : "");
+      }
+
+      function getConfig() {
+        return {
+          url: el.webappUrl.value.trim()
+        };
+      }
+
+      function isMonthlyReadOnlyTab() {
+        return state.currentSheet === MONTHLY_SUMMARY_KEY ||
+          state.currentSheet === MONTHLY_CLOSING_KEY ||
+          state.currentSheet === MONTHLY_RAW_DATA_KEY ||
+          getMonthlyWeekNumber(state.currentSheet) !== null;
+      }
+
+      function isReadOnlyTab() {
+        return isMonthlyReadOnlyTab() || isRecoveryTab() || isDeleteSheetTab() ||
+          isRecoveryMatchTab() || isOpenAsSheetTab() || isClaimDashboardTab();
+      }
+
+      function refreshActionButtonsVisibility() {
+        const readOnly = isReadOnlyTab();
+        const isMatchTab = isRecoveryMatchTab();
+        const isStatusTab = isOpenAsSheetTab();
+        const isDeleteTab = isDeleteSheetTab();
+        const isClaimTab = isClaimDashboardTab();
+
+        el.runCleanupBtn.style.display = readOnly ? "none" : "";
+        el.saveRowsBtn.style.display = readOnly ? "none" : "";
+        el.dirtyCount.style.display = readOnly ? "none" : "";
+        el.recoveryMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
+        el.accumulatedMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
+        el.openAsSheetToolbarBtn.style.display = isStatusTab ? "" : "none";
+        el.cleanupBothToolbarBtn.style.display = isStatusTab ? "" : "none";
+        el.removeDeletedToolbarBtn.style.display = isDeleteTab ? "" : "none";
+        el.claimUpdateWeeklyBtn.style.display = isClaimTab ? "" : "none";
+        el.claimReshapeMonthBtn.style.display = isClaimTab ? "" : "none";
+      }
+
+      async function loadRecoverySheet_() {
+        const csvUrl = el.recoveryCsvUrl.value.trim();
+
+        if (!csvUrl) {
+          setStatus("회수누적 웹에 게시 주소를 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        state.currentSheet = RECOVERY_KEY;
+        refreshActionButtonsVisibility();
+
+        setStatus("불러오는 중...", "");
+        state.loading = true;
+        el.saveRowsBtn.disabled = true;
+
+        try {
+          const proxyUrl = "/api/google-published-csv?url=" + encodeURIComponent(csvUrl);
+          const response = await fetch(proxyUrl);
+          const text = await response.text();
+
+          if (!response.ok) {
+            let message = text;
+            try { message = JSON.parse(text).error || text; } catch (_) {}
+            throw new Error(message);
+          }
+
+          const rows = parseCsv(text);
+
+          if (!rows.length) {
+            state.header = [];
+            state.rows = [];
+            renderTable();
+            setStatus("데이터 없음", "");
+            return;
+          }
+
+          state.header = rows[0];
+          state.rows = rows.slice(1).map(function(row, i) {
+            return { rowIndex: i + 2, loaded: row.slice(), current: row.slice() };
+          });
+
+          renderTable();
+          setStatus(state.rows.length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // loadSheet()와 같은 이유로, 실패 시 이전 탭 데이터가 남아
+          // "회수누적" 탭 것처럼 보이지 않도록 표를 비웁니다.
+          state.header = [];
+          state.rows = [];
+          renderTable();
+          setStatus("불러오기 실패: " + error.message, "error");
+        } finally {
+          state.loading = false;
+        }
+      }
+
+      let claimDashboardBlobUrl = null;
+
+      function showClaimDashboardViewer_(show) {
+        el.claimDashboardViewer.hidden = !show;
+        el.tableWrap.hidden = show;
+
+        if (show) {
+          el.monthlyCountsBar.hidden = true;
+        } else {
+          setClaimDashboardPdf_(null); // 탭을 벗어나면 blob URL을 정리
+        }
+      }
+
+      function setClaimDashboardPdf_(base64) {
+        if (claimDashboardBlobUrl) {
+          URL.revokeObjectURL(claimDashboardBlobUrl);
+          claimDashboardBlobUrl = null;
+        }
+
+        if (!base64) {
+          el.claimDashboardFrame.src = "about:blank";
+          return;
+        }
+
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+
+        claimDashboardBlobUrl = URL.createObjectURL(blob);
+        el.claimDashboardFrame.src = claimDashboardBlobUrl;
+      }
+
+      async function loadClaimDashboardSheet_() {
+        const url = el.claimDashboardWebappUrl.value.trim();
+
+        if (!url) {
+          setStatus("클레임 대시보드 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        state.currentSheet = CLAIM_DASHBOARD_KEY;
+        refreshActionButtonsVisibility();
+        showClaimDashboardViewer_(true);
+
+        setStatus("불러오는 중... (표가 커서 시간이 걸릴 수 있습니다)", "");
+        state.loading = true;
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=read";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+
+          if (!data.pdfBase64) {
+            setClaimDashboardPdf_(null);
+            setStatus("데이터 없음", "");
+            return;
+          }
+
+          setClaimDashboardPdf_(data.pdfBase64);
+          setStatus("불러왔습니다.", "ok");
+        } catch (error) {
+          setClaimDashboardPdf_(null);
+          setStatus("불러오기 실패: " + error.message, "error");
+        } finally {
+          state.loading = false;
+        }
+      }
+
+      async function loadSheet(sheetName) {
+        if (sheetName !== CLAIM_DASHBOARD_KEY) {
+          showClaimDashboardViewer_(false);
+        }
+
+        if (sheetName === RECOVERY_KEY) {
+          await loadRecoverySheet_();
+          return;
+        }
+
+        if (sheetName === CLAIM_DASHBOARD_KEY) {
+          await loadClaimDashboardSheet_();
+          return;
+        }
+
+        const weekNumber = getMonthlyWeekNumber(sheetName);
+        const isMonthlySummary = sheetName === MONTHLY_SUMMARY_KEY;
+        const isMonthlyClosing = sheetName === MONTHLY_CLOSING_KEY;
+        const isMonthlyRawData = sheetName === MONTHLY_RAW_DATA_KEY;
+        const isMonthly = isMonthlySummary || isMonthlyClosing || isMonthlyRawData || weekNumber !== null;
+
+        const requestBaseUrl = isMonthly
+          ? el.monthlyWebappUrl.value.trim()
+          : getConfig().url;
+
+        if (!requestBaseUrl) {
+          setStatus(
+            isMonthly
+              ? "월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요."
+              : "웹 앱 URL을 먼저 입력하고 저장하세요.",
+            "error"
+          );
+          return;
+        }
+
+        state.currentSheet = sheetName;
+        refreshActionButtonsVisibility();
+
+        setStatus("불러오는 중...", "");
+        state.loading = true;
+        el.saveRowsBtn.disabled = true;
+
+        try {
+          const isOpenAsSheet = sheetName === OPEN_AS_SHEET_KEY;
+
+          const actualSheetName = sheetName === RECOVERY_MATCH_KEY
+            ? RECOVERY_MATCH_SHEET_NAME
+            : sheetName;
+
+          const actionQuery = isMonthlySummary
+            ? "action=summary"
+            : isMonthlyClosing
+              ? "action=closing"
+              : isMonthlyRawData
+                ? "action=rawData"
+                : weekNumber !== null
+                  ? "action=weekByNumber&week=" + weekNumber
+                  : isOpenAsSheet
+                    ? "action=currentWeekStatus"
+                    : "sheet=" + encodeURIComponent(actualSheetName);
+
+          const requestUrl = requestBaseUrl +
+            (requestBaseUrl.includes("?") ? "&" : "?") + actionQuery;
+
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+
+          if ((isMonthly || isOpenAsSheet) && !data.sheet) {
+            state.header = [];
+            state.rows = [];
+            renderTable();
+            setStatus("데이터 없음", "");
+            return;
+          }
+
+          state.header = data.header || [];
+          state.rows = (data.rows || []).map(function(row) {
+            return {
+              rowIndex: row.rowIndex,
+              loaded: row.values.slice(),
+              current: row.values.slice()
+            };
+          });
+
+          renderTable();
+          setStatus(state.rows.length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          // 실패했는데 이전 탭 내용이 표에 그대로 남아있으면, state.currentSheet는
+          // 이미 새 탭으로 바뀐 상태라 어느 탭 데이터인지 헷갈리고 그 상태로
+          // 저장/삭제를 누르면 엉뚱한 탭 기준으로 동작할 수 있습니다. 표를
+          // 비워서 "지금 아무 데이터도 없는" 상태를 명확히 보여줍니다.
+          state.header = [];
+          state.rows = [];
+          renderTable();
+          setStatus("불러오기 실패: " + error.message, "error");
+        } finally {
+          state.loading = false;
+        }
+      }
+
+      const LEADING_COLUMNS = 1; // 대시보드에서만 앞에 붙이는 "구분"(순번) 열
+
+      function renderTable() {
+        el.thead.innerHTML = "";
+
+        const seqTh = document.createElement("th");
+        seqTh.textContent = "구분";
+        el.thead.appendChild(seqTh);
+
+        state.header.forEach(function(label) {
+          const th = document.createElement("th");
+          th.textContent = label || "";
+          el.thead.appendChild(th);
+        });
+
+        const dateColIndexes = DATE_COLUMN_LABELS
+          .map(function(label) { return state.header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        const narrowColIndexes = NARROW_COLUMN_LABELS
+          .map(function(label) { return state.header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        const amountColIndexes = AMOUNT_COLUMN_LABELS
+          .map(function(label) { return state.header.indexOf(label); })
+          .filter(function(i) { return i !== -1; });
+
+        const readOnly = isReadOnlyTab();
+
+        el.tbody.innerHTML = "";
+        state.rows.forEach(function(row, rowPos) {
+          const tr = document.createElement("tr");
+          tr.dataset.rowIndex = row.rowIndex;
+
+          const seqTd = document.createElement("td");
+          seqTd.textContent = String(rowPos + 1);
+          seqTd.contentEditable = "false";
+          seqTd.classList.add("seq-cell");
+          tr.appendChild(seqTd);
+
+          row.current.forEach(function(cellValue, colIndex) {
+            const td = document.createElement("td");
+            td.contentEditable = readOnly ? "false" : "true";
+
+            const isDateCol = dateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
+            const isNarrowCol = narrowColIndexes.indexOf(colIndex) !== -1;
+            const isAmountCol = amountColIndexes.indexOf(colIndex) !== -1;
+            const rawDisplayValue = isDateCol
+              ? formatDateKST(cellValue)
+              : isAmountCol
+                ? formatAmount_(cellValue)
+                : (cellValue === null || cellValue === undefined ? "" : cellValue);
+
+            // 날짜 칸에 시트 자체에 남아있는 "#######"류 깨진 텍스트가
+            // 그대로 들어있으면(formatDateKST가 날짜로 못 읽어서 원본
+            // 문자열을 그대로 반환한 경우) 매우 길어서 칸이 과도하게
+            // 넓어지는 문제가 있었습니다. 편집 가능한 표는 화면 글자를
+            // 그대로 저장에 쓰기도 해서 건드리지 않고, 읽기 전용 표에서만
+            // "2026-08-03" 정도 길이로 잘라서 보여줍니다.
+            const DATE_DISPLAY_MAX_LENGTH = 12;
+            const displayValue = (isDateCol && readOnly && String(rawDisplayValue).length > DATE_DISPLAY_MAX_LENGTH)
+              ? String(rawDisplayValue).slice(0, DATE_DISPLAY_MAX_LENGTH) + "…"
+              : rawDisplayValue;
+
+            td.textContent = displayValue;
+
+            if (isNarrowCol) {
+              td.classList.add("narrow-hover-cell");
+              td.title = String(displayValue);
+            }
+
+            td.addEventListener("input", function() {
+              row.current[colIndex] = isAmountCol ? stripAmountFormatting_(td.textContent) : td.textContent;
+              if (isNarrowCol) td.title = td.textContent;
+              updateDirtyState(rowPos, tr);
+            });
+            tr.appendChild(td);
+          });
+
+          el.tbody.appendChild(tr);
+        });
+
+        if (narrowColIndexes.length) {
+          applyNarrowColumnWidths_(state.header, narrowColIndexes, el.thead, el.tbody);
+        }
+
+        renderMonthlyCountsBar();
+        updateDirtyCount();
+      }
+
+      const PACKAGE_COLUMN_LABEL = "포장";
+
+      // 충주 = 1/4/7라인(내작) + 외주(외작)
+      function classifyPackage_(value) {
+        const text = String(value === null || value === undefined ? "" : value).trim();
+
+        if (/^[147]\s*라인$/.test(text)) return "inner";
+        if (/^외주/.test(text)) return "outer"; // "외주(성진)"처럼 뒤에 업체명이 붙어도 포함
+        if (text === "VN") return "vn";
+        if (text === "미회수") return "uncollected";
+        return null;
+      }
+
+      function renderMonthlyCountsBar() {
+        if (isRecoveryTab()) {
+          el.monthlyCountsBar.hidden = true;
+          return;
+        }
+
+        const packageColIndex = state.header.indexOf(PACKAGE_COLUMN_LABEL);
+
+        if (packageColIndex === -1) {
+          el.monthlyCountsBar.hidden = true;
+          return;
+        }
+
+        let innerCount = 0;
+        let outerCount = 0;
+        let vnCount = 0;
+        let uncollectedCount = 0;
+
+        state.rows.forEach(function(row) {
+          const category = classifyPackage_(row.current[packageColIndex]);
+          if (category === "inner") innerCount++;
+          else if (category === "outer") outerCount++;
+          else if (category === "vn") vnCount++;
+          else if (category === "uncollected") uncollectedCount++;
+        });
+
+        const chungjuCount = innerCount + outerCount;
+        const totalCount = chungjuCount + vnCount + uncollectedCount;
+
+        el.monthlyCountsBar.innerHTML =
+          "<span><span class=\"count-label\">합계</span>" + totalCount + "건</span>" +
+          "<span><span class=\"count-label\">충주</span>" + chungjuCount + "건 (내작 " + innerCount + "건, 외작 " + outerCount + "건)</span>" +
+          "<span><span class=\"count-label\">VN</span>" + vnCount + "건</span>" +
+          "<span><span class=\"count-label\">미회수</span>" + uncollectedCount + "건</span>";
+
+        el.monthlyCountsBar.hidden = false;
+      }
+
+      // 헤더 글자에 정렬 화살표 같은 부가 기호가 붙어있어도 찾을 수 있도록
+      // 정확히 일치하는 열이 없으면 라벨을 포함하는 열을 찾습니다.
+      function findHeaderIndex_(header, label) {
+        const exact = header.indexOf(label);
+        if (exact !== -1) return exact;
+
+        for (let i = 0; i < header.length; i++) {
+          if (String(header[i] || "").includes(label)) return i;
+        }
+
+        return -1;
+      }
+
+      function applyNarrowColumnWidths_(headerList, narrowColIndexes, theadRowEl, tbodyEl, referenceLabel, widthPlan) {
+        const headerCells = theadRowEl.querySelectorAll("th");
+        const refIndex = findHeaderIndex_(headerList, referenceLabel || NARROW_WIDTH_REFERENCE_LABEL);
+        const refCell = refIndex !== -1 ? headerCells[refIndex + LEADING_COLUMNS] : null;
+        const width = refCell ? Math.ceil(refCell.getBoundingClientRect().width) : NARROW_FALLBACK_WIDTH;
+
+        narrowColIndexes.forEach(function(colIndex) {
+          const th = headerCells[colIndex + LEADING_COLUMNS];
+          if (th) {
+            th.style.maxWidth = width + "px";
+            th.style.width = width + "px";
+          }
+
+          tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+            td.style.maxWidth = width + "px";
+            td.style.width = width + "px";
+          });
+
+          if (widthPlan) widthPlan[colIndex + LEADING_COLUMNS] = width;
+        });
+      }
+
+      function isRowDirty(row) {
+        for (let i = 0; i < row.loaded.length; i++) {
+          if (String(row.loaded[i] ?? "") !== String(row.current[i] ?? "")) return true;
+        }
+        return false;
+      }
+
+      function updateDirtyState(rowPos, tr) {
+        const row = state.rows[rowPos];
+        tr.classList.toggle("dirty", isRowDirty(row));
+        tr.classList.remove("conflict");
+        updateDirtyCount();
+      }
+
+      function updateDirtyCount() {
+        const dirtyRows = state.rows.filter(isRowDirty);
+        el.dirtyCount.textContent = dirtyRows.length
+          ? dirtyRows.length + "개 행 변경됨 (저장 전)"
+          : "";
+        el.saveRowsBtn.disabled = dirtyRows.length === 0 || state.loading;
+      }
+
+      async function saveDirtyRows() {
+        if (isReadOnlyTab()) return;
+
+        const dirtyRows = state.rows.filter(isRowDirty);
+
+        if (!dirtyRows.length) return;
+
+        const config = getConfig();
+        setStatus("저장 중...", "");
+        el.saveRowsBtn.disabled = true;
+
+        try {
+          const response = await fetch(config.url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              sheet: state.currentSheet,
+              rows: dirtyRows.map(function(row) {
+                return {
+                  rowIndex: row.rowIndex,
+                  key: row.loaded[KEY_COLUMN_INDEX],
+                  values: row.current
+                };
+              })
+            })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          state.header = data.header || state.header;
+          state.rows = (data.rows || []).map(function(row) {
+            return {
+              rowIndex: row.rowIndex,
+              loaded: row.values.slice(),
+              current: row.values.slice()
+            };
+          });
+
+          renderTable();
+
+          if (data.conflicts && data.conflicts.length) {
+            setStatus(
+              data.updatedCount + "건 저장, " + data.conflicts.length +
+              "건 충돌(다른 곳에서 먼저 수정됨) - 새로고침된 값으로 갱신했습니다.",
+              "error"
+            );
+          } else {
+            setStatus(data.updatedCount + "건 저장 완료.", "ok");
+          }
+        } catch (error) {
+          setStatus("저장 실패: " + error.message, "error");
+          el.saveRowsBtn.disabled = false;
+        }
+      }
+
+      async function runCleanup() {
+        if (isReadOnlyTab()) return;
+
+        const config = getConfig();
+
+        if (!config.url) {
+          setStatus("웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const dirtyRows = state.rows.filter(isRowDirty);
+        const warningLines = [
+          state.currentSheet + " 기준으로 정리(매크로)를 실행합니다.",
+          "원본 시트를 다시 다듬고 추가건/삭제건을 새로 계산해 덮어씁니다."
+        ];
+
+        if (dirtyRows.length) {
+          warningLines.push("저장하지 않은 화면 수정 " + dirtyRows.length + "건은 사라집니다.");
+        }
+
+        if (!confirm(warningLines.join("\n"))) return;
+
+        setStatus("정리 실행 중... (시간이 걸릴 수 있습니다)", "");
+        el.runCleanupBtn.disabled = true;
+        el.reloadBtn.disabled = true;
+        el.saveRowsBtn.disabled = true;
+
+        try {
+          const response = await fetch(config.url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "runCleanup",
+              sheet: state.currentSheet
+            })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          state.header = data.header || [];
+          state.rows = (data.rows || []).map(function(row) {
+            return {
+              rowIndex: row.rowIndex,
+              loaded: row.values.slice(),
+              current: row.values.slice()
+            };
+          });
+
+          renderTable();
+
+          setStatus(
+            (data.factoryName || state.currentSheet) + " 정리 완료 — 추가건 " +
+            data.addCount + "건, 삭제건 " + data.deleteCount + "건.",
+            "ok"
+          );
+        } catch (error) {
+          setStatus("정리 실행 실패: " + error.message, "error");
+        } finally {
+          el.runCleanupBtn.disabled = false;
+          el.reloadBtn.disabled = false;
+        }
+      }
+
+      async function runCleanupBoth() {
+        const config = getConfig();
+
+        if (!config.url) {
+          setStatus("웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "1공장, 2공장 정리(매크로)를 한 번에 실행할까요?\n" +
+          "각 공장의 원본 시트를 다시 다듬고 추가건/삭제건을 새로 계산해 덮어씁니다."
+        )) return;
+
+        setStatus("1,2공장 정리 실행 중... (시간이 걸릴 수 있습니다)", "");
+        el.cleanupBothToolbarBtn.disabled = true;
+
+        try {
+          const response = await fetch(config.url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "runCleanupBoth" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const summary = (data.results || []).map(function(result) {
+            return result.factoryName + "(추가건 " + result.addCount + "건, 삭제건 " + result.deleteCount + "건)";
+          }).join(", ");
+
+          setStatus("1,2공장 정리 완료 — " + summary, "ok");
+        } catch (error) {
+          setStatus("1,2공장 정리 실패: " + error.message, "error");
+        } finally {
+          el.cleanupBothToolbarBtn.disabled = false;
+        }
+      }
+
+      async function updateClaimWeeklyCounts() {
+        const url = el.claimDashboardWebappUrl.value.trim();
+        const sourceUrl = el.claimClosingArchiveWebappUrl.value.trim();
+
+        if (!url) {
+          setStatus("클레임 대시보드 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!sourceUrl) {
+          setStatus("26년 마감자료 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "이번달 주간 데이터를 다시 채울까요?\n" +
+          "26년 마감자료의 이번달 마감 시트를 가져와 이번달 1주~5주 칸을 덮어씁니다."
+        )) return;
+
+        setStatus("이번달 주간 데이터 채우는 중... (시간이 걸릴 수 있습니다)", "");
+        el.claimUpdateWeeklyBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "updateWeeklyCounts", sourceWebappUrl: sourceUrl })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setStatus("이번달 주간 데이터를 채웠습니다.", "ok");
+          await loadSheet(CLAIM_DASHBOARD_KEY);
+        } catch (error) {
+          setStatus("이번달 주간 데이터 채우기 실패: " + error.message, "error");
+        } finally {
+          el.claimUpdateWeeklyBtn.disabled = false;
+        }
+      }
+
+      async function reshapeClaimMonth() {
+        const url = el.claimDashboardWebappUrl.value.trim();
+
+        if (!url) {
+          setStatus("클레임 대시보드 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "다음달로 표를 넘길까요?\n" +
+          "지난달 칸은 합계만 남기고 접고, 이번달 칸은 1주~5주로 펼칩니다.\n" +
+          "열 삽입/삭제가 일어나는 작업이라 되돌리기 어렵습니다."
+        )) return;
+
+        setStatus("표 넘기는 중... (시간이 걸릴 수 있습니다)", "");
+        el.claimReshapeMonthBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "reshapeMonth" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setStatus("표를 다음달로 넘겼습니다.", "ok");
+          await loadSheet(CLAIM_DASHBOARD_KEY);
+        } catch (error) {
+          setStatus("표 넘기기 실패: " + error.message, "error");
+        } finally {
+          el.claimReshapeMonthBtn.disabled = false;
+        }
+      }
+
+      function setMonthlyStatus(message, kind) {
+        el.monthlyStatusLine.textContent = message || "";
+        el.monthlyStatusLine.className = "status-line" + (kind ? " " + kind : "");
+      }
+
+      function downloadBase64File_(base64, fileName) {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        });
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      async function downloadFullWorkbook() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setMonthlyStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyStatus("전체 엑셀 다운로드 중... (시간이 걸릴 수 있습니다)", "");
+        el.downloadFullBtn.disabled = true;
+
+        try {
+          const response = await fetch(monthlyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportFull" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setMonthlyStatus("다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setMonthlyStatus("다운로드 실패: " + error.message, "error");
+        } finally {
+          el.downloadFullBtn.disabled = false;
+        }
+      }
+
+      async function downloadClaimDashboardWorkbook() {
+        const url = el.claimDashboardWebappUrl.value.trim();
+
+        if (!url) {
+          setStatus("클레임 대시보드 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setStatus("누적표 엑셀 다운로드 중... (시간이 걸릴 수 있습니다)", "");
+        el.downloadClaimDashboardBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportFull" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setStatus("다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setStatus("다운로드 실패: " + error.message, "error");
+        } finally {
+          el.downloadClaimDashboardBtn.disabled = false;
+        }
+      }
+
+      function pickWeekNumber() {
+        return new Promise(function(resolve) {
+          const weekButtons = Array.from(el.weekPickerOverlay.querySelectorAll("[data-week]"));
+
+          function cleanup() {
+            el.weekPickerOverlay.hidden = true;
+            weekButtons.forEach(function(btn) { btn.removeEventListener("click", onPick); });
+            el.weekPickerCancelBtn.removeEventListener("click", onCancel);
+          }
+
+          function onPick(event) {
+            const week = Number(event.currentTarget.dataset.week);
+            cleanup();
+            resolve(week);
+          }
+
+          function onCancel() {
+            cleanup();
+            resolve(null);
+          }
+
+          weekButtons.forEach(function(btn) { btn.addEventListener("click", onPick); });
+          el.weekPickerCancelBtn.addEventListener("click", onCancel);
+
+          el.weekPickerOverlay.hidden = false;
+        });
+      }
+
+      async function archiveWeek() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setMonthlyStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const weekNumber = await pickWeekNumber();
+        if (!weekNumber) return;
+
+        await waitForRepaint_();
+
+        if (!confirm(
+          weekNumber + "주 탭에 저장할까요?\n" +
+          "1공장추가건 / 2공장추가건 데이터 중 아직 저장되지 않은 신규 건만\n" +
+          weekNumber + "주 탭/종합(N)에 추가되고, 기존 저장분(미회수 제외)은 유지됩니다.\n" +
+          "미회수 건은 해소 여부가 바뀔 수 있어 매번 지우고 최신 상태로 다시 채우고,\n" +
+          weekNumber + "주로 저장된 건 전체는 기존 정렬 규칙으로 다시 정렬됩니다."
+        )) return;
+
+        setMonthlyStatus("저장 중... (시간이 걸릴 수 있습니다)", "");
+        el.archiveWeekBtn.disabled = true;
+        setRunBadge_(el.archiveWeekRunBadge, "running");
+
+        try {
+          const response = await fetch(monthlyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "archiveWeek", week: weekNumber })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const countsText = Object.keys(data.counts || {}).map(function(factoryLabel) {
+            const c = data.counts[factoryLabel];
+            return factoryLabel + "(일반" + c["일반"] + " 감성" + c["감성"] +
+              " 취급" + c["취급"] + " VN" + c["VN"] + " 미회수" + c["미회수"] + ")";
+          }).join(", ");
+
+          setMonthlyStatus(
+            data.sheetName + " 탭 저장 완료 — 총 " + data.rowCount + "건 (신규 " +
+            data.addedCount + "건). 현재 추가건 분류: " + countsText,
+            "ok"
+          );
+          setRunBadge_(el.archiveWeekRunBadge, "done");
+
+          if (data.summary && data.summary.ok) {
+            alert(
+              "종합현황 추가완료\n" + data.sheetName + " 시트 신규 " + data.addedCount + "건, " +
+              "종합(N) 신규 " + (data.summary.addedCount != null ? data.summary.addedCount : "?") + "건"
+            );
+          } else {
+            alert(
+              "종합현황 갱신 실패했습니다.\n" +
+              (data.summary && data.summary.message ? data.summary.message : "원인을 알 수 없습니다.")
+            );
+          }
+        } catch (error) {
+          setMonthlyStatus("저장 실패: " + error.message, "error");
+          setRunBadge_(el.archiveWeekRunBadge, "error");
+        } finally {
+          el.archiveWeekBtn.disabled = false;
+        }
+      }
+
+      function pickRecoveryFromDate() {
+        return new Promise(function(resolve) {
+          el.recoveryDateInput.value = "";
+
+          function cleanup() {
+            el.recoveryDatePickerOverlay.hidden = true;
+            el.recoveryDatePickerConfirmBtn.removeEventListener("click", onConfirm);
+            el.recoveryDatePickerCancelBtn.removeEventListener("click", onCancel);
+          }
+
+          function onConfirm() {
+            const value = el.recoveryDateInput.value;
+            if (!value) return; // 날짜를 고르지 않으면 무시
+            cleanup();
+            resolve(value);
+          }
+
+          function onCancel() {
+            cleanup();
+            resolve(null);
+          }
+
+          el.recoveryDatePickerConfirmBtn.addEventListener("click", onConfirm);
+          el.recoveryDatePickerCancelBtn.addEventListener("click", onCancel);
+
+          el.recoveryDatePickerOverlay.hidden = false;
+        });
+      }
+
+      async function matchRecovery() {
+        const webappUrl = el.webappUrl.value.trim();
+        const recoveryCsvUrl = el.recoveryCsvUrl.value.trim();
+
+        if (!webappUrl) {
+          setStatus("정리파일 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!recoveryCsvUrl) {
+          setStatus("회수누적 웹에 게시 주소를 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const fromDate = await pickRecoveryFromDate();
+        if (!fromDate) return;
+
+        await waitForRepaint_();
+
+        if (!confirm(
+          fromDate + " 데이터부터 불러올까요?\n" +
+          "회수내역 시트는 헤더만 남기고 전부 지운 뒤,\n" +
+          "회수누적 웹 게시 주소에서 " + fromDate + "부터 마지막 날짜까지 다시 채웁니다."
+        )) return;
+
+        setStatus("회수누적 매칭 중... (시간이 걸릴 수 있습니다)", "");
+        el.recoveryMatchToolbarBtn.disabled = true;
+
+        try {
+          const response = await fetch(webappUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "matchRecovery",
+              recoveryCsvUrl: recoveryCsvUrl,
+              fromDate: fromDate
+            })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          alert(
+            "회수내역 " + data.addedCount + "건으로 다시 채웠습니다\n" +
+            "(" + (data.firstDate || "없음") + " ~ " + (data.lastDate || "없음") + ")"
+          );
+
+          await loadSheet(RECOVERY_MATCH_KEY);
+        } catch (error) {
+          setStatus("회수누적 매칭 실패: " + error.message, "error");
+        } finally {
+          el.recoveryMatchToolbarBtn.disabled = false;
+        }
+      }
+
+      async function removeDeletedEntries() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!state.rows.length) {
+          setStatus("삭제할 대상이 없습니다.", "");
+          return;
+        }
+
+        const accessionIdx = state.header.indexOf("접수번호");
+        const productIdx = state.header.indexOf("제품코드");
+        const colorIdx = state.header.indexOf("색상");
+
+        if (accessionIdx === -1 || productIdx === -1 || colorIdx === -1) {
+          setStatus("접수번호/제품코드/색상 열을 찾을 수 없습니다.", "error");
+          return;
+        }
+
+        if (!confirm(
+          state.rows.length + "건을 월현황 전체 시트(종합, 1주~5주 등)에서\n" +
+          "접수번호·제품코드·색상이 일치하는 행을 찾아 전부 삭제합니다.\n" +
+          "제거하시겠습니까?"
+        )) return;
+
+        const entries = state.rows.map(function(row) {
+          return {
+            accessionNumber: row.current[accessionIdx],
+            productCode: row.current[productIdx],
+            colorName: row.current[colorIdx]
+          };
+        });
+
+        setStatus("삭제 중... (시간이 걸릴 수 있습니다)", "");
+        el.removeDeletedToolbarBtn.disabled = true;
+
+        try {
+          const response = await fetch(monthlyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "removeEntries", entries: entries })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const sheetNames = Object.keys(data.deletedBySheet || {});
+          const summaryText = sheetNames.length
+            ? sheetNames.map(function(name) {
+                return name + ": " + data.deletedBySheet[name] + "건";
+              }).join("\n")
+            : "일치하는 항목을 찾지 못했습니다.";
+
+          alert("삭제 완료 (총 " + data.totalDeleted + "건)\n\n" + summaryText);
+          setStatus("삭제 완료 (총 " + data.totalDeleted + "건)", "ok");
+        } catch (error) {
+          setStatus("삭제 실패: " + error.message, "error");
+        } finally {
+          el.removeDeletedToolbarBtn.disabled = false;
+        }
+      }
+
+      async function matchAccumulatedData() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "종합(N) 시트 기준으로 1공장/2공장 누적데이터를 다시 채울까요?\n" +
+          "각 누적데이터 시트의 기존 내용(헤더 제외)은 모두 지워지고,\n" +
+          "종합(N)의 A~P열 중 제조자가 일치하고 미회수가 아닌 행만 새로 채워집니다."
+        )) return;
+
+        setStatus("누적데이터 매칭 중... (시간이 걸릴 수 있습니다)", "");
+        el.accumulatedMatchToolbarBtn.disabled = true;
+
+        try {
+          const response = await fetch(monthlyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "matchAccumulated" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const counts = data.counts || {};
+
+          alert(
+            "누적데이터 매칭 완료\n" +
+            "1공장 누적데이터: " + (counts["1공장"] || 0) + "건\n" +
+            "2공장 누적데이터: " + (counts["2공장"] || 0) + "건"
+          );
+
+          setStatus("누적데이터 매칭 완료", "ok");
+        } catch (error) {
+          setStatus("누적데이터 매칭 실패: " + error.message, "error");
+        } finally {
+          el.accumulatedMatchToolbarBtn.disabled = false;
+        }
+      }
+
+      el.configPanelToggleBtn.addEventListener("click", function() {
+        const willShow = el.configPanelBody.hidden;
+        el.configPanelBody.hidden = !willShow;
+        el.configPanelToggleBtn.textContent = willShow ? "접기" : "상세";
+      });
+
+      el.monthlyConfigPanelToggleBtn.addEventListener("click", function() {
+        const willShow = el.monthlyConfigPanelBody.hidden;
+        el.monthlyConfigPanelBody.hidden = !willShow;
+        el.monthlyConfigPanelToggleBtn.textContent = willShow ? "접기" : "상세";
+      });
+
+      el.dailyConfigPanelToggleBtn.addEventListener("click", function() {
+        const willShow = el.dailyConfigPanelBody.hidden;
+        el.dailyConfigPanelBody.hidden = !willShow;
+        el.dailyConfigPanelToggleBtn.textContent = willShow ? "접기" : "상세";
+      });
+
+      el.saveMonthlyClosingConfigBtn.addEventListener("click", saveMonthlyClosingConfig);
+      el.saveDailyPackagingConfigBtn.addEventListener("click", saveDailyPackagingConfig);
+      el.saveDailyReceiptConfigBtn.addEventListener("click", saveDailyReceiptConfig);
+      el.saveDailyReceiptStatusConfigBtn.addEventListener("click", saveDailyReceiptStatusConfig);
+      el.saveDailyRecoveryConfigBtn.addEventListener("click", saveDailyRecoveryConfig);
+      el.saveDailyRecoveryAccumulateConfigBtn.addEventListener("click", saveDailyRecoveryAccumulateConfig);
+      el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
+      // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
+      // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
+      // 저장/다운로드/누적저장 버튼 줄(dailyRecoveryResultActions)이 같이 뜸).
+      el.dailyRecoveryViewBtn.addEventListener("click", function() {
+        const isActive = el.dailyRecoveryViewBtn.classList.toggle("active");
+
+        if (isActive) {
+          el.dailyRecoveryResultViewBtn.classList.remove("active");
+          el.dailyRecoveryResultActions.classList.remove("visible");
+          viewDailyRecoveryDoc_();
+        }
+      });
+      el.dailyRecoveryReplaceBtn.addEventListener("click", replaceDailyRecoveryData);
+      el.dailyRecoveryCleanRunBtn.addEventListener("click", runDailyRecoveryClean);
+      el.dailyRecoveryResultViewBtn.addEventListener("click", function() {
+        const isActive = el.dailyRecoveryResultViewBtn.classList.toggle("active");
+        el.dailyRecoveryResultActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyRecoveryViewBtn.classList.remove("active");
+          viewDailyRecoveryResult_();
+        }
+      });
+      el.dailyRecoveryResultSaveBtn.addEventListener("click", saveDailyRecoveryResultEdits);
+      el.dailyRecoveryResultDownloadBtn.addEventListener("click", downloadDailyRecoveryResultExcel);
+      el.dailyPackagingReplaceBtn.addEventListener("click", replaceDailyPackagingData);
+      el.dailyPackagingDateCheckBtn.addEventListener("click", checkDailyPackagingDate);
+      el.dailyPackagingDownloadBtn.addEventListener("click", downloadDailyPackagingExcel);
+      el.monthlyClosingFactory2Btn.addEventListener("click", function() {
+        const isActive = el.monthlyClosingFactory2Btn.classList.toggle("active");
+        el.monthlyClosingFactory2Actions.classList.toggle("visible", isActive);
+      });
+
+      // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
+      // 상태를 깨끗하게 초기화해서 다음에 들어올 때 항상 기본 상태로
+      // 시작하게 합니다(포장일자확인 버튼 자체는 이제 이 탭 안에 있어서
+      // 서로 숨기는 관계가 아니라, 하위 보기 중 하나로 같이 있습니다).
+      el.dailyReceiptStatusToggleBtn.addEventListener("click", function() {
+        const isActive = el.dailyReceiptStatusToggleBtn.classList.toggle("active");
+        el.dailyReceiptStatusActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+          el.dailyPackagingActions.classList.remove("visible");
+          el.dailyRecoveryStatusToggleBtn.classList.remove("active");
+          el.dailyRecoveryStatusActions.classList.remove("visible");
+        }
+
+        resetDailyTableView_();
+      });
+
+      // "일일회수현황" 탭 — 일일접수현황과는 서로 다른 영역이라 동시에
+      // 켜져 있을 필요가 없어서, 하나를 켜면 다른 하나는 꺼지게 합니다.
+      el.dailyRecoveryStatusToggleBtn.addEventListener("click", function() {
+        const isActive = el.dailyRecoveryStatusToggleBtn.classList.toggle("active");
+        el.dailyRecoveryStatusActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyReceiptStatusToggleBtn.classList.remove("active");
+          el.dailyReceiptStatusActions.classList.remove("visible");
+          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+          el.dailyPackagingActions.classList.remove("visible");
+        }
+
+        resetDailyTableView_();
+      });
+
+      el.dailyManualBtn.addEventListener("click", showDailyManual_);
+      el.monthlyRegularTaskManualBtn.addEventListener("click", showMonthlyRegularTaskManual_);
+
+      el.dailyReceiptStatusReplaceBtn.addEventListener("click", replaceDailyReceiptStatusData);
+      el.dailyReceiptStatusCheckAddedBtn.addEventListener("click", async function() {
+        const isVisible = el.dailyCheckAddedConfirmRow.classList.toggle("visible");
+        el.dailyAddedEntriesTabs.classList.toggle("visible", isVisible);
+        el.dailyReceiptStatusCheckAddedBtn.classList.toggle("active", isVisible);
+
+        if (isVisible) {
+          el.dailyMeetingMaterialViewBtn.classList.remove("active");
+          el.dailyMeetingMaterialActions.classList.remove("visible");
+          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+          el.dailyPackagingActions.classList.remove("visible");
+
+          const activeTab = el.dailyAddedEntriesTabs.querySelector("button[data-sheet].active");
+          const tabToLoad = activeTab || el.dailyAddedEntriesTabs.querySelector("button[data-sheet]");
+          if (tabToLoad) await selectDailyAddedEntriesTab_(tabToLoad);
+        }
+      });
+      el.dailyCheckAddedConfirmBtn.addEventListener("click", checkDailyAddedEntries);
+      el.dailyMeetingMaterialViewBtn.addEventListener("click", async function() {
+        const isActive = el.dailyMeetingMaterialViewBtn.classList.toggle("active");
+        el.dailyMeetingMaterialActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
+          el.dailyCheckAddedConfirmRow.classList.remove("visible");
+          el.dailyAddedEntriesTabs.classList.remove("visible");
+          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+          el.dailyPackagingActions.classList.remove("visible");
+          await viewDailyMeetingMaterial_();
+        }
+      });
+      el.dailyMeetingMaterialDeletePreviousBtn.addEventListener("click", deletePreviousDaysMeetingMaterial);
+      el.dailyMeetingMaterialSaveBtn.addEventListener("click", saveDailyMeetingMaterialEdits);
+      el.dailyMeetingMaterialDeleteBtn.addEventListener("click", deleteDailyMeetingMaterialCheckedRows);
+      el.dailyMeetingMaterialDownloadBtn.addEventListener("click", downloadMeetingMaterialExcel);
+      el.dailyReceiptAccumulateBtn.addEventListener("click", accumulateDailyReceiptData);
+      el.dailyAddedEntriesTabs.querySelectorAll("button[data-sheet]").forEach(function(tabBtn) {
+        tabBtn.addEventListener("click", function() { selectDailyAddedEntriesTab_(tabBtn); });
+      });
+      el.dailyMoveToSavedBtn.addEventListener("click", saveDailyAddedEntriesToMeetingMaterial);
+      el.dailyShowOnlyMaterialBtn.addEventListener("click", function() {
+        dailyShowOnlyMaterialActive = !dailyShowOnlyMaterialActive;
+        el.dailyShowOnlyMaterialBtn.classList.toggle("active", dailyShowOnlyMaterialActive);
+
+        if (dailyShowOnlyMaterialActive && dailyHideMaterialActive) {
+          dailyHideMaterialActive = false;
+          el.dailyHideMaterialBtn.classList.remove("active");
+        }
+
+        redrawDailyTable_();
+      });
+
+      el.dailyHideMaterialBtn.addEventListener("click", function() {
+        dailyHideMaterialActive = !dailyHideMaterialActive;
+        el.dailyHideMaterialBtn.classList.toggle("active", dailyHideMaterialActive);
+
+        if (dailyHideMaterialActive && dailyShowOnlyMaterialActive) {
+          dailyShowOnlyMaterialActive = false;
+          el.dailyShowOnlyMaterialBtn.classList.remove("active");
+        }
+
+        redrawDailyTable_();
+      });
+
+      el.dailyPackagingDateCheckToggleBtn.addEventListener("click", function() {
+        const isActive = el.dailyPackagingDateCheckToggleBtn.classList.toggle("active");
+        el.dailyPackagingActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
+          el.dailyCheckAddedConfirmRow.classList.remove("visible");
+          el.dailyAddedEntriesTabs.classList.remove("visible");
+          el.dailyMeetingMaterialViewBtn.classList.remove("active");
+          el.dailyMeetingMaterialActions.classList.remove("visible");
+        }
+
+        resetDailyTableView_();
+      });
+
+      el.monthlyClosingOpenSheetBtn.addEventListener("click", function() {
+        const proceed = window.confirm(
+          "진행상태 '입고일확정' 건은 출고확인 후에 입고완료 변경하거나 제외 해주세요.\n" +
+          "기존 저장되어 있던 이번달시트 값을 전월시트에 복사 후에 금월데이터를 이번달시트에 복사해주세요."
+        );
+        if (!proceed) return;
+
+        window.open(
+          "https://docs.google.com/spreadsheets/d/" + MONTHLY_CLOSING_SPREADSHEET_ID + "/edit",
+          "_blank"
+        );
+      });
+
+      el.monthlyClosingCleanupAddedBtn.addEventListener("click", cleanupAddedItems);
+      el.monthlyClosingCleanupByBrandBtn.addEventListener("click", cleanupByBrand);
+      el.monthlyClosingDownloadBtn.addEventListener("click", downloadPaidClosing);
+      el.monthlyClosingDownloadDetailBtn.addEventListener("click", downloadPaidClosingDetail);
+      el.monthlyClosingSaveBtn.addEventListener("click", saveMonthlyClosingCleanupSheet);
+
+      el.monthlyClosingTabs.forEach(function(tabBtn) {
+        tabBtn.addEventListener("click", function() {
+          el.monthlyClosingTabs.forEach(function(b) { b.classList.remove("active"); });
+          tabBtn.classList.add("active");
+          monthlyClosingCurrentSheet = tabBtn.dataset.monthlySheet;
+          el.monthlyClosingSaveBtn.style.display =
+            monthlyClosingCurrentSheet === MONTHLY_CLEANUP_SHEET_NAME ? "" : "none";
+          loadMonthlyClosingData();
+        });
+      });
+
+      el.saveConfigBtn.addEventListener("click", saveConfig);
+      el.saveMonthlyConfigBtn.addEventListener("click", saveMonthlyConfig);
+      el.saveRecoveryConfigBtn.addEventListener("click", saveRecoveryConfig);
+      el.saveClaimDashboardConfigBtn.addEventListener("click", saveClaimDashboardConfig);
+      el.saveClaimClosingArchiveConfigBtn.addEventListener("click", saveClaimClosingArchiveConfig);
+      el.archiveWeekBtn.addEventListener("click", archiveWeek);
+      el.downloadFullBtn.addEventListener("click", downloadFullWorkbook);
+      el.downloadClaimDashboardBtn.addEventListener("click", downloadClaimDashboardWorkbook);
+      el.reloadBtn.addEventListener("click", function() {
+        if (!state.currentSheet) {
+          setStatus("먼저 탭을 선택하세요.", "error");
+          return;
+        }
+        loadSheet(state.currentSheet);
+      });
+      el.runCleanupBtn.addEventListener("click", runCleanup);
+      el.saveRowsBtn.addEventListener("click", saveDirtyRows);
+
+      el.recoveryMatchToolbarBtn.addEventListener("click", matchRecovery);
+      el.accumulatedMatchToolbarBtn.addEventListener("click", matchAccumulatedData);
+
+      el.openAsSheetToolbarBtn.addEventListener("click", function() {
+        if (!confirm(
+          "1공장 금주AS현황분석시트, 2공장 금주AS현황분석시트 모두 변경해주세요.\n\n" +
+          "(마감은 전월 26일 ~ 금월 25일입니다. 전월 26일~금일(최대 25일)까지 자료인지 확인해주세요.)"
+        )) return;
+        window.open(AS_SPREADSHEET_EDIT_URL, "_blank");
+      });
+
+      el.cleanupBothToolbarBtn.addEventListener("click", runCleanupBoth);
+
+      el.claimUpdateWeeklyBtn.addEventListener("click", updateClaimWeeklyCounts);
+      el.claimReshapeMonthBtn.addEventListener("click", reshapeClaimMonth);
+
+      el.removeDeletedToolbarBtn.addEventListener("click", removeDeletedEntries);
+
+      el.tabs.forEach(function(tabBtn) {
+        tabBtn.addEventListener("click", function() {
+          el.tabs.forEach(function(b) { b.classList.remove("active"); });
+          tabBtn.classList.add("active");
+          loadSheet(tabBtn.dataset.sheet);
+        });
+      });
+
+      const pageNavButtons = Array.from(document.querySelectorAll(".page-nav-btn"));
+      const pageViews = {
+        daily: document.getElementById("dailyPage"),
+        weekly: document.getElementById("weeklyPage"),
+        monthly: document.getElementById("monthlyPage")
+      };
+
+      pageNavButtons.forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          const page = btn.dataset.page;
+
+          pageNavButtons.forEach(function(b) { b.classList.toggle("active", b === btn); });
+
+          Object.keys(pageViews).forEach(function(key) {
+            pageViews[key].hidden = key !== page;
+          });
+        });
+      });
+
+      (async function bootstrap() {
+        await loadConfig();
+        // 기본 활성 탭을 두지 않음 — 탭을 직접 눌러야 그때 데이터를 불러옵니다.
+      })();
+    </script>
+  </body>
+</html>
