@@ -151,6 +151,22 @@ const RETURN_DOC_TARGET_HEADER = [
   "결과현상", "조치결과특이사항"
 ];
 
+// "정리결과" 열 너비(px). 맨앞 순번 + RETURN_DOC_TARGET_HEADER 순서와
+// 정확히 같은 개수/순서. autoResizeColumns는 한글 폭을 실제보다 좁게
+// 계산하는 경우가 있어서(daily-packaging-webapp.gs에서도 같은 이유로
+// 안 씀) 내용에 맞춰 고정값을 직접 지정합니다.
+const RESULT_SHEET_COLUMN_WIDTHS = [
+  40,  // 순번
+  130, // 접수번호
+  80,  // 품목코드
+  50,  // 칼라
+  160, // 품목명칭
+  90,  // 제품공급업체
+  140, // 고객명
+  90,  // 결과현상
+  420  // 조치결과특이사항
+];
+
 /**************************************************************
  * 헤더 셀에 정렬/필터 화살표 같은 부가 기호("제품공급업체▲"처럼)가
  * 붙어있어도 이름으로 찾을 수 있도록, 정확히 일치하는 게 없으면
@@ -242,8 +258,10 @@ function returnDataCleanAction_() {
     .getRange(1, 1, finalResult.length, finalResult[0].length)
     .setValues(finalResult);
 
-  // 순번 열은 내용에 맞게 좁게 고정(숫자 몇 자리라 넓을 필요 없음)
-  resultSheet.setColumnWidth(1, 40);
+  // 각 열을 내용에 맞는 고정 너비로 지정(엑셀 다운로드에도 그대로 반영됨)
+  RESULT_SHEET_COLUMN_WIDTHS.forEach(function(width, idx) {
+    resultSheet.setColumnWidth(idx + 1, width);
+  });
 
   // 결과 범위 선택
   resultSheet.setActiveSelection(

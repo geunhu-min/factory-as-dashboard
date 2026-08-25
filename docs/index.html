@@ -2466,6 +2466,28 @@
 
       // "정리결과" 버튼 — 연결한 스프레드시트의 "정리결과" 시트를 표로
       // 불러와 보여줍니다(직접 수정 가능).
+      // "정리결과" 시트에는 엑셀 다운로드용으로 실제 "순번" 열이 A열에
+      // 들어있는데, 화면에는 표 맨앞에 이미 자체 순번(좁은 회색 칸)이
+      // 있어서 그대로 같이 보여주면 순번이 두 번 나오게 됩니다. 그래서
+      // 화면에 그리기 전에 이 열을 떼어냅니다. 순번 값은 항상 "그 행의
+      // 시트상 위치-1"이라 저장할 때 rowIndex로 다시 계산해 넣으면 되므로
+      // 화면 쪽 상태(dailyCurrentRows)에는 아예 안 들고 있어도 됩니다.
+      function stripRecoveryResultSequenceColumn_(header, rows) {
+        const seqIdx = header.indexOf("순번");
+        if (seqIdx === -1) return { header: header, rows: rows };
+
+        const strippedHeader = header.slice();
+        strippedHeader.splice(seqIdx, 1);
+
+        const strippedRows = rows.map(function(row) {
+          const values = row.values.slice();
+          values.splice(seqIdx, 1);
+          return { rowIndex: row.rowIndex, values: values };
+        });
+
+        return { header: strippedHeader, rows: strippedRows };
+      }
+
       async function viewDailyRecoveryResult_() {
         const url = el.dailyRecoveryWebappUrl.value.trim();
 
@@ -2483,7 +2505,8 @@
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], {
+          const stripped = stripRecoveryResultSequenceColumn_(data.header || [], data.rows || []);
+          renderDailyTable_(stripped.header, stripped.rows, {
             checkable: false,
             editable: true,
             editableColumnLabels: ["품목명칭", "제품공급업체"]
@@ -2522,14 +2545,24 @@
               action: "save",
               sheet: RECOVERY_RESULT_SHEET_NAME,
               rows: dirtyRows.map(function(row) {
-                return { rowIndex: row.rowIndex, loaded: row.loaded, values: row.values };
+                // 화면에서는 순번 열을 떼고 있으므로(stripRecoveryResultSequenceColumn_),
+                // 저장할 때 그 자리에 다시 채워 넣어야 시트의 실제 A열
+                // (순번)과 자리가 맞습니다. 순번 값은 항상 "시트상 위치-1"
+                // 이라 rowIndex로 그대로 계산합니다.
+                const sequenceValue = row.rowIndex - 1;
+                return {
+                  rowIndex: row.rowIndex,
+                  loaded: [sequenceValue].concat(row.loaded),
+                  values: [sequenceValue].concat(row.values)
+                };
               })
             })
           });
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], {
+          const stripped = stripRecoveryResultSequenceColumn_(data.header || [], data.rows || []);
+          renderDailyTable_(stripped.header, stripped.rows, {
             checkable: false,
             editable: true,
             editableColumnLabels: ["품목명칭", "제품공급업체"]
