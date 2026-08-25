@@ -225,6 +225,8 @@ function returnDataCleanAction_() {
   });
 
   const receiptNoTargetPos = RETURN_DOC_TARGET_HEADER.indexOf("접수번호");
+  const productCodeTargetPos = RETURN_DOC_TARGET_HEADER.indexOf("품목코드");
+  const colorTargetPos = RETURN_DOC_TARGET_HEADER.indexOf("칼라");
 
   // 맨앞에 순번(1,2,3...) 열을 실제로 추가합니다(엑셀로 받았을 때도
   // 화면과 똑같이 보이도록 — 이 열은 원본 "시트1"에서 옮겨온 값이 아니라
@@ -238,6 +240,11 @@ function returnDataCleanAction_() {
     const outRow = targetColIndexes.map(function(idx) { return row[idx]; });
 
     const receiptNo = String(outRow[receiptNoTargetPos]).trim();
+    const productCode = String(outRow[productCodeTargetPos]).trim();
+    const color = String(outRow[colorTargetPos]).trim();
+
+    // 접수번호/품목코드/칼라가 전부 비어있는 행(원본의 빈 줄)은 건너뜁니다.
+    if (!receiptNo && !productCode && !color) continue;
 
     if (receiptNo !== "") {
       outRow[receiptNoTargetPos] = receiptNo + "-" + seq;
