@@ -381,6 +381,22 @@ function exportSheetsSubsetAsXlsxBase64_(sheetNames, fileNamePrefix) {
       if (!sourceSheet) throw new Error("'" + name + "' 시트를 찾을 수 없습니다.");
       const copied = sourceSheet.copyTo(tempSpreadsheet);
       copied.setName(name);
+
+      // 화면(정리결과 표)에는 맨앞에 순번이 보이는데 시트 자체에는 그
+      // 열이 없어서, 엑셀로 받았을 때도 똑같이 보이도록 이 임시 복사본
+      // 에만 순번 열을 추가합니다(원본 시트는 그대로 둠).
+      const lastRow = copied.getLastRow();
+
+      if (lastRow >= 1) {
+        copied.insertColumnBefore(1);
+        copied.getRange(1, 1).setValue("순번");
+
+        if (lastRow >= 2) {
+          const seqValues = [];
+          for (let i = 1; i <= lastRow - 1; i++) seqValues.push([i]);
+          copied.getRange(2, 1, lastRow - 1, 1).setValues(seqValues);
+        }
+      }
     });
 
     // 새 스프레드시트가 기본으로 만들어주는 빈 시트(Sheet1 등)는 지움
