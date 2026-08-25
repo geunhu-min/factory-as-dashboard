@@ -202,6 +202,26 @@ const FACTORY_GROUPS = [
 // F열(순번) — 원본 표시값을 그대로 가져오고, 텍스트 서식을 강제할 열 번호(1-based)
 const SEQUENCE_COLUMN_NUMBER = 6;
 
+// "추가건 확인" 원본(유형별자료)을 조회할 때 사람이 직접 제품공급업체를
+// 이 두 값으로 필터링해서 붙여넣도록 안내하고 있는데, 간혹 필터가 안 된
+// 자료가 섞여 들어올 수 있어서 코드에서도 한 번 더 걸러냅니다.
+const ALLOWED_PRODUCT_SUPPLIERS = ["퍼시스충주1", "퍼시스충주2"];
+const PRODUCT_SUPPLIER_COLUMN_LABEL = "제품공급업체";
+
+/**************************************************************
+ * 헤더 셀에 정렬/필터 화살표 같은 부가 기호가 붙어있어도 이름으로
+ * 찾을 수 있도록, 정확히 일치하는 게 없으면 그 기호를 뗀 뒤에도
+ * 한 번 더 비교합니다.
+ **************************************************************/
+function findHeaderIndexLenient_(header, label) {
+  const exact = header.indexOf(label);
+  if (exact !== -1) return exact;
+
+  return header.findIndex(function(cell) {
+    return String(cell || "").replace(/[▲▼△▽]/g, "").trim() === label;
+  });
+}
+
 function checkAddedEntriesAction_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const results = [];
@@ -230,10 +250,26 @@ function checkAddedEntriesAction_() {
     const compareValues = readAllValues_(compareSheet);
     const compareKeys = buildKeySet_(compareValues);
 
+    const supplierColIndex = findHeaderIndexLenient_(typeHeaderRow, PRODUCT_SUPPLIER_COLUMN_LABEL);
+
+    if (supplierColIndex === -1) {
+      throw new Error(
+        "'" + group.typeSheet + "'에서 '" + PRODUCT_SUPPLIER_COLUMN_LABEL + "' 열을 찾을 수 없습니다.\n\n" +
+        "헤더(1행)에 이 이름이 정확히 들어있는지 확인해 주세요."
+      );
+    }
+
     const addedRows = [];
     for (let i = 1; i < typeValues.length; i++) {
       const row = typeValues[i];
-      if (!compareKeys.has(rowKey_(row))) addedRows.push(row);
+      if (compareKeys.has(rowKey_(row))) continue;
+
+      // 조회할 때 사람이 직접 제품공급업체를 퍼시스충주1/2로 필터링해서
+      // 붙여넣도록 안내하고 있는데, 필터가 안 된 자료가 섞여 들어와도
+      // 여기서 한 번 더 걸러서 추가건에는 그 두 곳 것만 들어가게 합니다.
+      if (ALLOWED_PRODUCT_SUPPLIERS.indexOf(normalizeText_(row[supplierColIndex])) === -1) continue;
+
+      addedRows.push(row);
     }
 
     const header = typeValues.length ? typeValues[0] : [];

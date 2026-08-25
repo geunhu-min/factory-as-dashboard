@@ -152,6 +152,20 @@ const RETURN_DOC_TARGET_HEADER = [
 ];
 
 /**************************************************************
+ * 헤더 셀에 정렬/필터 화살표 같은 부가 기호("제품공급업체▲"처럼)가
+ * 붙어있어도 이름으로 찾을 수 있도록, 정확히 일치하는 게 없으면
+ * 그 기호를 뗀 뒤에도 한 번 더 비교합니다.
+ **************************************************************/
+function findHeaderIndexLenient_(header, label) {
+  const exact = header.indexOf(label);
+  if (exact !== -1) return exact;
+
+  return header.findIndex(function(cell) {
+    return String(cell || "").replace(/[▲▼△▽]/g, "").trim() === label;
+  });
+}
+
+/**************************************************************
  * "시트1"에서 헤더 이름으로 열을 찾아 접수번호+순번을 "접수번호-순번"
  * 형태로 합친 뒤 RETURN_DOC_TARGET_HEADER 순서로 뽑아 "정리결과" 시트에
  * 덮어씁니다. 메뉴("정리 실행")와 웹앱(doPost action="clean") 둘 다
@@ -175,14 +189,14 @@ function returnDataCleanAction_() {
 
   const header = data[0];
 
-  const seqColIndex = header.indexOf("순번");
+  const seqColIndex = findHeaderIndexLenient_(header, "순번");
 
   if (seqColIndex === -1) {
     throw new Error("'" + SOURCE_SHEET_NAME + "'에서 '순번' 열을 찾을 수 없습니다.");
   }
 
   const targetColIndexes = RETURN_DOC_TARGET_HEADER.map(function(label) {
-    const idx = header.indexOf(label);
+    const idx = findHeaderIndexLenient_(header, label);
 
     if (idx === -1) {
       throw new Error(
