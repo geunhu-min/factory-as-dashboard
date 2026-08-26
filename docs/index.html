@@ -3732,11 +3732,25 @@
           .filter(function(i) { return i !== -1; });
 
         const readOnly = isReadOnlyTab();
+        // 원본 구글시트(monthly-weekly-webapp.gs의 applyPackageFontColors_)와
+        // 같은 기준으로, 포장이 VN/미회수인 행은 화면에서도 같은 색으로
+        // 표시합니다(1/2공장추가건, 월현황/마감/로데이터/N주 전부 이 표를
+        // 같이 씀).
+        const packageColIndexForColor = state.header.indexOf(PACKAGE_COLUMN_LABEL);
 
         el.tbody.innerHTML = "";
         state.rows.forEach(function(row, rowPos) {
           const tr = document.createElement("tr");
           tr.dataset.rowIndex = row.rowIndex;
+
+          if (packageColIndexForColor !== -1) {
+            const packageCategory = classifyPackage_(row.current[packageColIndexForColor]);
+            if (packageCategory === "vn") {
+              tr.style.color = "#1155cc";
+            } else if (packageCategory === "uncollected") {
+              tr.style.color = "#cc0000";
+            }
+          }
 
           const seqTd = document.createElement("td");
           seqTd.textContent = String(rowPos + 1);
