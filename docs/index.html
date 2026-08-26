@@ -611,6 +611,8 @@
     <div class="factory-tabs">
       <button type="button" data-sheet="__recovery_match__">회수누적/누적데이터 매칭</button>
       <button type="button" data-sheet="__open_as_sheet__">금주현황변경</button>
+      <button type="button" data-sheet="1공장추가건">1공장추가건</button>
+      <button type="button" data-sheet="2공장추가건">2공장추가건</button>
       <button type="button" data-sheet="1공장삭제건">1공장삭제건</button>
       <button type="button" data-sheet="2공장삭제건">2공장삭제건</button>
       <button id="archiveWeekBtn" class="warning">현황시트반영</button>
@@ -763,6 +765,7 @@
       const RECOVERY_MATCH_SHEET_NAME = "회수내역";
       const OPEN_AS_SHEET_KEY = "__open_as_sheet__"; // 금주현황변경, 1/2공장 금주AS현황분석시트를 합쳐 보여줌
       const DELETE_SHEET_NAMES = ["1공장삭제건", "2공장삭제건"]; // 참고용 읽기 전용 탭
+      const ADD_SHEET_NAMES = ["1공장추가건", "2공장추가건"]; // 참고용 읽기 전용 탭
       const CLAIM_DASHBOARD_KEY = "__claim_dashboard__"; // 클레임대시보드, 별도 스프레드시트의 마감자료 표를 보여줌
 
       function isRecoveryTab() {
@@ -783,6 +786,10 @@
 
       function isDeleteSheetTab() {
         return DELETE_SHEET_NAMES.indexOf(state.currentSheet) !== -1;
+      }
+
+      function isAddSheetTab() {
+        return ADD_SHEET_NAMES.indexOf(state.currentSheet) !== -1;
       }
 
       // 아주 단순한 CSV 파서 (따옴표로 묶인 값, 콤마, 줄바꿈 처리)
@@ -3436,7 +3443,7 @@
       }
 
       function isReadOnlyTab() {
-        return isMonthlyReadOnlyTab() || isRecoveryTab() || isDeleteSheetTab() ||
+        return isMonthlyReadOnlyTab() || isRecoveryTab() || isDeleteSheetTab() || isAddSheetTab() ||
           isRecoveryMatchTab() || isOpenAsSheetTab() || isClaimDashboardTab();
       }
 
