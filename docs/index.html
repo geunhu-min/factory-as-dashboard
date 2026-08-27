@@ -1786,6 +1786,7 @@
         const brandColIndex = findHeaderIndex_(header, "브랜드");
         const customerColIndex = findHeaderIndex_(header, "고객명");
         const sequenceColIndex = findHeaderIndex_(header, "순번");
+        const supplierColIndex = findHeaderIndex_(header, "제품공급업체");
 
         // 회사/구분 칸은 값이 짧은 분류값이라 가운데 정렬이 더 보기 좋음
         const companyColIndex = findHeaderIndex_(header, "회사");
@@ -1892,7 +1893,8 @@
                   accessionColIndex !== -1 ? row.values[accessionColIndex] : "",
                   sequenceColIndex !== -1 ? row.values[sequenceColIndex] : "",
                   customerColIndex !== -1 ? row.values[customerColIndex] : "",
-                  requirementColIndex !== -1 ? row.values[requirementColIndex] : ""
+                  requirementColIndex !== -1 ? row.values[requirementColIndex] : "",
+                  supplierColIndex !== -1 ? row.values[supplierColIndex] : ""
                 );
               });
             }
@@ -2012,11 +2014,12 @@
       // 브라우저 팝업 창)으로 보여줌 — OS 창 그대로라 크기 조정/위치 이동이
       // 기본으로 되고, 화면 가운데에 뜨게 좌표를 계산해서 넘깁니다.
       // ESC 키로도 닫힘.
-      function showDailyRowDetail_(rowPos, accessionValue, sequenceValue, customerValue, requirementValue) {
+      function showDailyRowDetail_(rowPos, accessionValue, sequenceValue, customerValue, requirementValue, supplierValue) {
         const accession = String(accessionValue === null || accessionValue === undefined ? "" : accessionValue);
         const sequence = String(sequenceValue === null || sequenceValue === undefined ? "" : sequenceValue);
         const customer = String(customerValue === null || customerValue === undefined ? "" : customerValue);
         const requirement = String(requirementValue === null || requirementValue === undefined ? "" : requirementValue);
+        const supplier = String(supplierValue === null || supplierValue === undefined ? "" : supplierValue);
 
         const width = 420;
         const height = 400;
@@ -2042,7 +2045,7 @@
                 h1 { margin:0; font-size:18px; }
                 .close { position:absolute; right:12px; top:10px; border:0; background:#fff; font-size:22px; font-weight:900; cursor:pointer; }
                 .body { padding:20px; }
-                .field-row { display:flex; gap:16px; }
+                .field-row { display:flex; gap:8px; }
                 .field { margin-bottom:16px; }
                 .field-row .field { flex: 1; }
                 .field label { display:block; font-size:12px; color:#687482; margin-bottom:4px; }
@@ -2055,6 +2058,7 @@
                 <div class="field-row">
                   <div class="field"><label>접수번호</label><span>${escapeHtmlDaily_(accession)}</span></div>
                   <div class="field"><label>순번</label><span>${escapeHtmlDaily_(sequence)}</span></div>
+                  <div class="field"><label>제품공급업체</label><span>${escapeHtmlDaily_(supplier)}</span></div>
                 </div>
                 <div class="field"><label>고객명</label><span>${escapeHtmlDaily_(customer)}</span></div>
                 <div class="field"><label>요구내역</label><span>${escapeHtmlDaily_(requirement)}</span></div>
