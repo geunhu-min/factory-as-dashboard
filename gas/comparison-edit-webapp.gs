@@ -24,6 +24,10 @@
  *   담아 돌려주므로, 화면은 그 값으로 다시 그리면 됩니다.
  * - doPost action="exportFull": 이 스프레드시트 파일 전체(모든 시트)를
  *   xlsx로 내보내 base64로 반환합니다(오프라인 비교/백업용).
+ * - doPost action="carryOverPreviousMonth": "전월데이터 이월하기" 버튼
+ *   액션. "이번달" 시트의 현재 값+서식을 "전월" 시트에 그대로
+ *   덮어씁니다(전월 기존 내용은 전부 지움). 자세한 내용은
+ *   carryOverPreviousMonthAction_ 참고.
  * - doPost action="cleanupAddedItems": "추가건정리" 버튼 액션.
  *   "이번달"/"전월" 시트를 접수번호+순번+부품코드+색상+금액 기준으로
  *   비교해 이번달에 새로 추가된 행만 골라, 발주일자/접수번호가 빈
@@ -171,6 +175,10 @@ function doPost(e) {
       return jsonOutput_(exportFullWorkbookAction_());
     }
 
+    if (action === "carryOverPreviousMonth") {
+      return jsonOutput_(carryOverPreviousMonthAction_());
+    }
+
     if (action === "cleanupAddedItems") {
       return jsonOutput_(cleanupAddedItemsAction_());
     }
@@ -211,6 +219,37 @@ function doPost(e) {
  * 했지만, 그 부분은 "브랜드별정리" 버튼(cleanupByBrandAction_)으로
  * 분리했습니다 — 이 액션은 "정리" 시트를 만드는 데까지만 합니다.
  **************************************************************/
+/**************************************************************
+ * "전월데이터 이월하기" 액션
+ *
+ * "이번달" 시트의 현재 값+서식을 "전월" 시트에 그대로 덮어씁니다
+ * (전월 시트 기존 내용은 전부 지우고 씀). 매달 마감 후 다음 달로
+ * 넘어갈 때, 지난달 마감한 "이번달" 시트를 "전월" 시트로 옮기는
+ * 수동 작업(복사해서 전월에 붙여넣기)을 대신합니다.
+ **************************************************************/
+function carryOverPreviousMonthAction_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const currentSheet = ss.getSheetByName(CURRENT_MONTH_SHEET_NAME);
+  const previousSheet = ss.getSheetByName(PREVIOUS_MONTH_SHEET_NAME);
+
+  if (!currentSheet) throw new Error("'" + CURRENT_MONTH_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+  if (!previousSheet) throw new Error("'" + PREVIOUS_MONTH_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+
+  const sourceRange = currentSheet.getDataRange();
+  const rowCount = sourceRange.getNumRows();
+  const columnCount = sourceRange.getNumColumns();
+
+  previousSheet.clear();
+  sourceRange.copyTo(previousSheet.getRange(1, 1, rowCount, columnCount));
+
+  for (let col = 1; col <= columnCount; col++) {
+    previousSheet.setColumnWidth(col, currentSheet.getColumnWidth(col));
+  }
+
+  return { ok: true, rowCount: Math.max(rowCount - 1, 0) };
+}
+
+
 function cleanupAddedItemsAction_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const currentSheet = ss.getSheetByName(CURRENT_MONTH_SHEET_NAME);

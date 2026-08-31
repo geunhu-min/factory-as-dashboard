@@ -718,6 +718,7 @@
 
       <div class="toolbar">
         <div id="monthlyClosingFactory2Actions" class="factory-actions">
+          <button type="button" id="monthlyClosingCarryOverBtn">전월데이터 이월하기</button>
           <button type="button" id="monthlyClosingOpenSheetBtn">이번달데이터변경</button>
           <button type="button" id="monthlyClosingCleanupAddedBtn">추가건정리</button>
           <button type="button" id="monthlyClosingCleanupByBrandBtn" class="warning">브랜드별정리</button>
@@ -1107,6 +1108,7 @@
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
         monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
+        monthlyClosingCarryOverBtn: document.getElementById("monthlyClosingCarryOverBtn"),
         monthlyClosingOpenSheetBtn: document.getElementById("monthlyClosingOpenSheetBtn"),
         monthlyClosingCleanupAddedBtn: document.getElementById("monthlyClosingCleanupAddedBtn"),
         monthlyClosingCleanupByBrandBtn: document.getElementById("monthlyClosingCleanupByBrandBtn"),
@@ -3307,6 +3309,43 @@
         }
       }
 
+      // "전월데이터 이월하기" 버튼 — 지난달 마감한 "이번달" 시트의
+      // 현재 값+서식을 "전월" 시트에 그대로 덮어씁니다(전월 기존
+      // 내용은 전부 지워짐). 새 달로 넘어갈 때 "이번달데이터변경"
+      // 전에 먼저 눌러야 합니다.
+      async function carryOverPreviousMonth() {
+        const url = el.monthlyClosingWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("충주2유상마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "지난달 마감한 이번달시트의 값을 전월시트로 새로고침합니다."
+        )) return;
+
+        setMonthlyClosingStatus_("전월데이터 이월 중...", "");
+        el.monthlyClosingCarryOverBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "carryOverPreviousMonth" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setMonthlyClosingStatus_("전월데이터 이월 완료: " + data.rowCount + "건", "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_("전월데이터 이월 실패: " + error.message, "error");
+        } finally {
+          el.monthlyClosingCarryOverBtn.disabled = false;
+        }
+      }
+
       // "추가건정리" 버튼 — 이번달/전월을 비교해 추가된 건만 골라
       // "정리" 시트를 덮어쓰는 것까지만 합니다(퍼시스/일룸 등 브랜드별
       // 분리는 하지 않음 — "브랜드별정리" 버튼에서 이어서 처리).
@@ -4703,6 +4742,8 @@
 
         resetDailyTableView_();
       });
+
+      el.monthlyClosingCarryOverBtn.addEventListener("click", carryOverPreviousMonth);
 
       el.monthlyClosingOpenSheetBtn.addEventListener("click", function() {
         const proceed = window.confirm(
