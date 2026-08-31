@@ -490,6 +490,7 @@
       <div class="factory-tabs">
         <button type="button" id="dailyReceiptStatusToggleBtn">일일접수현황</button>
         <button type="button" id="dailyRecoveryStatusToggleBtn">일일회수현황</button>
+        <button type="button" id="dailyServiceShipmentToggleBtn">금일서비스출고건</button>
         <span class="tabs-spacer"></span>
         <button type="button" id="dailyManualBtn">메뉴얼</button>
       </div>
@@ -506,6 +507,11 @@
         <button type="button" id="dailyRecoveryReplaceBtn">반납내역서 정리 교체</button>
         <button type="button" id="dailyRecoveryCleanRunBtn">반납내역서 정리실행</button>
         <button type="button" id="dailyRecoveryResultViewBtn">정리결과</button>
+      </div>
+
+      <div id="dailyServiceShipmentActions" class="toolbar factory-actions">
+        <button type="button" id="dailyServiceShipmentReplaceBtn">서비스출고건 리스트교체</button>
+        <button type="button" id="dailyServiceShipmentCleanBtn">리스트 정리</button>
       </div>
 
       <div id="dailyCheckAddedConfirmRow" class="toolbar factory-actions">
@@ -1062,6 +1068,10 @@
         dailyPageStatusLine: document.getElementById("dailyPageStatusLine"),
         dailyReceiptStatusToggleBtn: document.getElementById("dailyReceiptStatusToggleBtn"),
         dailyRecoveryStatusToggleBtn: document.getElementById("dailyRecoveryStatusToggleBtn"),
+        dailyServiceShipmentToggleBtn: document.getElementById("dailyServiceShipmentToggleBtn"),
+        dailyServiceShipmentActions: document.getElementById("dailyServiceShipmentActions"),
+        dailyServiceShipmentReplaceBtn: document.getElementById("dailyServiceShipmentReplaceBtn"),
+        dailyServiceShipmentCleanBtn: document.getElementById("dailyServiceShipmentCleanBtn"),
         dailyManualBtn: document.getElementById("dailyManualBtn"),
         dailyReceiptStatusActions: document.getElementById("dailyReceiptStatusActions"),
         dailyRecoveryStatusActions: document.getElementById("dailyRecoveryStatusActions"),
@@ -4640,6 +4650,8 @@
           el.dailyPackagingActions.classList.remove("visible");
           el.dailyRecoveryStatusToggleBtn.classList.remove("active");
           el.dailyRecoveryStatusActions.classList.remove("visible");
+          el.dailyServiceShipmentToggleBtn.classList.remove("active");
+          el.dailyServiceShipmentActions.classList.remove("visible");
         }
 
         resetDailyTableView_();
@@ -4654,6 +4666,26 @@
         if (isActive) {
           el.dailyReceiptStatusToggleBtn.classList.remove("active");
           el.dailyReceiptStatusActions.classList.remove("visible");
+          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+          el.dailyPackagingActions.classList.remove("visible");
+          el.dailyServiceShipmentToggleBtn.classList.remove("active");
+          el.dailyServiceShipmentActions.classList.remove("visible");
+        }
+
+        resetDailyTableView_();
+      });
+
+      // "금일서비스출고건" 탭 — 버튼만 만들어둔 상태(리스트교체/리스트
+      // 정리 기능은 아직 미구현, 추후 요청 시 추가 예정).
+      el.dailyServiceShipmentToggleBtn.addEventListener("click", function() {
+        const isActive = el.dailyServiceShipmentToggleBtn.classList.toggle("active");
+        el.dailyServiceShipmentActions.classList.toggle("visible", isActive);
+
+        if (isActive) {
+          el.dailyReceiptStatusToggleBtn.classList.remove("active");
+          el.dailyReceiptStatusActions.classList.remove("visible");
+          el.dailyRecoveryStatusToggleBtn.classList.remove("active");
+          el.dailyRecoveryStatusActions.classList.remove("visible");
           el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
           el.dailyPackagingActions.classList.remove("visible");
         }
