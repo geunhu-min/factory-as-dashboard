@@ -2785,6 +2785,33 @@
         }
       }
 
+      // "정리결과" 버튼 — 연결한 스프레드시트의 "정리" 시트를 읽어와
+      // 아래 표에 읽기 전용 리스트로 보여줍니다(회의자료 목록과 같은 방식).
+      async function viewDailyServiceShipmentResult_() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("정리결과 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("정리");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, sortFilterEnabled: true });
+          setDailyStatus_("정리결과 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          resetDailyTableView_();
+          setDailyStatus_("정리결과 불러오기 실패: " + error.message, "error");
+        }
+      }
+
       // 회의자료 표에서 수정한(칸을 직접 고친) 행들을 저장합니다.
       async function saveDailyMeetingMaterialEdits() {
         const url = el.dailyReceiptStatusWebappUrl.value.trim();
@@ -4700,6 +4727,14 @@
       el.saveDailyServiceShipmentConfigBtn.addEventListener("click", saveDailyServiceShipmentConfig);
       el.dailyServiceShipmentReplaceBtn.addEventListener("click", replaceDailyServiceShipmentData);
       el.dailyServiceShipmentCleanBtn.addEventListener("click", runDailyServiceShipmentClean);
+      el.dailyServiceShipmentResultViewBtn.addEventListener("click", function() {
+        const isActive = el.dailyServiceShipmentResultViewBtn.classList.toggle("active");
+        if (isActive) {
+          viewDailyServiceShipmentResult_();
+        } else {
+          resetDailyTableView_();
+        }
+      });
       el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
       // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
       // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
