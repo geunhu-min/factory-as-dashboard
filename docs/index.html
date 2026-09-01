@@ -558,6 +558,13 @@
         <button type="button" id="dailyRecoveryAccumulateBtn">회수데이터 누적저장</button>
       </div>
 
+      <div id="dailyServiceShipmentResultActions" class="added-entries-tabs">
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyServiceShipmentResultDeleteBtn" class="warning">삭제</button>
+        <button type="button" id="dailyServiceShipmentResultSaveBtn">저장</button>
+        <button type="button" id="dailyServiceShipmentResultDownloadBtn">정리자료다운로드</button>
+      </div>
+
       <div id="dailyTableWrap" class="table-wrap">
         <table id="dailyTable">
           <thead><tr></tr></thead>
@@ -1091,6 +1098,10 @@
         dailyRecoveryCleanRunBtn: document.getElementById("dailyRecoveryCleanRunBtn"),
         dailyRecoveryResultViewBtn: document.getElementById("dailyRecoveryResultViewBtn"),
         dailyRecoveryResultActions: document.getElementById("dailyRecoveryResultActions"),
+        dailyServiceShipmentResultActions: document.getElementById("dailyServiceShipmentResultActions"),
+        dailyServiceShipmentResultDeleteBtn: document.getElementById("dailyServiceShipmentResultDeleteBtn"),
+        dailyServiceShipmentResultSaveBtn: document.getElementById("dailyServiceShipmentResultSaveBtn"),
+        dailyServiceShipmentResultDownloadBtn: document.getElementById("dailyServiceShipmentResultDownloadBtn"),
         dailyRecoveryResultSaveBtn: document.getElementById("dailyRecoveryResultSaveBtn"),
         dailyRecoveryResultDownloadBtn: document.getElementById("dailyRecoveryResultDownloadBtn"),
         dailyRecoveryAccumulateBtn: document.getElementById("dailyRecoveryAccumulateBtn"),
@@ -1365,6 +1376,8 @@
         el.dailyRecoveryViewBtn.classList.remove("active");
         el.dailyRecoveryResultViewBtn.classList.remove("active");
         el.dailyRecoveryResultActions.classList.remove("visible");
+        el.dailyServiceShipmentResultViewBtn.classList.remove("active");
+        el.dailyServiceShipmentResultActions.classList.remove("visible");
         dailyCheckedRowPositions = new Set();
         dailyCurrentRows = [];
         dailyCurrentAddedFactory = "";
@@ -2785,8 +2798,11 @@
         }
       }
 
+      const SERVICE_SHIPMENT_RESULT_SHEET_NAME = "정리";
+
       // "정리결과" 버튼 — 연결한 스프레드시트의 "정리" 시트를 읽어와
-      // 아래 표에 읽기 전용 리스트로 보여줍니다(회의자료 목록과 같은 방식).
+      // 아래 표에 보여줍니다. 맨 앞 체크박스로 삭제할 행을 고를 수 있고,
+      // "현재공정" 칸만 직접 고쳐서 저장할 수 있습니다.
       async function viewDailyServiceShipmentResult_() {
         const url = el.dailyServiceShipmentWebappUrl.value.trim();
 
@@ -2799,16 +2815,140 @@
 
         try {
           const requestUrl = url + (url.includes("?") ? "&" : "?") +
-            "action=read&sheet=" + encodeURIComponent("정리");
+            "action=read&sheet=" + encodeURIComponent(SERVICE_SHIPMENT_RESULT_SHEET_NAME);
           const response = await fetch(requestUrl);
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, sortFilterEnabled: true });
+          renderDailyTable_(data.header || [], data.rows || [], {
+            checkable: true,
+            editable: true,
+            editableColumnLabels: ["현재공정"]
+          });
           setDailyStatus_("정리결과 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
         } catch (error) {
           resetDailyTableView_();
           setDailyStatus_("정리결과 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "삭제" 버튼 — 체크한 행을 "정리" 시트에서 지웁니다.
+      async function deleteDailyServiceShipmentCheckedRows() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const checkedPositions = Array.from(dailyCheckedRowPositions).sort(function(a, b) { return a - b; });
+        const checkedRowIndexes = checkedPositions.map(function(pos) { return dailyCurrentRows[pos].rowIndex; });
+
+        if (!checkedRowIndexes.length) {
+          setDailyStatus_("삭제할 항목을 체크하세요.", "error");
+          return;
+        }
+
+        if (!window.confirm("선택건을 삭제하시겠습니까?")) return;
+
+        setDailyStatus_("삭제 중...", "");
+        el.dailyServiceShipmentResultDeleteBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "deleteRows", rowIndexes: checkedRowIndexes })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_(data.deletedCount + "건 삭제했습니다.", "ok");
+          await viewDailyServiceShipmentResult_();
+        } catch (error) {
+          setDailyStatus_("삭제 실패: " + error.message, "error");
+        } finally {
+          el.dailyServiceShipmentResultDeleteBtn.disabled = false;
+        }
+      }
+
+      // "저장" 버튼 — 표에서 직접 고친(현재공정) 행들을 "정리" 시트에 저장합니다.
+      async function saveDailyServiceShipmentResultEdits() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const dirtyRows = dailyCurrentRows.filter(isDailyRowDirty_);
+
+        if (!dirtyRows.length) {
+          setDailyStatus_("변경된 내용이 없습니다.", "error");
+          return;
+        }
+
+        setDailyStatus_("저장 중...", "");
+        el.dailyServiceShipmentResultSaveBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "save",
+              rows: dirtyRows.map(function(row) {
+                return { rowIndex: row.rowIndex, loaded: row.loaded, values: row.values };
+              })
+            })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          renderDailyTable_(data.header || [], data.rows || [], {
+            checkable: true,
+            editable: true,
+            editableColumnLabels: ["현재공정"]
+          });
+
+          const conflictCount = (data.conflicts || []).length;
+          const message = data.updatedCount + "건 저장했습니다." +
+            (conflictCount ? " (" + conflictCount + "건은 그 사이 다른 곳에서 바뀌어 충돌 — 덮어쓰지 않음)" : "");
+          setDailyStatus_(message, conflictCount ? "error" : "ok");
+        } catch (error) {
+          setDailyStatus_("저장 실패: " + error.message, "error");
+        } finally {
+          el.dailyServiceShipmentResultSaveBtn.disabled = false;
+        }
+      }
+
+      // "정리자료다운로드" 버튼 — "정리" 시트만 담은 엑셀을 내려받습니다.
+      async function downloadDailyServiceShipmentResultExcel() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("정리자료다운로드 중...", "");
+        el.dailyServiceShipmentResultDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportResult" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setDailyStatus_("정리자료다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setDailyStatus_("정리자료다운로드 실패: " + error.message, "error");
+        } finally {
+          el.dailyServiceShipmentResultDownloadBtn.disabled = false;
         }
       }
 
@@ -4729,12 +4869,17 @@
       el.dailyServiceShipmentCleanBtn.addEventListener("click", runDailyServiceShipmentClean);
       el.dailyServiceShipmentResultViewBtn.addEventListener("click", function() {
         const isActive = el.dailyServiceShipmentResultViewBtn.classList.toggle("active");
+        el.dailyServiceShipmentResultActions.classList.toggle("visible", isActive);
+
         if (isActive) {
           viewDailyServiceShipmentResult_();
         } else {
           resetDailyTableView_();
         }
       });
+      el.dailyServiceShipmentResultDeleteBtn.addEventListener("click", deleteDailyServiceShipmentCheckedRows);
+      el.dailyServiceShipmentResultSaveBtn.addEventListener("click", saveDailyServiceShipmentResultEdits);
+      el.dailyServiceShipmentResultDownloadBtn.addEventListener("click", downloadDailyServiceShipmentResultExcel);
       el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
       // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
       // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
