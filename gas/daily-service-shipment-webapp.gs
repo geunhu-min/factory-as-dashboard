@@ -192,6 +192,11 @@ function cleanServiceShipmentListAction_() {
     }
   });
 
+  // 1차 포장라인(오름차순) 2차 최초포장일(오래된순)로 정렬
+  const packagingLinePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("포장라인");
+  const firstPackagingDatePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("최초포장일");
+  sortServiceShipmentRows_(allRows, packagingLinePos, firstPackagingDatePos);
+
   // Route1부터 순서대로 보면서, 값이 있는 마지막 Route 열까지만 남깁니다
   // (예: Route1~2만 값이 있으면 Route3~5는 결과 열 자체에서 뺌).
   const fixedCount = CLEAN_FIXED_COLUMN_LABELS.length;
@@ -223,6 +228,28 @@ function cleanServiceShipmentListAction_() {
   }
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
+}
+
+
+/**************************************************************
+ * 1차 포장라인(오름차순, 한글/숫자 섞여도 자연스럽게) 2차 최초포장일
+ * (오래된 날짜가 먼저 오도록)로 정렬합니다. 값이 없는 최초포장일은
+ * 맨 뒤로 보냅니다.
+ **************************************************************/
+function sortServiceShipmentRows_(rows, packagingLinePos, dateColPos) {
+  rows.sort(function(a, b) {
+    const lineCompare = normalizeText_(a[packagingLinePos])
+      .localeCompare(normalizeText_(b[packagingLinePos]), "ko", { numeric: true, sensitivity: "base" });
+    if (lineCompare !== 0) return lineCompare;
+
+    const dateA = a[dateColPos] instanceof Date ? a[dateColPos].getTime() : NaN;
+    const dateB = b[dateColPos] instanceof Date ? b[dateColPos].getTime() : NaN;
+
+    if (isNaN(dateA) && isNaN(dateB)) return 0;
+    if (isNaN(dateA)) return 1;
+    if (isNaN(dateB)) return -1;
+    return dateA - dateB;
+  });
 }
 
 
