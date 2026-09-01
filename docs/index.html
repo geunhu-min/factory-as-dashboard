@@ -2753,6 +2753,38 @@
         }
       }
 
+      // "리스트 정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
+      // 실행해서 "정리" 시트를 지우고 새 정리 결과로 덮어씁니다.
+      async function runDailyServiceShipmentClean() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!window.confirm("정리를 실행하시겠습니까?")) return;
+
+        setDailyStatus_("리스트 정리 중...", "");
+        el.dailyServiceShipmentCleanBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "clean" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setDailyStatus_("리스트 정리 완료: " + data.rowCount + "건", "ok");
+        } catch (error) {
+          setDailyStatus_("리스트 정리 실패: " + error.message, "error");
+        } finally {
+          el.dailyServiceShipmentCleanBtn.disabled = false;
+        }
+      }
+
       // 회의자료 표에서 수정한(칸을 직접 고친) 행들을 저장합니다.
       async function saveDailyMeetingMaterialEdits() {
         const url = el.dailyReceiptStatusWebappUrl.value.trim();
@@ -4667,6 +4699,7 @@
       el.saveDailyRecoveryAccumulateConfigBtn.addEventListener("click", saveDailyRecoveryAccumulateConfig);
       el.saveDailyServiceShipmentConfigBtn.addEventListener("click", saveDailyServiceShipmentConfig);
       el.dailyServiceShipmentReplaceBtn.addEventListener("click", replaceDailyServiceShipmentData);
+      el.dailyServiceShipmentCleanBtn.addEventListener("click", runDailyServiceShipmentClean);
       el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
       // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
       // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
