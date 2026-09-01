@@ -18,7 +18,7 @@
  *   리스트를 변환해 시트1에 붙여넣는 실제 작업은 그 스프레드시트에서
  *   직접 함).
  * - doPost action="clean": "리스트 정리" 버튼 액션. "시트1"에서
- *   CLEAN_TARGET_COLUMN_LABELS 순서로 열만 뽑아 "정리" 시트에
+ *   CLEAN_FIXED_COLUMN_LABELS(+값이 있는 Route 열) 순서로 열만 뽑아 "정리" 시트에
  *   덮어씁니다(기존 내용은 전부 지움). 현재공정이 빈 값인 행은
  *   포장 단계로 보고 "포장"을 채워 넣고, 최초포장일 열은 "yyyy-mm-dd"
  *   형식으로 맞춥니다. 자세한 내용은 cleanServiceShipmentListAction_ 참고.
@@ -52,11 +52,14 @@ const SOURCE_SHEET_NAME = "시트1"; // 대시보드가 기본으로 읽는 탭
 const CLEAN_RESULT_SHEET_NAME = "정리";
 
 // "리스트 정리" 결과에 이 순서로만 열을 남깁니다.
-const CLEAN_TARGET_COLUMN_LABELS = [
+const CLEAN_FIXED_COLUMN_LABELS = [
   "포장라인", "계획량", "최초포장일", "부품이동카드번호",
-  "자재코드", "자재색상", "부품명", "현재공정", "출고지",
-  "Route1", "Route2", "Route3", "Route4", "Route5"
+  "자재코드", "자재색상", "부품명", "현재공정", "출고지"
 ];
+
+// 출고지 다음의 Route 열은 값이 있는 열까지만 남깁니다(예: 전체 행에서
+// Route1~Route2까지만 값이 있으면 Route3~5는 결과에서 아예 뺌).
+const ROUTE_COLUMN_LABELS = ["Route1", "Route2", "Route3", "Route4", "Route5"];
 
 // 현재공정이 빈 값이면 아직 포장 단계인 것으로 보고 이 값을 채워 넣습니다.
 const CURRENT_PROCESS_COLUMN_LABEL = "현재공정";
@@ -143,7 +146,7 @@ function doPost(e) {
  * "리스트 정리" 액션
  *
  * "시트1"(ERP 긴급생산 리스트를 변환해 붙여넣은 원본)에서
- * CLEAN_TARGET_COLUMN_LABELS 순서로 열만 뽑아 "정리" 시트에
+ * CLEAN_FIXED_COLUMN_LABELS(+값이 있는 Route 열) 순서로 열만 뽑아 "정리" 시트에
  * 덮어씁니다(기존 내용은 전부 지우고 다시 씀). 모든 대상 열이 빈
  * 행(완전히 빈 행)은 건너뜁니다. 현재공정 열이 빈 값인 행은 아직
  * 포장 단계인 것으로 보고 "포장"을 채워 넣습니다.
@@ -159,35 +162,60 @@ function cleanServiceShipmentListAction_() {
   const source = readSheetObject_(sourceSheet);
   const header = source.header;
 
-  const columnIndexes = CLEAN_TARGET_COLUMN_LABELS.map(function(label) {
+  const fixedColumnIndexes = CLEAN_FIXED_COLUMN_LABELS.map(function(label) {
     const idx = header.indexOf(label);
     if (idx === -1) throw new Error("'" + SOURCE_SHEET_NAME + "'에서 '" + label + "' 열을 찾을 수 없습니다.");
     return idx;
   });
 
-  const currentProcessPos = CLEAN_TARGET_COLUMN_LABELS.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
+  // Route 열은 시트1에 아예 없어도 에러 내지 않고 그냥 건너뜁니다(있는
+  // 것만 후보로 삼고, 그중에서도 값이 있는 데까지만 최종 결과에 남김).
+  const routeColumnEntries = ROUTE_COLUMN_LABELS
+    .map(function(label) { return { label: label, idx: header.indexOf(label) }; })
+    .filter(function(entry) { return entry.idx !== -1; });
 
-  const rows = source.rows
-    .map(function(row) { return columnIndexes.map(function(idx) { return row.values[idx]; }); })
+  const allColumnIndexes = fixedColumnIndexes.concat(
+    routeColumnEntries.map(function(entry) { return entry.idx; })
+  );
+
+  const currentProcessPos = CLEAN_FIXED_COLUMN_LABELS.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
+
+  const allRows = source.rows
+    .map(function(row) { return allColumnIndexes.map(function(idx) { return row.values[idx]; }); })
     .filter(function(values) {
       return values.some(function(value) { return normalizeText_(value) !== ""; });
     });
 
-  rows.forEach(function(values) {
+  allRows.forEach(function(values) {
     if (normalizeText_(values[currentProcessPos]) === "") {
       values[currentProcessPos] = CURRENT_PROCESS_DEFAULT_VALUE;
     }
   });
 
+  // Route1부터 순서대로 보면서, 값이 있는 마지막 Route 열까지만 남깁니다
+  // (예: Route1~2만 값이 있으면 Route3~5는 결과 열 자체에서 뺌).
+  const fixedCount = CLEAN_FIXED_COLUMN_LABELS.length;
+  let usedRouteCount = 0;
+  routeColumnEntries.forEach(function(entry, i) {
+    const pos = fixedCount + i;
+    const hasValue = allRows.some(function(values) { return normalizeText_(values[pos]) !== ""; });
+    if (hasValue) usedRouteCount = i + 1;
+  });
+
+  const finalHeader = CLEAN_FIXED_COLUMN_LABELS.concat(
+    routeColumnEntries.slice(0, usedRouteCount).map(function(entry) { return entry.label; })
+  );
+  const rows = allRows.map(function(values) { return values.slice(0, finalHeader.length); });
+
   const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
   resultSheet.clear();
-  resultSheet.getRange(1, 1, 1, CLEAN_TARGET_COLUMN_LABELS.length).setValues([CLEAN_TARGET_COLUMN_LABELS]);
+  resultSheet.getRange(1, 1, 1, finalHeader.length).setValues([finalHeader]);
 
   if (rows.length) {
-    resultSheet.getRange(2, 1, rows.length, CLEAN_TARGET_COLUMN_LABELS.length).setValues(rows);
+    resultSheet.getRange(2, 1, rows.length, finalHeader.length).setValues(rows);
 
     DATE_FORMAT_COLUMN_LABELS.forEach(function(label) {
-      const colIndex = CLEAN_TARGET_COLUMN_LABELS.indexOf(label);
+      const colIndex = finalHeader.indexOf(label);
       if (colIndex !== -1) {
         resultSheet.getRange(2, colIndex + 1, rows.length, 1).setNumberFormat(DATE_NUMBER_FORMAT);
       }
