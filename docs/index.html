@@ -1801,6 +1801,8 @@
         const customerColIndex = findHeaderIndex_(header, "고객명");
         const sequenceColIndex = findHeaderIndex_(header, "순번");
         const supplierColIndex = findHeaderIndex_(header, "제품공급업체");
+        const partCodeColIndex = findHeaderIndex_(header, "부품코드");
+        const colorColIndex = findHeaderIndex_(header, "칼라");
 
         // 회사/구분 칸은 값이 짧은 분류값이라 가운데 정렬이 더 보기 좋음
         const companyColIndex = findHeaderIndex_(header, "회사");
@@ -1908,7 +1910,9 @@
                   sequenceColIndex !== -1 ? row.values[sequenceColIndex] : "",
                   customerColIndex !== -1 ? row.values[customerColIndex] : "",
                   requirementColIndex !== -1 ? row.values[requirementColIndex] : "",
-                  supplierColIndex !== -1 ? row.values[supplierColIndex] : ""
+                  supplierColIndex !== -1 ? row.values[supplierColIndex] : "",
+                  partCodeColIndex !== -1 ? row.values[partCodeColIndex] : "",
+                  colorColIndex !== -1 ? row.values[colorColIndex] : ""
                 );
               });
             }
@@ -2028,12 +2032,14 @@
       // 브라우저 팝업 창)으로 보여줌 — OS 창 그대로라 크기 조정/위치 이동이
       // 기본으로 되고, 화면 가운데에 뜨게 좌표를 계산해서 넘깁니다.
       // ESC 키로도 닫힘.
-      function showDailyRowDetail_(rowPos, accessionValue, sequenceValue, customerValue, requirementValue, supplierValue) {
+      function showDailyRowDetail_(rowPos, accessionValue, sequenceValue, customerValue, requirementValue, supplierValue, partCodeValue, colorValue) {
         const accession = String(accessionValue === null || accessionValue === undefined ? "" : accessionValue);
         const sequence = String(sequenceValue === null || sequenceValue === undefined ? "" : sequenceValue);
         const customer = String(customerValue === null || customerValue === undefined ? "" : customerValue);
         const requirement = String(requirementValue === null || requirementValue === undefined ? "" : requirementValue);
         const supplier = String(supplierValue === null || supplierValue === undefined ? "" : supplierValue);
+        const partCode = String(partCodeValue === null || partCodeValue === undefined ? "" : partCodeValue);
+        const color = String(colorValue === null || colorValue === undefined ? "" : colorValue);
 
         const width = 420;
         const height = 400;
@@ -2073,6 +2079,10 @@
                   <div class="field"><label>접수번호</label><span>${escapeHtmlDaily_(accession)}</span></div>
                   <div class="field"><label>순번</label><span>${escapeHtmlDaily_(sequence)}</span></div>
                   <div class="field"><label>제품공급업체</label><span>${escapeHtmlDaily_(supplier)}</span></div>
+                </div>
+                <div class="field-row">
+                  <div class="field"><label>제품코드</label><span>${escapeHtmlDaily_(partCode)}</span></div>
+                  <div class="field"><label>칼라</label><span>${escapeHtmlDaily_(color)}</span></div>
                 </div>
                 <div class="field"><label>고객명</label><span>${escapeHtmlDaily_(customer)}</span></div>
                 <div class="field"><label>요구내역</label><span>${escapeHtmlDaily_(requirement)}</span></div>
