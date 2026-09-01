@@ -483,6 +483,13 @@
             </label>
             <button id="saveDailyRecoveryAccumulateConfigBtn">회수데이터 연결</button>
           </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="dailyServiceShipmentWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveDailyServiceShipmentConfigBtn">서비스출고건 연결</button>
+          </div>
           <div id="dailyPageStatusLine" class="status-line"></div>
         </div>
       </div>
@@ -1064,6 +1071,8 @@
         saveDailyRecoveryConfigBtn: document.getElementById("saveDailyRecoveryConfigBtn"),
         dailyRecoveryAccumulateWebappUrl: document.getElementById("dailyRecoveryAccumulateWebappUrl"),
         saveDailyRecoveryAccumulateConfigBtn: document.getElementById("saveDailyRecoveryAccumulateConfigBtn"),
+        dailyServiceShipmentWebappUrl: document.getElementById("dailyServiceShipmentWebappUrl"),
+        saveDailyServiceShipmentConfigBtn: document.getElementById("saveDailyServiceShipmentConfigBtn"),
         dailyConfigPanelToggleBtn: document.getElementById("dailyConfigPanelToggleBtn"),
         dailyConfigPanelBody: document.getElementById("dailyConfigPanelBody"),
         dailyPageStatusLine: document.getElementById("dailyPageStatusLine"),
@@ -1239,6 +1248,7 @@
         el.dailyReceiptStatusWebappUrl.value = saved.dailyReceiptStatusUrl || "";
         el.dailyRecoveryWebappUrl.value = saved.dailyRecoveryUrl || "";
         el.dailyRecoveryAccumulateWebappUrl.value = saved.dailyRecoveryAccumulateUrl || "";
+        el.dailyServiceShipmentWebappUrl.value = saved.dailyServiceShipmentUrl || "";
         dailyPackagingLastDate = saved.dailyPackagingLastDate || "";
       }
 
@@ -1324,6 +1334,14 @@
         saveConfigField_(
           { dailyRecoveryAccumulateUrl: el.dailyRecoveryAccumulateWebappUrl.value.trim() },
           "회수데이터",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveDailyServiceShipmentConfig() {
+        saveConfigField_(
+          { dailyServiceShipmentUrl: el.dailyServiceShipmentWebappUrl.value.trim() },
+          "서비스출고건",
           el.dailyPageStatusLine
         );
       }
@@ -2700,6 +2718,38 @@
           setDailyStatus_("반납내역서 정리 스프레드시트를 새 탭에서 열었습니다.", "ok");
         } catch (error) {
           setDailyStatus_("반납내역서 정리 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      // "서비스출고건 리스트교체" 버튼 — 시트1 내용을 ERP 긴급생산 리스트를
+      // 변환한 내용으로 바꾸도록 안내한 뒤, 연결한 스프레드시트를 새 탭으로
+      // 열어줍니다(반납내역서 정리 교체와 같은 방식 — 실제 교체는 그
+      // 스프레드시트에서 직접 함).
+      async function replaceDailyServiceShipmentData() {
+        const url = el.dailyServiceShipmentWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("서비스출고건 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const proceed = window.confirm("ERP 긴급생산 리스트 변환 후 시트1 교체해주세요.");
+        if (!proceed) return;
+
+        setDailyStatus_("서비스출고건 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setDailyStatus_("서비스출고건 스프레드시트를 새 탭에서 열었습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("서비스출고건 스프레드시트 열기 실패: " + error.message, "error");
         }
       }
 
@@ -4615,6 +4665,8 @@
       el.saveDailyReceiptStatusConfigBtn.addEventListener("click", saveDailyReceiptStatusConfig);
       el.saveDailyRecoveryConfigBtn.addEventListener("click", saveDailyRecoveryConfig);
       el.saveDailyRecoveryAccumulateConfigBtn.addEventListener("click", saveDailyRecoveryAccumulateConfig);
+      el.saveDailyServiceShipmentConfigBtn.addEventListener("click", saveDailyServiceShipmentConfig);
+      el.dailyServiceShipmentReplaceBtn.addEventListener("click", replaceDailyServiceShipmentData);
       el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
       // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
       // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
