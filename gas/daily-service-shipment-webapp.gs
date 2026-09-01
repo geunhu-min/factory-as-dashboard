@@ -192,9 +192,39 @@ function cleanServiceShipmentListAction_() {
     }
   });
 
-  // 1차 포장라인(오름차순) 2차 최초포장일(오래된순)로 정렬
+  // 같은 자재(자재코드+자재색상)가 포장라인/계획량/최초포장일 없이 다시
+  // 나오면(재투입 건), 시트1에서 바로 위쪽에 있던 같은 자재의 값을
+  // 그대로 채워 넣어서 원래 건과 같은 그룹으로 묶입니다.
   const packagingLinePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("포장라인");
+  const planQtyPos = CLEAN_FIXED_COLUMN_LABELS.indexOf("계획량");
   const firstPackagingDatePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("최초포장일");
+  const materialCodePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("자재코드");
+  const materialColorPos = CLEAN_FIXED_COLUMN_LABELS.indexOf("자재색상");
+
+  const lastKnownPlanByMaterial = {};
+
+  allRows.forEach(function(values) {
+    const materialKey = normalizeText_(values[materialCodePos]) + "||" + normalizeText_(values[materialColorPos]);
+    const isMissingPlan =
+      normalizeText_(values[packagingLinePos]) === "" && normalizeText_(values[firstPackagingDatePos]) === "";
+
+    if (isMissingPlan) {
+      const known = lastKnownPlanByMaterial[materialKey];
+      if (known) {
+        values[packagingLinePos] = known.line;
+        values[planQtyPos] = known.qty;
+        values[firstPackagingDatePos] = known.date;
+      }
+    } else {
+      lastKnownPlanByMaterial[materialKey] = {
+        line: values[packagingLinePos],
+        qty: values[planQtyPos],
+        date: values[firstPackagingDatePos]
+      };
+    }
+  });
+
+  // 1차 포장라인(오름차순) 2차 최초포장일(오래된순)로 정렬
   sortServiceShipmentRows_(allRows, packagingLinePos, firstPackagingDatePos);
 
   // Route1부터 순서대로 보면서, 값이 있는 마지막 Route 열까지만 남깁니다
