@@ -766,6 +766,7 @@
       <div id="monthlyClosingStatusLine" class="status-line"></div>
 
       <div class="toolbar">
+        <button id="monthlyInhouseRefreshBtn" style="display:none;">새로고침</button>
         <span class="spacer"></span>
         <button id="monthlyInhouseDownloadBtn" style="display:none;">정리파일다운로드</button>
         <button id="monthlyClosingSaveBtn" style="display:none;">저장</button>
@@ -1162,6 +1163,7 @@
         monthlyInhouseReplaceBtn: document.getElementById("monthlyInhouseReplaceBtn"),
         monthlyInhouseCleanBtn: document.getElementById("monthlyInhouseCleanBtn"),
         monthlyInhouseDownloadBtn: document.getElementById("monthlyInhouseDownloadBtn"),
+        monthlyInhouseRefreshBtn: document.getElementById("monthlyInhouseRefreshBtn"),
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
         monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
@@ -5122,6 +5124,7 @@
           el.monthlyInhouseToggleBtn.classList.remove("active");
           el.monthlyInhouseActions.classList.remove("visible");
           el.monthlyInhouseDownloadBtn.style.display = "none";
+          el.monthlyInhouseRefreshBtn.style.display = "none";
         }
 
         refreshMonthlyClosingTabsVisibility_();
@@ -5130,6 +5133,7 @@
         const isActive = el.monthlyInhouseToggleBtn.classList.toggle("active");
         el.monthlyInhouseActions.classList.toggle("visible", isActive);
         el.monthlyInhouseDownloadBtn.style.display = isActive ? "" : "none";
+        el.monthlyInhouseRefreshBtn.style.display = isActive ? "" : "none";
 
         if (isActive) {
           el.monthlyClosingFactory2Btn.classList.remove("active");
@@ -5142,6 +5146,7 @@
       el.monthlyInhouseReplaceBtn.addEventListener("click", replaceMonthlyInhouseData);
       el.monthlyInhouseCleanBtn.addEventListener("click", cleanMonthlyInhouseData);
       el.monthlyInhouseDownloadBtn.addEventListener("click", downloadMonthlyInhouseExcel);
+      el.monthlyInhouseRefreshBtn.addEventListener("click", viewMonthlyInhouseResult_);
 
       // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
       // 상태를 깨끗하게 초기화해서 다음에 들어올 때 항상 기본 상태로
