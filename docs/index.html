@@ -3676,7 +3676,15 @@
 
           monthlyClosingCurrentSheet = "";
           renderMonthlyClosingTable_(data.header || [], data.rows || []);
-          setMonthlyClosingStatus_("정리 결과 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+
+          // 포장별 그룹 사이에 끼워 넣은 빈 행은 실제 건수가 아니므로 빼고 셉니다.
+          const nonBlankRowCount = (data.rows || []).filter(function(row) {
+            return (row.values || []).some(function(value) {
+              return value !== null && value !== undefined && String(value).trim() !== "";
+            });
+          }).length;
+
+          setMonthlyClosingStatus_("정리 결과 " + nonBlankRowCount + "건 불러왔습니다.", "ok");
         } catch (error) {
           renderMonthlyClosingTable_([], []);
           setMonthlyClosingStatus_("정리 결과 불러오기 실패: " + error.message, "error");
