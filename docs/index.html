@@ -679,6 +679,7 @@
       <button id="reloadBtn">새로고침</button>
       <button id="recoveryMatchToolbarBtn" class="warning" style="display:none;">회수데이터 매칭</button>
       <button id="accumulatedMatchToolbarBtn" class="warning" style="display:none;">1,2공장 누적데이터 매칭</button>
+      <button id="clearMonthlyDataToolbarBtn" class="warning" style="display:none;">월자료 초기화</button>
       <button id="openAsSheetToolbarBtn" class="warning" style="display:none;">현황변경하기</button>
       <button id="cleanupBothToolbarBtn" class="warning" style="display:none;">1,2공장 정리실행</button>
       <button id="removeDeletedToolbarBtn" class="warning" style="display:none;">삭제건 제거</button>
@@ -1153,6 +1154,7 @@
         tabs: Array.from(document.querySelectorAll(".factory-tabs button[data-sheet]")),
         recoveryMatchToolbarBtn: document.getElementById("recoveryMatchToolbarBtn"),
         accumulatedMatchToolbarBtn: document.getElementById("accumulatedMatchToolbarBtn"),
+        clearMonthlyDataToolbarBtn: document.getElementById("clearMonthlyDataToolbarBtn"),
         openAsSheetToolbarBtn: document.getElementById("openAsSheetToolbarBtn"),
         cleanupBothToolbarBtn: document.getElementById("cleanupBothToolbarBtn"),
         removeDeletedToolbarBtn: document.getElementById("removeDeletedToolbarBtn"),
@@ -3773,6 +3775,7 @@
         el.dirtyCount.style.display = readOnly ? "none" : "";
         el.recoveryMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
         el.accumulatedMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
+        el.clearMonthlyDataToolbarBtn.style.display = isMatchTab ? "" : "none";
         el.openAsSheetToolbarBtn.style.display = isStatusTab ? "" : "none";
         el.cleanupBothToolbarBtn.style.display = isStatusTab ? "" : "none";
         el.removeDeletedToolbarBtn.style.display = isDeleteTab ? "" : "none";
@@ -4840,6 +4843,42 @@
         }
       }
 
+      // "월자료 초기화" 버튼 — 월현황(주간) 연결 스프레드시트의 종합(N)/
+      // 마감(N)/로데이터/1주~5주(N) 데이터를 헤더만 남기고 전부 지웁니다.
+      async function clearMonthlyData() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "전월 마감이 끝났는지 확인해주세요.\n" +
+          "월현황(주간) 연결 스프레드 시트 전체 데이터가 초기화 됩니다."
+        )) return;
+
+        setStatus("월자료 초기화 중...", "");
+        el.clearMonthlyDataToolbarBtn.disabled = true;
+
+        try {
+          const response = await fetch(monthlyUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "clearMonthlyData" })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setStatus("월자료 초기화 완료: " + (data.clearedSheets || []).length + "개 시트", "ok");
+        } catch (error) {
+          setStatus("월자료 초기화 실패: " + error.message, "error");
+        } finally {
+          el.clearMonthlyDataToolbarBtn.disabled = false;
+        }
+      }
+
       el.configPanelToggleBtn.addEventListener("click", function() {
         const willShow = el.configPanelBody.hidden;
         el.configPanelBody.hidden = !willShow;
@@ -5104,6 +5143,7 @@
 
       el.recoveryMatchToolbarBtn.addEventListener("click", matchRecovery);
       el.accumulatedMatchToolbarBtn.addEventListener("click", matchAccumulatedData);
+      el.clearMonthlyDataToolbarBtn.addEventListener("click", clearMonthlyData);
 
       el.openAsSheetToolbarBtn.addEventListener("click", function() {
         if (!confirm(

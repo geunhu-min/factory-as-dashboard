@@ -195,6 +195,10 @@ function doPost(e) {
       return jsonOutput_(matchAccumulatedDataAction_());
     }
 
+    if (body.action === "clearMonthlyData") {
+      return jsonOutput_(clearMonthlyDataAction_());
+    }
+
     if (body.action === "exportFull") {
       return jsonOutput_(exportFullWorkbookAction_());
     }
@@ -606,6 +610,40 @@ function matchAccumulatedDataAction_() {
   });
 
   return { ok: true, counts: counts };
+}
+
+
+/**************************************************************
+ * "월자료 초기화" 액션
+ *
+ * 이 스프레드시트(월현황 주간)의 종합(N), 마감(N), 로데이터, N주(N)
+ * 시트를 전부 찾아서 헤더만 남기고 데이터 행을 지웁니다. 지운 뒤에는
+ * 이름에 건수가 들어있는 시트(종합/마감/N주)는 renumberSheetNameIfNeeded_로
+ * 이름도 0건으로 맞춥니다.
+ **************************************************************/
+function clearMonthlyDataAction_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const weekSheetPatterns = WEEK_NUMBERS.map(function(n) {
+    return new RegExp("^" + n + "주\\(\\d+\\)$");
+  });
+
+  const clearedSheets = [];
+
+  ss.getSheets().forEach(function(sheet) {
+    const name = sheet.getName();
+    const isWeekSheet = weekSheetPatterns.some(function(pattern) { return pattern.test(name); });
+
+    if (!SUMMARY_SHEET_PATTERN.test(name) && !CLOSING_SHEET_PATTERN.test(name) &&
+        name !== RAW_DATA_SHEET_NAME && !isWeekSheet) {
+      return;
+    }
+
+    clearSheetKeepHeader_(sheet);
+    renumberSheetNameIfNeeded_(sheet);
+    clearedSheets.push(name);
+  });
+
+  return { ok: true, clearedSheets: clearedSheets };
 }
 
 
