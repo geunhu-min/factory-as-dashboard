@@ -17,16 +17,19 @@
  *   띄운 뒤 이 스프레드시트를 새 탭에서 열 때 씁니다(ERP 긴급생산
  *   리스트를 변환해 시트1에 붙여넣는 실제 작업은 그 스프레드시트에서
  *   직접 함).
- * - doPost action="clean": "리스트 정리" 버튼 액션. "시트1"에서
- *   CLEAN_FIXED_COLUMN_LABELS(+값이 있는 Route 열) 순서로 열만 뽑아 "정리" 시트에
- *   덮어씁니다(기존 내용은 전부 지움). 현재공정이 빈 값인 행은
- *   포장 단계로 보고 "포장"을 채워 넣고, 최초포장일 열은 "yyyy-mm-dd"
- *   형식으로 맞춥니다. 자세한 내용은 cleanServiceShipmentListAction_ 참고.
+ * - doPost action="clean": "리스트 정리" 버튼 액션. "시트1"에서 출고지가
+ *   "서비스"인 행만, CLEAN_FIXED_COLUMN_LABELS(+값이 있는 Route 열)
+ *   순서로 열만 뽑아 "정리" 시트에 덮어씁니다(기존 내용은 전부 지움).
+ *   현재공정이 빈 값인 행은 포장 단계로 보고 "포장"을 채워 넣고,
+ *   최초포장일 열은 "yyyy-mm-dd" 형식으로 맞추고, 현재공정 칸은
+ *   값에 따라 배경색을 칠합니다(CURRENT_PROCESS_COLOR_MAP 참고).
+ *   자세한 내용은 cleanServiceShipmentListAction_ 참고.
  * - doPost action="save": 대시보드의 "정리결과" 표에서 직접 수정한
  *   행(현재공정만 편집 가능)을 "정리" 시트에 저장합니다. body에
  *   rows(각 행마다 loaded/values)를 담아 보내면, 저장 직전 시트의
  *   실제 값과 loaded를 비교해서 그 사이 다른 곳에서 먼저 바뀐 행은
- *   충돌로 보고 덮어쓰지 않습니다.
+ *   충돌로 보고 덮어쓰지 않습니다. 저장한 행의 현재공정 칸 배경색도
+ *   새 값에 맞게 다시 칠합니다.
  * - doPost action="deleteRows": "삭제" 버튼 액션. body에 담긴
  *   rowIndexes에 해당하는 행을 "정리" 시트에서 지웁니다.
  * - doPost action="exportResult": "정리자료다운로드" 버튼 액션.
@@ -65,10 +68,25 @@ const ROUTE_COLUMN_LABELS = ["Route1", "Route2", "Route3", "Route4", "Route5"];
 const CURRENT_PROCESS_COLUMN_LABEL = "현재공정";
 const CURRENT_PROCESS_DEFAULT_VALUE = "포장";
 
+// "리스트 정리"는 출고지가 이 값인 행만 남깁니다.
+const SHIPPING_DESTINATION_COLUMN_LABEL = "출고지";
+const SHIPPING_DESTINATION_FILTER_VALUE = "서비스";
+
 // 날짜로 표시할 열 이름과 날짜 표시 형식(시트1의 원본 표시와 맞춤 —
 // 그냥 두면 "정리" 시트가 기본 서식으로 "2026. 8. 28"처럼 나옴)
 const DATE_FORMAT_COLUMN_LABELS = ["최초포장일"];
 const DATE_NUMBER_FORMAT = "yyyy-mm-dd";
+
+// 현재공정 값별 배경색(구글 시트 기본 팔레트의 "밝은 색 3" 계열 — 20%
+// 채우기와 비슷한 옅은 톤). 정리 시트에 쓸 때와, 정리결과 표에서
+// 현재공정을 직접 고쳐 저장할 때 둘 다 이 색으로 다시 칠합니다.
+const CURRENT_PROCESS_COLOR_MAP = {
+  "보링": "#f4cccc", // 빨강 20%
+  "엣지": "#c9daf8", // 파랑 20%
+  "엣지(곡면)": "#c9daf8", // 파랑 20%
+  "포장": "#fff2cc", // 노랑 20%
+  "재단": "#d9ead3" // 녹색 20%
+};
 
 
 /**************************************************************
@@ -179,11 +197,15 @@ function cleanServiceShipmentListAction_() {
   );
 
   const currentProcessPos = CLEAN_FIXED_COLUMN_LABELS.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
+  const shippingDestPos = CLEAN_FIXED_COLUMN_LABELS.indexOf(SHIPPING_DESTINATION_COLUMN_LABEL);
 
   const allRows = source.rows
     .map(function(row) { return allColumnIndexes.map(function(idx) { return row.values[idx]; }); })
     .filter(function(values) {
       return values.some(function(value) { return normalizeText_(value) !== ""; });
+    })
+    .filter(function(values) {
+      return normalizeText_(values[shippingDestPos]) === SHIPPING_DESTINATION_FILTER_VALUE;
     });
 
   allRows.forEach(function(values) {
@@ -255,9 +277,29 @@ function cleanServiceShipmentListAction_() {
         resultSheet.getRange(2, colIndex + 1, rows.length, 1).setNumberFormat(DATE_NUMBER_FORMAT);
       }
     });
+
+    const currentProcessColIndex = finalHeader.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
+    if (currentProcessColIndex !== -1) {
+      applyCurrentProcessColors_(resultSheet, 2, rows, currentProcessColIndex);
+    }
   }
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
+}
+
+
+/**************************************************************
+ * 현재공정 값에 따라 그 칸의 배경색을 CURRENT_PROCESS_COLOR_MAP대로
+ * 칠합니다(정의 안 된 값은 배경색 없음으로 되돌림).
+ **************************************************************/
+function applyCurrentProcessColors_(sheet, startRow, valueRows, currentProcessColIndex) {
+  if (!valueRows.length) return;
+
+  const backgrounds = valueRows.map(function(values) {
+    return [CURRENT_PROCESS_COLOR_MAP[normalizeText_(values[currentProcessColIndex])] || null];
+  });
+
+  sheet.getRange(startRow, currentProcessColIndex + 1, valueRows.length, 1).setBackgrounds(backgrounds);
 }
 
 
@@ -296,6 +338,9 @@ function saveRowsAction_(sheet, rows) {
   const conflicts = [];
   let updatedCount = 0;
 
+  const header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const currentProcessColIndex = header.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
+
   rows.forEach(function(row) {
     const rowIndex = Number(row.rowIndex);
 
@@ -318,6 +363,11 @@ function saveRowsAction_(sheet, rows) {
 
     const newValues = normalizeRowLength_(row.values || [], lastColumn);
     sheet.getRange(rowIndex, 1, 1, lastColumn).setValues([newValues]);
+
+    if (currentProcessColIndex !== -1) {
+      applyCurrentProcessColors_(sheet, rowIndex, [newValues], currentProcessColIndex);
+    }
+
     updatedCount++;
   });
 
