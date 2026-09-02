@@ -677,9 +677,9 @@
 
     <div class="toolbar">
       <button id="reloadBtn">새로고침</button>
+      <button id="clearMonthlyDataToolbarBtn" class="warning" style="display:none;">월자료 초기화</button>
       <button id="recoveryMatchToolbarBtn" class="warning" style="display:none;">회수데이터 매칭</button>
       <button id="accumulatedMatchToolbarBtn" class="warning" style="display:none;">1,2공장 누적데이터 매칭</button>
-      <button id="clearMonthlyDataToolbarBtn" class="warning" style="display:none;">월자료 초기화</button>
       <button id="openAsSheetToolbarBtn" class="warning" style="display:none;">현황변경하기</button>
       <button id="cleanupBothToolbarBtn" class="warning" style="display:none;">1,2공장 정리실행</button>
       <button id="removeDeletedToolbarBtn" class="warning" style="display:none;">삭제건 제거</button>
@@ -801,6 +801,10 @@
 
       function isRecoveryMatchTab() {
         return state.currentSheet === RECOVERY_MATCH_KEY;
+      }
+
+      function isMonthlySummaryTab() {
+        return state.currentSheet === MONTHLY_SUMMARY_KEY;
       }
 
       function isOpenAsSheetTab() {
@@ -3775,7 +3779,7 @@
         el.dirtyCount.style.display = readOnly ? "none" : "";
         el.recoveryMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
         el.accumulatedMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
-        el.clearMonthlyDataToolbarBtn.style.display = isMatchTab ? "" : "none";
+        el.clearMonthlyDataToolbarBtn.style.display = isMonthlySummaryTab() ? "" : "none";
         el.openAsSheetToolbarBtn.style.display = isStatusTab ? "" : "none";
         el.cleanupBothToolbarBtn.style.display = isStatusTab ? "" : "none";
         el.removeDeletedToolbarBtn.style.display = isDeleteTab ? "" : "none";
