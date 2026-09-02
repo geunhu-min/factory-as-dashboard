@@ -20,7 +20,9 @@
  *   SOURCE_COLUMN_LABELS 순서로 열만 뽑고 맨 앞에 번호를 새로 매겨
  *   "정리" 시트에 덮어씁니다(기존 내용은 전부 지움). 포장 값 기준으로
  *   정렬하고, 포장 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
- *   자세한 내용은 cleanMonthlyInhouseListAction_ 참고.
+ *   기존에 맞춰둔 열 너비는 그대로 유지하고, 금액 열만 오른쪽 정렬
+ *   +천단위 콤마, 나머지 열은 가운데 정렬로 맞춥니다. 자세한 내용은
+ *   cleanMonthlyInhouseListAction_ 참고.
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
  *   "정리" 시트 하나만 담은 xlsx를 base64로 반환합니다.
  *
@@ -52,6 +54,10 @@ const SOURCE_COLUMN_LABELS = [
 
 // 정렬/그룹 구분 기준 열 — 이 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
 const PACKAGE_COLUMN_LABEL = "포장";
+
+// 금액 열만 오른쪽 정렬 + 천단위 콤마, 나머지 열은 전부 가운데 정렬
+const AMOUNT_COLUMN_LABEL = "금액";
+const AMOUNT_NUMBER_FORMAT = "#,##0";
 
 
 /**************************************************************
@@ -174,11 +180,37 @@ function cleanMonthlyInhouseListAction_() {
   });
 
   const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
+
+  // clear()는 셀 서식은 지워도 열 너비는 그대로 두지만, 혹시 모를 경우에
+  // 대비해 직접 맞춰둔 열 너비를 미리 기억해뒀다가 다시 쓴 뒤 그대로
+  // 되돌려서, 수동으로 조절한 폭이 "자료정리"를 다시 실행해도 항상
+  // 고정되게 합니다.
+  const columnCountForWidths = Math.max(resultSheet.getLastColumn(), finalHeader.length);
+  const preservedWidths = [];
+  for (let col = 1; col <= columnCountForWidths; col++) {
+    preservedWidths.push(resultSheet.getColumnWidth(col));
+  }
+
   resultSheet.clear();
   resultSheet.getRange(1, 1, 1, finalHeader.length).setValues([finalHeader]);
 
   if (outputRows.length) {
     resultSheet.getRange(2, 1, outputRows.length, finalHeader.length).setValues(outputRows);
+  }
+
+  preservedWidths.forEach(function(width, idx) {
+    resultSheet.setColumnWidth(idx + 1, width);
+  });
+
+  const totalRowCount = outputRows.length + 1; // 헤더 포함
+  resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setHorizontalAlignment("center");
+
+  const amountColIndex = finalHeader.indexOf(AMOUNT_COLUMN_LABEL);
+  if (amountColIndex !== -1) {
+    resultSheet.getRange(1, amountColIndex + 1, totalRowCount, 1).setHorizontalAlignment("right");
+    if (outputRows.length) {
+      resultSheet.getRange(2, amountColIndex + 1, outputRows.length, 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
+    }
   }
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
