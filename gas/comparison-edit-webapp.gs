@@ -154,6 +154,10 @@ function doGet(e) {
       return jsonOutput_(readSheetObject_(sheet));
     }
 
+    if (action === "spreadsheetUrl") {
+      return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });

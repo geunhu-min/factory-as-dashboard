@@ -52,6 +52,10 @@ function doGet(e) {
       return jsonOutput_(currentWeekStatusAction_());
     }
 
+    if (params.action === "spreadsheetUrl") {
+      return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    }
+
     const sheetName = params.sheet || "";
 
     if (!EDITABLE_SHEETS[sheetName]) {

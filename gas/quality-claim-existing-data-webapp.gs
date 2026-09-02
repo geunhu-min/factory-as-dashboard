@@ -48,6 +48,12 @@
 function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const params = (e && e.parameter) || {};
+
+    if (params.action === "spreadsheetUrl") {
+      return jsonOutput_({ url: ss.getUrl() });
+    }
+
     const months = {};
     ss.getSheets().forEach((sheet) => {
       const name = sheet.getName().trim();

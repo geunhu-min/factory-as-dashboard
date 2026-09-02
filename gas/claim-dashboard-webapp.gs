@@ -60,6 +60,12 @@ function testAuth() {
 
 function doGet(e) {
   try {
+    const params = (e && e.parameter) || {};
+
+    if (params.action === "spreadsheetUrl") {
+      return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    }
+
     const sheet = getTargetSheet_();
     const pdfBase64 = exportSheetAsPdfBase64_(sheet);
 
