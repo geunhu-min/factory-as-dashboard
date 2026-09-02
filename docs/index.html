@@ -685,7 +685,7 @@
       <button id="removeDeletedToolbarBtn" class="warning" style="display:none;">삭제건 제거</button>
       <button id="claimUpdateWeeklyBtn" class="warning" style="display:none;">이번달 주간 데이터 채우기</button>
       <button id="claimReshapeMonthBtn" class="warning" style="display:none;">다음달로 표 넘기기</button>
-      <button id="runCleanupBtn" class="warning">정리 실행 (매크로)</button>
+      <button id="runCleanupBtn" class="warning" style="display:none;">정리 실행 (매크로)</button>
       <span class="spacer"></span>
       <button id="downloadFullBtn">월현황엑셀다운로드</button>
       <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
@@ -3774,7 +3774,6 @@
         const isDeleteTab = isDeleteSheetTab();
         const isClaimTab = isClaimDashboardTab();
 
-        el.runCleanupBtn.style.display = readOnly ? "none" : "";
         el.saveRowsBtn.style.display = readOnly ? "none" : "";
         el.dirtyCount.style.display = readOnly ? "none" : "";
         el.recoveryMatchToolbarBtn.style.display = isMatchTab ? "" : "none";
