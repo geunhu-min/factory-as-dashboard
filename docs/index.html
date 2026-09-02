@@ -767,6 +767,7 @@
 
       <div class="toolbar">
         <span class="spacer"></span>
+        <button id="monthlyInhouseDownloadBtn" style="display:none;">정리파일다운로드</button>
         <button id="monthlyClosingSaveBtn" style="display:none;">저장</button>
       </div>
 
@@ -1160,6 +1161,7 @@
         monthlyInhouseActions: document.getElementById("monthlyInhouseActions"),
         monthlyInhouseReplaceBtn: document.getElementById("monthlyInhouseReplaceBtn"),
         monthlyInhouseCleanBtn: document.getElementById("monthlyInhouseCleanBtn"),
+        monthlyInhouseDownloadBtn: document.getElementById("monthlyInhouseDownloadBtn"),
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
         monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
@@ -3650,6 +3652,65 @@
 
       // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
       // 실행해서 "정리" 시트를 지우고 새 정리 결과로 덮어씁니다.
+      // "자료정리" 완료 후 "정리" 시트 내용을 표로 보여줍니다(2공장유상마감의
+      // monthlyClosingTable을 그대로 재사용 — 읽기 전용으로 보이도록
+      // monthlyClosingCurrentSheet를 비워서 편집 가능 조건과 안 겹치게 합니다).
+      async function viewMonthlyInhouseResult_() {
+        const url = el.monthlyInhouseWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 내작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("정리 결과 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("정리");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          monthlyClosingCurrentSheet = "";
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+          setMonthlyClosingStatus_("정리 결과 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          renderMonthlyClosingTable_([], []);
+          setMonthlyClosingStatus_("정리 결과 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "정리파일다운로드" 버튼 — "정리" 시트만 담은 엑셀을 내려받습니다.
+      async function downloadMonthlyInhouseExcel() {
+        const url = el.monthlyInhouseWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 내작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("정리파일다운로드 중...", "");
+        el.monthlyInhouseDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportResult" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setMonthlyClosingStatus_("정리파일다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_("정리파일다운로드 실패: " + error.message, "error");
+        } finally {
+          el.monthlyInhouseDownloadBtn.disabled = false;
+        }
+      }
+
       async function cleanMonthlyInhouseData() {
         const url = el.monthlyInhouseWebappUrl.value.trim();
 
@@ -3673,7 +3734,7 @@
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          setMonthlyClosingStatus_("자료정리 완료: " + data.rowCount + "건", "ok");
+          await viewMonthlyInhouseResult_();
         } catch (error) {
           setMonthlyClosingStatus_("자료정리 실패: " + error.message, "error");
         } finally {
@@ -5060,6 +5121,7 @@
         if (isActive) {
           el.monthlyInhouseToggleBtn.classList.remove("active");
           el.monthlyInhouseActions.classList.remove("visible");
+          el.monthlyInhouseDownloadBtn.style.display = "none";
         }
 
         refreshMonthlyClosingTabsVisibility_();
@@ -5067,6 +5129,7 @@
       el.monthlyInhouseToggleBtn.addEventListener("click", function() {
         const isActive = el.monthlyInhouseToggleBtn.classList.toggle("active");
         el.monthlyInhouseActions.classList.toggle("visible", isActive);
+        el.monthlyInhouseDownloadBtn.style.display = isActive ? "" : "none";
 
         if (isActive) {
           el.monthlyClosingFactory2Btn.classList.remove("active");
@@ -5078,6 +5141,7 @@
       el.saveMonthlyInhouseConfigBtn.addEventListener("click", saveMonthlyInhouseConfig);
       el.monthlyInhouseReplaceBtn.addEventListener("click", replaceMonthlyInhouseData);
       el.monthlyInhouseCleanBtn.addEventListener("click", cleanMonthlyInhouseData);
+      el.monthlyInhouseDownloadBtn.addEventListener("click", downloadMonthlyInhouseExcel);
 
       // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
       // 상태를 깨끗하게 초기화해서 다음에 들어올 때 항상 기본 상태로

@@ -21,6 +21,8 @@
  *   "정리" 시트에 덮어씁니다(기존 내용은 전부 지움). 포장 값 기준으로
  *   정렬하고, 포장 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
  *   자세한 내용은 cleanMonthlyInhouseListAction_ 참고.
+ * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
+ *   "정리" 시트 하나만 담은 xlsx를 base64로 반환합니다.
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -28,6 +30,9 @@
  * 2. 배포 > 새 배포 > 유형: 웹 앱, 실행 계정: 나, 액세스 권한: 필요 범위
  * 3. 배포 후 나오는 웹 앱 URL을 대시보드의 "월간업무" 페이지 >
  *    "월간업무 데이터" > "상세" > "월마감 내작건정리 연결"에 입력
+ * 4. UrlFetchApp/DriveApp을 처음 쓰는 경우(exportResult) 권한 재승인이
+ *    필요할 수 있습니다. 함수 선택 드롭다운에서 testAuth를 선택해 한 번
+ *    실행하고 동의 화면을 통과한 뒤 다시 배포하세요.
  *
  * 주의
  * ------------------------------------------------------------
@@ -47,6 +52,23 @@ const SOURCE_COLUMN_LABELS = [
 
 // 정렬/그룹 구분 기준 열 — 이 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
 const PACKAGE_COLUMN_LABEL = "포장";
+
+
+/**************************************************************
+ * 권한 재승인용 임시 테스트 함수
+ *
+ * exportResult가 쓰는 UrlFetchApp(외부 요청)/DriveApp 권한을 승인받기
+ * 위한 함수입니다. 이름에 밑줄(_)이 없어야 Apps Script 편집기의
+ * "실행할 함수" 드롭다운에 보입니다. 드롭다운에서 testAuth를 선택해
+ * 실행하면 동의 화면이 뜹니다 — 승인한 뒤에는 이 함수를 지우고 다시
+ * 배포해도 되고, 그냥 남겨둬도 동작에는 영향이 없습니다.
+ **************************************************************/
+function testAuth() {
+  UrlFetchApp.fetch("https://www.google.com");
+
+  const tempFile = DriveApp.createFile("월마감내작건정리_권한테스트_임시파일.txt", "test");
+  tempFile.setTrashed(true);
+}
 
 
 function doGet(e) {
@@ -81,6 +103,10 @@ function doPost(e) {
 
     if (action === "clean") {
       return jsonOutput_(cleanMonthlyInhouseListAction_());
+    }
+
+    if (action === "exportResult") {
+      return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([CLEAN_RESULT_SHEET_NAME], "월마감내작건정리"));
     }
 
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
@@ -156,6 +182,63 @@ function cleanMonthlyInhouseListAction_() {
   }
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
+}
+
+
+/**************************************************************
+ * 이 스프레드시트에서 sheetNames에 해당하는 시트만 임시 스프레드시트에
+ * 복사해서 xlsx로 내보낸 뒤, 임시 스프레드시트는 지웁니다
+ * ("정리파일다운로드" 버튼에서 사용).
+ **************************************************************/
+function exportSheetsSubsetAsXlsxBase64_(sheetNames, fileNamePrefix) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tempSpreadsheet = SpreadsheetApp.create(fileNamePrefix + "_임시");
+  const tempId = tempSpreadsheet.getId();
+
+  try {
+    sheetNames.forEach(function(name) {
+      const sourceSheet = ss.getSheetByName(name);
+      if (!sourceSheet) throw new Error("'" + name + "' 시트를 찾을 수 없습니다.");
+      const copied = sourceSheet.copyTo(tempSpreadsheet);
+      copied.setName(name);
+    });
+
+    tempSpreadsheet.getSheets().forEach(function(sheet) {
+      if (sheetNames.indexOf(sheet.getName()) === -1) {
+        tempSpreadsheet.deleteSheet(sheet);
+      }
+    });
+
+    SpreadsheetApp.flush();
+
+    const base64 = exportSpreadsheetAsXlsxBase64_(tempId);
+    const fileName = fileNamePrefix + "_" +
+      Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmm") + ".xlsx";
+
+    return { ok: true, fileName: fileName, base64: base64 };
+  } finally {
+    DriveApp.getFileById(tempId).setTrashed(true);
+  }
+}
+
+
+/**************************************************************
+ * 스프레드시트 ID로 xlsx 내보내기 → base64 문자열로 반환
+ * (이 스크립트 자신의 OAuth 토큰으로 export 엔드포인트를 호출합니다)
+ **************************************************************/
+function exportSpreadsheetAsXlsxBase64_(spreadsheetId) {
+  const url = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx";
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error("엑셀 내보내기에 실패했습니다 (" + response.getResponseCode() + ")");
+  }
+
+  return Utilities.base64Encode(response.getBlob().getBytes());
 }
 
 
