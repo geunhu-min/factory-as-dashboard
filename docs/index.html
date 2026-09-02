@@ -5042,6 +5042,17 @@
       el.dailyPackagingReplaceBtn.addEventListener("click", replaceDailyPackagingData);
       el.dailyPackagingDateCheckBtn.addEventListener("click", checkDailyPackagingDate);
       el.dailyPackagingDownloadBtn.addEventListener("click", downloadDailyPackagingExcel);
+      // 정리시트/퍼시스/일룸 등 하위 탭과 유상마감다운로드 버튼들은
+      // "2공장유상마감" 자료라서, 그 탭이 켜져 있을 때만 보이게 합니다.
+      function refreshMonthlyClosingTabsVisibility_() {
+        const isFactory2Active = el.monthlyClosingFactory2Btn.classList.contains("active");
+        el.monthlyClosingTabs.forEach(function(tabBtn) {
+          tabBtn.style.display = isFactory2Active ? "" : "none";
+        });
+        el.monthlyClosingDownloadBtn.style.display = isFactory2Active ? "" : "none";
+        el.monthlyClosingDownloadDetailBtn.style.display = isFactory2Active ? "" : "none";
+      }
+
       el.monthlyClosingFactory2Btn.addEventListener("click", function() {
         const isActive = el.monthlyClosingFactory2Btn.classList.toggle("active");
         el.monthlyClosingFactory2Actions.classList.toggle("visible", isActive);
@@ -5050,6 +5061,8 @@
           el.monthlyInhouseToggleBtn.classList.remove("active");
           el.monthlyInhouseActions.classList.remove("visible");
         }
+
+        refreshMonthlyClosingTabsVisibility_();
       });
       el.monthlyInhouseToggleBtn.addEventListener("click", function() {
         const isActive = el.monthlyInhouseToggleBtn.classList.toggle("active");
@@ -5059,6 +5072,8 @@
           el.monthlyClosingFactory2Btn.classList.remove("active");
           el.monthlyClosingFactory2Actions.classList.remove("visible");
         }
+
+        refreshMonthlyClosingTabsVisibility_();
       });
       el.saveMonthlyInhouseConfigBtn.addEventListener("click", saveMonthlyInhouseConfig);
       el.monthlyInhouseReplaceBtn.addEventListener("click", replaceMonthlyInhouseData);
