@@ -451,14 +451,6 @@ function cleanMonthlyOutsourceListAction_() {
     summarySheet.getRange(sheetRow, 1, 1, mergeColumnCount).merge();
   });
 
-  // merge()가 방금 합친 셀의 테두리를 다시 정리해버리는 경우가 있어서
-  // (특히 맨 아래 합계 행), 병합을 다 끝낸 뒤 전체 데이터 범위에
-  // 테두리를 한 번에 다시 그려서 확실하게 맞춥니다.
-  if (outputRows.length) {
-    summarySheet.getRange(dataStartRow, 1, outputRows.length, totalColumnCount)
-      .setBorder(true, true, true, true, true, true);
-  }
-
   // 이번에 필요한 행 수가 지난번보다 적으면(건수가 줄어든 경우), 남는
   // 아래쪽 행은 값만 지워서는 테두리 등 서식이 그대로 남아 빈 칸에
   // 테두리만 보이는 문제가 생기므로, 그 행들을 아예 삭제합니다.
@@ -472,7 +464,20 @@ function cleanMonthlyOutsourceListAction_() {
   // existingDataRowCount에 안 잡혀서 위 삭제 로직을 피해갑니다. 그래서
   // 합계 바로 아래 일정 범위는 테두리를 확실하게 지워서 빈 칸에
   // 테두리만 남아있는 문제를 없앱니다.
+  //
+  // 반드시 이 다음(아래)에 데이터 범위 테두리를 "마지막으로" 다시
+  // 그려야 합니다 — 합계 행의 아래쪽 테두리와 그 바로 아래 빈 행의
+  // 위쪽 테두리는 시트에서 같은 경계선이라, 순서가 바뀌면 방금 지운
+  // "빈 행 위쪽 테두리 없음"이 합계 행 테두리까지 같이 지워버립니다.
   clearStrayBordersBelow_(summarySheet, dataStartRow + neededRowCount, totalColumnCount);
+
+  // merge()가 방금 합친 셀의 테두리를 다시 정리해버리는 경우가 있고,
+  // 위 테두리 지우기와 경계선을 공유하므로, 모든 테두리 처리의 맨
+  // 마지막에 전체 데이터 범위 테두리를 다시 그려서 확실하게 맞춥니다.
+  if (outputRows.length) {
+    summarySheet.getRange(dataStartRow, 1, outputRows.length, totalColumnCount)
+      .setBorder(true, true, true, true, true, true);
+  }
 
   // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
   // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
@@ -695,8 +700,16 @@ function clearStrayBordersBelow_(sheet, fromRow, columnCount) {
   const maxRows = sheet.getMaxRows();
   const rowCount = Math.min(CLEAR_STRAY_BORDER_ROW_COUNT, maxRows - fromRow + 1);
 
-  if (rowCount > 0) {
-    sheet.getRange(fromRow, 1, rowCount, columnCount)
+  if (rowCount <= 0) return;
+
+  // fromRow의 위쪽 테두리는 바로 위 실제 마지막 데이터 행(합계 등)의
+  // 아래쪽 테두리와 같은 경계선을 공유합니다. 여기서 top을 false로
+  // 지우면 그 경계선 자체가 없어져서 합계 행 테두리까지 같이
+  // 사라지므로, top만 null(그대로 둠)로 남겨두고 나머지만 지웁니다.
+  sheet.getRange(fromRow, 1, 1, columnCount).setBorder(null, false, false, false, false, false);
+
+  if (rowCount > 1) {
+    sheet.getRange(fromRow + 1, 1, rowCount - 1, columnCount)
       .setBorder(false, false, false, false, false, false);
   }
 }
