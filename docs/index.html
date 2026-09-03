@@ -793,8 +793,10 @@
 
       <div class="toolbar">
         <button id="monthlyInhouseRefreshBtn" style="display:none;">새로고침</button>
+        <button id="monthlyOutsourceRefreshBtn" style="display:none;">새로고침</button>
         <span class="spacer"></span>
         <button id="monthlyInhouseDownloadBtn" style="display:none;">정리파일다운로드</button>
+        <button id="monthlyOutsourceDownloadBtn" style="display:none;">정리파일다운로드</button>
         <button id="monthlyClosingSaveBtn" style="display:none;">저장</button>
       </div>
 
@@ -1210,6 +1212,8 @@
         monthlyOutsourceActions: document.getElementById("monthlyOutsourceActions"),
         monthlyOutsourceReplaceBtn: document.getElementById("monthlyOutsourceReplaceBtn"),
         monthlyOutsourceCleanBtn: document.getElementById("monthlyOutsourceCleanBtn"),
+        monthlyOutsourceRefreshBtn: document.getElementById("monthlyOutsourceRefreshBtn"),
+        monthlyOutsourceDownloadBtn: document.getElementById("monthlyOutsourceDownloadBtn"),
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
         monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
@@ -3787,6 +3791,66 @@
 
       // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
       // 실행해서 "종합" 시트를 원인별로 묶어 새로 채웁니다.
+      // "새로고침" 버튼 — 연결한 스프레드시트의 "종합" 시트를 읽어와
+      // 아래 표에 보여줍니다(2공장유상마감의 monthlyClosingTable을
+      // 재사용 — 읽기 전용으로 보이도록 monthlyClosingCurrentSheet를 비움).
+      async function viewMonthlyOutsourceResult_() {
+        const url = el.monthlyOutsourceWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 외작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("종합 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("종합");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          monthlyClosingCurrentSheet = "";
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+          setMonthlyClosingStatus_("종합 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          renderMonthlyClosingTable_([], []);
+          setMonthlyClosingStatus_("종합 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      // "정리파일다운로드" 버튼 — 시트1/진산(양식)을 뺀 나머지 시트를
+      // 담은 엑셀을 내려받습니다.
+      async function downloadMonthlyOutsourceExcel() {
+        const url = el.monthlyOutsourceWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 외작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("정리파일다운로드 중...", "");
+        el.monthlyOutsourceDownloadBtn.disabled = true;
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportResult" })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          downloadBase64File_(data.base64, data.fileName);
+          setMonthlyClosingStatus_("정리파일다운로드 완료: " + data.fileName, "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_("정리파일다운로드 실패: " + error.message, "error");
+        } finally {
+          el.monthlyOutsourceDownloadBtn.disabled = false;
+        }
+      }
+
       async function cleanMonthlyOutsourceData() {
         const url = el.monthlyOutsourceWebappUrl.value.trim();
 
@@ -5306,6 +5370,8 @@
 
         el.monthlyOutsourceToggleBtn.classList.toggle("active", tab === "outsource");
         el.monthlyOutsourceActions.classList.toggle("visible", tab === "outsource");
+        el.monthlyOutsourceDownloadBtn.style.display = tab === "outsource" ? "" : "none";
+        el.monthlyOutsourceRefreshBtn.style.display = tab === "outsource" ? "" : "none";
 
         refreshMonthlyClosingTabsVisibility_();
       }
@@ -5330,6 +5396,8 @@
       el.saveMonthlyOutsourceConfigBtn.addEventListener("click", saveMonthlyOutsourceConfig);
       el.monthlyOutsourceReplaceBtn.addEventListener("click", replaceMonthlyOutsourceData);
       el.monthlyOutsourceCleanBtn.addEventListener("click", cleanMonthlyOutsourceData);
+      el.monthlyOutsourceRefreshBtn.addEventListener("click", viewMonthlyOutsourceResult_);
+      el.monthlyOutsourceDownloadBtn.addEventListener("click", downloadMonthlyOutsourceExcel);
 
       // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
       // 상태를 깨끗하게 초기화해서 다음에 들어올 때 항상 기본 상태로
