@@ -362,15 +362,19 @@ function cleanMonthlyOutsourceListAction_() {
   outputRows.forEach(function(row, offset) {
     const isDividerRow = !!mergeOffsetSet[offset];
     const formatSource = isDividerRow ? (dividerRowFormatSource || dataRowFormatSource) : dataRowFormatSource;
-
-    if (!formatSource) return;
-
     const targetRange = summarySheet.getRange(dataStartRow + offset, 1, 1, totalColumnCount);
-    formatSource.copyTo(targetRange, { formatOnly: true });
+
+    if (formatSource) {
+      formatSource.copyTo(targetRange, { formatOnly: true });
+    }
 
     if (isDividerRow) {
       targetRange.setFontWeight("bold");
     }
+
+    // 서식 복사가 테두리까지 완전히 물려주지 못하는 경우(특히 맨 아래
+    // 합계 행)를 대비해, 모든 행에 얇은 테두리를 확실하게 다시 그립니다.
+    targetRange.setBorder(true, true, true, true, true, true);
   });
 
   mergeRowOffsets.forEach(function(offset) {
