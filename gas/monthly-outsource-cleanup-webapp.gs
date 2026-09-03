@@ -35,8 +35,12 @@
  * - "종합" 시트의 제목/기준 안내/헤더(순번~조치결과, "패널티 금액(원)"
  *   묶음 헤더 포함)는 이 스크립트가 만들지 않습니다 — 이미 만들어진
  *   양식이 있다고 가정하고, "순번" 글자가 있는 헤더 행을 찾아 그
- *   바로 아래부터만 데이터를 새로 씁니다. 그래서 열 너비/글자
- *   크기/정렬 같은 서식은 원래 양식 그대로 유지됩니다.
+ *   바로 아래부터만 데이터를 새로 씁니다.
+ * - 필요한 행 수가 기존 데이터 영역보다 많으면 부족한 만큼 실제로
+ *   행을 삽입하고, 데이터 행/구분행(그룹 소계)/합계행 각각 알맞은
+ *   기존 행의 서식(열 너비·글자 크기·정렬·숫자 서식 등)을 그대로
+ *   복사해서 입힙니다 — 그냥 빈 칸에 값만 채우면 서식이 없어서 글자가
+ *   안 굵어지거나 내용이 옆 칸으로 넘치는 문제가 있어서 이렇게 처리함.
  **************************************************************/
 
 const SOURCE_SHEET_NAME = "시트1"; // 대시보드가 기본으로 읽는 탭
@@ -309,12 +313,35 @@ function cleanMonthlyOutsourceListAction_() {
   mergeRowOffsets.push(outputRows.length - 1);
 
   const dataStartRow = headerRowNumber + 1;
-
-  // 기존 데이터 영역만 지웁니다(제목/안내/헤더는 그대로 둠). clearContent만
-  // 써서 열 너비·글자 크기·정렬 같은 서식은 손대지 않고, 이전에 남아있을
-  // 수 있는 병합은 breakApart로 먼저 풀어서 새 데이터와 충돌하지 않게 합니다.
+  const neededRowCount = outputRows.length;
   const existingLastRow = summarySheet.getLastRow();
-  const wipeRowCount = Math.max(existingLastRow - dataStartRow + 1, outputRows.length, 0);
+  const existingDataRowCount = Math.max(existingLastRow - dataStartRow + 1, 0);
+
+  // 지우기 전에 서식 기준으로 삼을 행을 먼저 찾아둡니다 — 일반 데이터
+  // 행은 dataStartRow(첫 데이터 행) 서식을, 구분행/합계행은 그 아래에서
+  // 처음 만나는 병합 행의 서식을 기준으로 삼습니다(전에 만든 데이터가
+  // 없으면 서식 기준 없이 진행 — 최초 1회만 해당).
+  const dataRowFormatSource = existingDataRowCount > 0
+    ? summarySheet.getRange(dataStartRow, 1, 1, totalColumnCount)
+    : null;
+  const dividerRowNumber = existingDataRowCount > 0
+    ? findFirstMergedRowNumber_(summarySheet, dataStartRow, existingLastRow)
+    : -1;
+  const dividerRowFormatSource = dividerRowNumber !== -1
+    ? summarySheet.getRange(dividerRowNumber, 1, 1, totalColumnCount)
+    : null;
+
+  // 필요한 행 수가 기존보다 많으면 부족한 만큼 실제로 행을 삽입합니다.
+  // (그냥 그 아래 빈 행에 값만 써넣으면 서식이 없는 기본 칸이라
+  // 글자가 안 굵어지거나 내용이 옆 칸으로 넘치는 문제가 생겼음)
+  if (neededRowCount > existingDataRowCount) {
+    const extraRowCount = neededRowCount - existingDataRowCount;
+    const insertAfterRow = existingDataRowCount > 0 ? existingLastRow : dataStartRow - 1;
+    summarySheet.insertRowsAfter(insertAfterRow, extraRowCount);
+  }
+
+  // 기존 병합은 새 데이터와 어긋날 수 있으므로 전부 풀고 값만 지웁니다.
+  const wipeRowCount = Math.max(neededRowCount, existingDataRowCount);
 
   if (wipeRowCount > 0) {
     const wipeRange = summarySheet.getRange(dataStartRow, 1, wipeRowCount, totalColumnCount);
@@ -325,6 +352,26 @@ function cleanMonthlyOutsourceListAction_() {
   if (outputRows.length) {
     summarySheet.getRange(dataStartRow, 1, outputRows.length, totalColumnCount).setValues(outputRows);
   }
+
+  // 행마다 종류(데이터 행 / 구분·합계 행)에 맞는 서식을 다시 입혀서,
+  // 새로 늘어난 행도 표 서식(열 너비 제외 — 열 너비는 열 단위라 항상
+  // 유지됨)이 그대로 유지되게 합니다.
+  const mergeOffsetSet = {};
+  mergeRowOffsets.forEach(function(offset) { mergeOffsetSet[offset] = true; });
+
+  outputRows.forEach(function(row, offset) {
+    const isDividerRow = !!mergeOffsetSet[offset];
+    const formatSource = isDividerRow ? (dividerRowFormatSource || dataRowFormatSource) : dataRowFormatSource;
+
+    if (!formatSource) return;
+
+    const targetRange = summarySheet.getRange(dataStartRow + offset, 1, 1, totalColumnCount);
+    formatSource.copyTo(targetRange, { formatOnly: true });
+
+    if (isDividerRow) {
+      targetRange.setFontWeight("bold");
+    }
+  });
 
   mergeRowOffsets.forEach(function(offset) {
     const sheetRow = dataStartRow + offset;
@@ -409,6 +456,18 @@ function readSheetObject_(sheet) {
   }
 
   return { sheet: sheet.getName(), gid: sheet.getSheetId(), header: header, rows: rows };
+}
+
+
+/**************************************************************
+ * fromRow~toRow 범위에서 A열이 병합의 일부인 첫 번째 행 번호를
+ * 찾습니다(구분행/합계행은 항상 A열부터 병합돼 있음). 없으면 -1.
+ **************************************************************/
+function findFirstMergedRowNumber_(sheet, fromRow, toRow) {
+  for (let row = fromRow; row <= toRow; row++) {
+    if (sheet.getRange(row, 1).getMergedRanges().length > 0) return row;
+  }
+  return -1;
 }
 
 
