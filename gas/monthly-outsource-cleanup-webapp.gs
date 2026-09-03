@@ -228,6 +228,11 @@ function cleanMonthlyOutsourceListAction_() {
     throw new Error("'" + SUMMARY_SHEET_NAME + "' 시트에서 '" + SUMMARY_HEADER_MARKER + "' 헤더 행을 찾을 수 없습니다.");
   }
 
+  // 제목("OO년 O월 협력업체 사외하자 클레임 현황")과 기간
+  // ("YYYY.MM.26~YYYY.MM.25") 안내 문구를, 실행 시점(오늘) 기준
+  // 전월/전전월로 자동으로 맞춥니다(마감은 항상 전월 자료 기준).
+  updateSummaryDateLabels_(summarySheet, headerRowNumber);
+
   function summaryIdx(label) {
     const idx = summaryHeader.indexOf(label);
     if (idx === -1) throw new Error("'" + SUMMARY_SHEET_NAME + "' 헤더에서 '" + label + "' 열을 찾을 수 없습니다.");
@@ -460,6 +465,63 @@ function readSheetObject_(sheet) {
   }
 
   return { sheet: sheet.getName(), gid: sheet.getSheetId(), header: header, rows: rows };
+}
+
+
+/**************************************************************
+ * "종합" 시트 위쪽(제목/안내 영역, 헤더 행 이전)에서 "OO년 O월" 형태의
+ * 제목 문구와 "YYYY.M.D~YYYY.M.D" 형태의 기간 문구를 찾아, 오늘 기준
+ * 전월/전전월 값으로 바꿔 씁니다.
+ *
+ * 마감은 항상 "전월" 자료 기준이라(예: 9월에 실행하면 8월 마감),
+ * 제목은 전월 연/월, 기간은 "전전월 26일~전월 25일"로 계산합니다.
+ * (예: 오늘 2026-09-03 실행 → 제목 "26년 8월", 기간 "2026.07.26~2026.08.25")
+ **************************************************************/
+function updateSummaryDateLabels_(summarySheet, headerRowNumber) {
+  const scanRowCount = headerRowNumber - 1;
+  if (scanRowCount <= 0) return;
+
+  const range = summarySheet.getRange(1, 1, scanRowCount, 1); // 제목/기간 문구는 A열에 있음
+  const values = range.getValues();
+
+  const now = new Date();
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1); // 전월
+  const prevPrevMonthDate = new Date(now.getFullYear(), now.getMonth() - 2, 1); // 전전월
+
+  const titleReplacement = String(prevMonthDate.getFullYear()).slice(-2) + "년 " + (prevMonthDate.getMonth() + 1) + "월";
+  const periodReplacement =
+    prevPrevMonthDate.getFullYear() + "." + pad2_(prevPrevMonthDate.getMonth() + 1) + ".26~" +
+    prevMonthDate.getFullYear() + "." + pad2_(prevMonthDate.getMonth() + 1) + ".25";
+
+  const titlePattern = /\d+\s*년\s*\d+\s*월/;
+  const periodPattern = /\d{4}\.\d{1,2}\.\d{1,2}\s*~\s*\d{4}\.\d{1,2}\.\d{1,2}/;
+
+  let changed = false;
+
+  const newValues = values.map(function(row) {
+    const text = String(row[0] === null || row[0] === undefined ? "" : row[0]);
+
+    if (titlePattern.test(text)) {
+      changed = true;
+      return [text.replace(titlePattern, titleReplacement)];
+    }
+
+    if (periodPattern.test(text)) {
+      changed = true;
+      return [text.replace(periodPattern, periodReplacement)];
+    }
+
+    return [text];
+  });
+
+  if (changed) {
+    range.setValues(newValues);
+  }
+}
+
+
+function pad2_(number) {
+  return number < 10 ? "0" + number : String(number);
 }
 
 
