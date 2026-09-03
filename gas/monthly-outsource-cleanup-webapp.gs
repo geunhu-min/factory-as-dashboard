@@ -451,6 +451,14 @@ function cleanMonthlyOutsourceListAction_() {
     summarySheet.getRange(sheetRow, 1, 1, mergeColumnCount).merge();
   });
 
+  // 이번에 필요한 행 수가 지난번보다 적으면(건수가 줄어든 경우), 남는
+  // 아래쪽 행은 값만 지워서는 테두리 등 서식이 그대로 남아 빈 칸에
+  // 테두리만 보이는 문제가 생기므로, 그 행들을 아예 삭제합니다.
+  if (existingDataRowCount > neededRowCount) {
+    const removeRowCount = existingDataRowCount - neededRowCount;
+    summarySheet.deleteRows(dataStartRow + neededRowCount, removeRowCount);
+  }
+
   // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
   // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
   updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
@@ -645,6 +653,13 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
           targetSheet.setColumnWidth(colIndex + 1, CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH);
         }
       });
+    }
+
+    // 이번 건수가 지난번(이 시트가 "진산"처럼 재사용된 경우)보다 적으면
+    // 남는 아래쪽 행은 값만 지워선 서식(테두리 등)이 남으므로 아예 삭제합니다.
+    if (existingDataRowCount > neededRowCount) {
+      const removeRowCount = existingDataRowCount - neededRowCount;
+      targetSheet.deleteRows(dataStartRow + neededRowCount, removeRowCount);
     }
   });
 }
