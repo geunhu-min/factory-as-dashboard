@@ -83,6 +83,13 @@ const CAUSE_SHEET_TEMPLATE_NAME = "진산";
 // 별개 — 이 열만 1부터 순차적으로 새로 채우고, 나머지 열은 이름이
 // 같은 시트1 열 값을 그대로 복사합니다).
 const CAUSE_SHEET_SEQUENCE_COLUMN_LABEL = "구분";
+// 원인별 상세 시트의 "매입금액" 열은 이름이 달라서 이름 매칭이 안 되므로,
+// "시트1"의 금액(AMOUNT_SOURCE_LABEL) 열 값을 명시적으로 채웁니다.
+const CAUSE_SHEET_AMOUNT_COLUMN_LABEL = "매입금액";
+// 날짜 열은 값을 쓰면 시트 기본 로캘 서식("2026. 8. 13")으로 보이므로,
+// 시트1과 같은 "yyyy-mm-dd" 형식으로 명시적으로 맞춰줍니다.
+const CAUSE_SHEET_DATE_COLUMN_LABELS = ["최종조치일"];
+const CAUSE_SHEET_DATE_NUMBER_FORMAT = "yyyy-mm-dd";
 const GRAND_TOTAL_LABEL = "합계";
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
@@ -552,7 +559,9 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
     const sequenceColIndex = header.indexOf(CAUSE_SHEET_SEQUENCE_COLUMN_LABEL);
 
     const sourceColByTargetCol = header.map(function(label, idx) {
-      return idx === sequenceColIndex ? -1 : sourceHeader.indexOf(label);
+      if (idx === sequenceColIndex) return -1;
+      if (label === CAUSE_SHEET_AMOUNT_COLUMN_LABEL) return sourceHeader.indexOf(AMOUNT_SOURCE_LABEL);
+      return sourceHeader.indexOf(label);
     });
 
     const rowsForCause = group.rows;
@@ -593,6 +602,14 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
 
     if (outputRows.length) {
       targetSheet.getRange(dataStartRow, 1, outputRows.length, lastColumn).setValues(outputRows);
+
+      CAUSE_SHEET_DATE_COLUMN_LABELS.forEach(function(label) {
+        const colIndex = header.indexOf(label);
+        if (colIndex !== -1) {
+          targetSheet.getRange(dataStartRow, colIndex + 1, outputRows.length, 1)
+            .setNumberFormat(CAUSE_SHEET_DATE_NUMBER_FORMAT);
+        }
+      });
     }
   });
 }
