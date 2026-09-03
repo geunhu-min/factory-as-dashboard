@@ -166,8 +166,9 @@ function doPost(e) {
  * "자료정리" 액션
  *
  * "시트1"에서 완전히 빈 행을 뺀 나머지 행을, 원인(→업체) 열 값
- * 기준으로 묶어서 행이 많은 그룹부터(내림차순) 정렬해 "종합" 시트에
- * 씁니다. 같은 그룹 안에서는 시트1의 원래 순서를 유지합니다.
+ * 기준으로 묶어서 행이 많은 그룹부터(내림차순), 개수가 같으면 금액
+ * 합이 높은 그룹부터 정렬해 "종합" 시트에 씁니다. 같은 그룹 안에서는
+ * 시트1의 원래 순서를 유지합니다.
  *
  * 각 행에는 1부터 순차적인 순번을 매기고, 제품가(시트1 금액)+패널티
  * (건당 60,000원 고정)=합계를 계산합니다. 그룹이 끝날 때마다 순번~
@@ -240,8 +241,19 @@ function cleanMonthlyOutsourceListAction_() {
     groups[key].rows.push(item);
   });
 
-  // 행이 많은 그룹부터(내림차순). 개수가 같으면 먼저 나온 순서 유지(안정 정렬).
-  groupOrder.sort(function(a, b) { return groups[b].rows.length - groups[a].rows.length; });
+  // 행이 많은 그룹부터(내림차순). 개수가 같으면 시트1 금액 합이 높은
+  // 그룹부터.
+  function groupAmountSum_(key) {
+    return groups[key].rows.reduce(function(sum, item) {
+      return sum + (Number(item.amount) || 0);
+    }, 0);
+  }
+
+  groupOrder.sort(function(a, b) {
+    const rowCountDiff = groups[b].rows.length - groups[a].rows.length;
+    if (rowCountDiff !== 0) return rowCountDiff;
+    return groupAmountSum_(b) - groupAmountSum_(a);
+  });
 
   // "종합" 시트의 실제 헤더 행을 찾아서, 그 열 이름으로 각 열 위치를 파악합니다.
   const summaryLastColumn = Math.max(summarySheet.getLastColumn(), 1);
@@ -527,7 +539,11 @@ function readSheetObject_(sheet) {
 /**************************************************************
  * 원인별 상세 시트를 채웁니다.
  *
- * 원인 값과 이름이 같은 시트가 이미 있으면 그 시트를, 없으면
+ * 먼저 "시트1"/"종합"/양식 시트("진산") 이 셋을 뺀 나머지 시트를
+ * 전부 지웁니다 — 지난 실행 때 만들어졌던, 이번엔 없어진 원인의
+ * 시트가 계속 남아있지 않게 하기 위함입니다. 그 다음 이번 원인
+ * 목록으로 새로 만듭니다: 원인 값과 이름이 같은 시트가 있으면(양식
+ * 시트 자신이 실제 원인 값과 같은 경우) 그 시트를, 없으면
  * CAUSE_SHEET_TEMPLATE_NAME("진산") 시트를 복사해서 그 원인 이름으로
  * 만듭니다(양식은 헤더 1행 + 예시 데이터 2행 구조라고 가정).
  *
@@ -543,6 +559,17 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
   if (!templateSheet) {
     throw new Error("'" + CAUSE_SHEET_TEMPLATE_NAME + "' 시트(원인별 상세 시트 양식)를 찾을 수 없습니다.");
   }
+
+  // 이전 실행에서 만들어졌던 원인별 시트는 전부 지우고, 이번 정리
+  // 결과로만 새로 채웁니다("시트1"/"종합"/양식 시트("진산")는 항상
+  // 남겨둠). 그래서 이번에 없어진 원인의 옛날 시트가 계속 남아있지
+  // 않습니다.
+  const permanentSheetNames = [SOURCE_SHEET_NAME, SUMMARY_SHEET_NAME, CAUSE_SHEET_TEMPLATE_NAME];
+  ss.getSheets().forEach(function(sheet) {
+    if (permanentSheetNames.indexOf(sheet.getName()) === -1) {
+      ss.deleteSheet(sheet);
+    }
+  });
 
   const dataStartRow = 2;
 
