@@ -200,7 +200,22 @@ function cleanMonthlyOutsourceListAction_() {
   for (let i = 0; i < headerScanValues.length; i++) {
     if (normalizeText_(headerScanValues[i][0]) === SUMMARY_HEADER_MARKER) {
       headerRowNumber = i + 1;
-      summaryHeader = headerScanValues[i];
+
+      // "순번" 같은 단일 열 헤더는 이 행과 바로 다음 행이 세로로 병합되어
+      // 있어서 실제 값은 이 행에만 있지만, "패널티 금액(원)"처럼 묶음
+      // 헤더 아래 제품가/패널티/합계 같은 하위 열 이름은 다음 행에만
+      // 있습니다. 그래서 두 행을 합쳐서(다음 행 값이 있으면 그걸 우선)
+      // 하나의 헤더로 씁니다.
+      const nextRow = headerScanValues[i + 1] || [];
+      summaryHeader = headerScanValues[i].map(function(value, colIndex) {
+        const nextValue = nextRow[colIndex];
+        return normalizeText_(nextValue) !== "" ? nextValue : value;
+      });
+
+      // 다음 행에 새 열 이름이 하나라도 있으면 그 행도 헤더의 일부이므로
+      // 데이터는 그 다음 행부터 시작합니다.
+      const nextRowHasOwnLabel = nextRow.some(function(value) { return normalizeText_(value) !== ""; });
+      headerRowNumber = nextRowHasOwnLabel ? headerRowNumber + 1 : headerRowNumber;
       break;
     }
   }
