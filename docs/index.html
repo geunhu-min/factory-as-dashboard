@@ -744,6 +744,14 @@
             <button id="saveMonthlyInhouseConfigBtn">월마감 내작건정리 연결</button>
             <button type="button" id="openMonthlyInhouseConfigBtn">열기</button>
           </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="monthlyOutsourceWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveMonthlyOutsourceConfigBtn">월마감 외작건정리 연결</button>
+            <button type="button" id="openMonthlyOutsourceConfigBtn">열기</button>
+          </div>
           <div id="monthlyPageStatusLine" class="status-line"></div>
         </div>
       </div>
@@ -751,6 +759,7 @@
       <div class="factory-tabs">
         <button type="button" id="monthlyClosingFactory2Btn">2공장유상마감</button>
         <button type="button" id="monthlyInhouseToggleBtn">월마감 내작건</button>
+        <button type="button" id="monthlyOutsourceToggleBtn">월마감 외작건</button>
         <span class="tabs-spacer"></span>
         <button type="button" class="monthly-closing-tab" data-monthly-sheet="정리" style="display:none;">정리시트</button>
         <button type="button" class="monthly-closing-tab" data-monthly-sheet="퍼시스" style="display:none;">퍼시스</button>
@@ -770,6 +779,10 @@
         <div id="monthlyInhouseActions" class="factory-actions">
           <button type="button" id="monthlyInhouseReplaceBtn">내작월마감 자료교체</button>
           <button type="button" id="monthlyInhouseCleanBtn">자료정리</button>
+        </div>
+        <div id="monthlyOutsourceActions" class="factory-actions">
+          <button type="button" id="monthlyOutsourceReplaceBtn">외작월마감 자료교체</button>
+          <button type="button" id="monthlyOutsourceCleanBtn">자료정리</button>
         </div>
         <span class="spacer"></span>
         <button id="monthlyClosingDownloadBtn" style="display:none;">유상마감다운로드</button>
@@ -1190,6 +1203,13 @@
         monthlyInhouseCleanBtn: document.getElementById("monthlyInhouseCleanBtn"),
         monthlyInhouseDownloadBtn: document.getElementById("monthlyInhouseDownloadBtn"),
         monthlyInhouseRefreshBtn: document.getElementById("monthlyInhouseRefreshBtn"),
+        monthlyOutsourceWebappUrl: document.getElementById("monthlyOutsourceWebappUrl"),
+        saveMonthlyOutsourceConfigBtn: document.getElementById("saveMonthlyOutsourceConfigBtn"),
+        openMonthlyOutsourceConfigBtn: document.getElementById("openMonthlyOutsourceConfigBtn"),
+        monthlyOutsourceToggleBtn: document.getElementById("monthlyOutsourceToggleBtn"),
+        monthlyOutsourceActions: document.getElementById("monthlyOutsourceActions"),
+        monthlyOutsourceReplaceBtn: document.getElementById("monthlyOutsourceReplaceBtn"),
+        monthlyOutsourceCleanBtn: document.getElementById("monthlyOutsourceCleanBtn"),
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
         monthlyClosingSaveBtn: document.getElementById("monthlyClosingSaveBtn"),
@@ -1309,6 +1329,7 @@
         el.claimClosingArchiveWebappUrl.value = saved.claimClosingArchiveUrl || "";
         el.monthlyClosingWebappUrl.value = saved.monthlyClosingUrl || "";
         el.monthlyInhouseWebappUrl.value = saved.monthlyInhouseUrl || "";
+        el.monthlyOutsourceWebappUrl.value = saved.monthlyOutsourceUrl || "";
         el.dailyPackagingWebappUrl.value = saved.dailyPackagingUrl || "";
         el.dailyReceiptWebappUrl.value = saved.dailyReceiptUrl || "";
         el.dailyReceiptStatusWebappUrl.value = saved.dailyReceiptStatusUrl || "";
@@ -1415,6 +1436,14 @@
         saveConfigField_(
           { monthlyInhouseUrl: el.monthlyInhouseWebappUrl.value.trim() },
           "월마감 내작건정리",
+          el.monthlyPageStatusLine
+        );
+      }
+
+      function saveMonthlyOutsourceConfig() {
+        saveConfigField_(
+          { monthlyOutsourceUrl: el.monthlyOutsourceWebappUrl.value.trim() },
+          "월마감 외작건정리",
           el.monthlyPageStatusLine
         );
       }
@@ -3725,6 +3754,37 @@
         }
       }
 
+      // "외작월마감 자료교체" 버튼 — 시트1 내용을 마감된 외작 월마감 자료로
+      // 바꾸도록 안내한 뒤, 연결한 스프레드시트를 새 탭으로 열어줍니다
+      // (내작건 자료교체와 같은 방식 — 실제 교체는 그 스프레드시트에서 직접 함).
+      async function replaceMonthlyOutsourceData() {
+        const url = el.monthlyOutsourceWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 외작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const proceed = window.confirm("마감된 외작 월마감 자료로 시트1 교체해주세요.");
+        if (!proceed) return;
+
+        setMonthlyClosingStatus_("월마감 외작건정리 스프레드시트를 여는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+
+          if (data.error) throw new Error(data.error);
+          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+
+          window.open(data.url, "_blank");
+          setMonthlyClosingStatus_("월마감 외작건정리 스프레드시트를 새 탭에서 열었습니다.", "ok");
+        } catch (error) {
+          setMonthlyClosingStatus_("월마감 외작건정리 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
       // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
       // 실행해서 "정리" 시트를 지우고 새 정리 결과로 덮어씁니다.
       // "자료정리" 완료 후 "정리" 시트 내용을 표로 보여줍니다(2공장유상마감의
@@ -5197,37 +5257,42 @@
         el.monthlyClosingDownloadDetailBtn.style.display = isFactory2Active ? "" : "none";
       }
 
-      el.monthlyClosingFactory2Btn.addEventListener("click", function() {
-        const isActive = el.monthlyClosingFactory2Btn.classList.toggle("active");
-        el.monthlyClosingFactory2Actions.classList.toggle("visible", isActive);
+      // 2공장유상마감/월마감 내작건/월마감 외작건은 같은 자리에 서로 다른
+      // 표를 보여주는 탭이라 하나만 켜져 있게 합니다. tab이 "" 이면 전부 끔.
+      function setActiveMonthlyTab_(tab) {
+        el.monthlyClosingFactory2Btn.classList.toggle("active", tab === "factory2");
+        el.monthlyClosingFactory2Actions.classList.toggle("visible", tab === "factory2");
 
-        if (isActive) {
-          el.monthlyInhouseToggleBtn.classList.remove("active");
-          el.monthlyInhouseActions.classList.remove("visible");
-          el.monthlyInhouseDownloadBtn.style.display = "none";
-          el.monthlyInhouseRefreshBtn.style.display = "none";
-        }
+        el.monthlyInhouseToggleBtn.classList.toggle("active", tab === "inhouse");
+        el.monthlyInhouseActions.classList.toggle("visible", tab === "inhouse");
+        el.monthlyInhouseDownloadBtn.style.display = tab === "inhouse" ? "" : "none";
+        el.monthlyInhouseRefreshBtn.style.display = tab === "inhouse" ? "" : "none";
+
+        el.monthlyOutsourceToggleBtn.classList.toggle("active", tab === "outsource");
+        el.monthlyOutsourceActions.classList.toggle("visible", tab === "outsource");
 
         refreshMonthlyClosingTabsVisibility_();
+      }
+
+      el.monthlyClosingFactory2Btn.addEventListener("click", function() {
+        const isActive = el.monthlyClosingFactory2Btn.classList.contains("active");
+        setActiveMonthlyTab_(isActive ? "" : "factory2");
       });
       el.monthlyInhouseToggleBtn.addEventListener("click", function() {
-        const isActive = el.monthlyInhouseToggleBtn.classList.toggle("active");
-        el.monthlyInhouseActions.classList.toggle("visible", isActive);
-        el.monthlyInhouseDownloadBtn.style.display = isActive ? "" : "none";
-        el.monthlyInhouseRefreshBtn.style.display = isActive ? "" : "none";
-
-        if (isActive) {
-          el.monthlyClosingFactory2Btn.classList.remove("active");
-          el.monthlyClosingFactory2Actions.classList.remove("visible");
-        }
-
-        refreshMonthlyClosingTabsVisibility_();
+        const isActive = el.monthlyInhouseToggleBtn.classList.contains("active");
+        setActiveMonthlyTab_(isActive ? "" : "inhouse");
+      });
+      el.monthlyOutsourceToggleBtn.addEventListener("click", function() {
+        const isActive = el.monthlyOutsourceToggleBtn.classList.contains("active");
+        setActiveMonthlyTab_(isActive ? "" : "outsource");
       });
       el.saveMonthlyInhouseConfigBtn.addEventListener("click", saveMonthlyInhouseConfig);
       el.monthlyInhouseReplaceBtn.addEventListener("click", replaceMonthlyInhouseData);
       el.monthlyInhouseCleanBtn.addEventListener("click", cleanMonthlyInhouseData);
       el.monthlyInhouseDownloadBtn.addEventListener("click", downloadMonthlyInhouseExcel);
       el.monthlyInhouseRefreshBtn.addEventListener("click", viewMonthlyInhouseResult_);
+      el.saveMonthlyOutsourceConfigBtn.addEventListener("click", saveMonthlyOutsourceConfig);
+      el.monthlyOutsourceReplaceBtn.addEventListener("click", replaceMonthlyOutsourceData);
 
       // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
       // 상태를 깨끗하게 초기화해서 다음에 들어올 때 항상 기본 상태로
@@ -5441,6 +5506,9 @@
       });
       el.openMonthlyInhouseConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.monthlyInhouseWebappUrl.value, el.monthlyPageStatusLine, "월마감 내작건정리");
+      });
+      el.openMonthlyOutsourceConfigBtn.addEventListener("click", function() {
+        openConnectedSpreadsheet_(el.monthlyOutsourceWebappUrl.value, el.monthlyPageStatusLine, "월마감 외작건정리");
       });
 
       el.archiveWeekBtn.addEventListener("click", archiveWeek);
