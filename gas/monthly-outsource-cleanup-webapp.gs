@@ -88,8 +88,12 @@ const CAUSE_SHEET_SEQUENCE_COLUMN_LABEL = "구분";
 const CAUSE_SHEET_AMOUNT_COLUMN_LABEL = "매입금액";
 // 날짜 열은 값을 쓰면 시트 기본 로캘 서식("2026. 8. 13")으로 보이므로,
 // 시트1과 같은 "yyyy-mm-dd" 형식으로 명시적으로 맞춰줍니다.
-const CAUSE_SHEET_DATE_COLUMN_LABELS = ["최종조치일"];
+const CAUSE_SHEET_DATE_COLUMN_LABELS = ["최종조치일", "반납일자"];
 const CAUSE_SHEET_DATE_NUMBER_FORMAT = "yyyy-mm-dd";
+// 위 날짜 열이 이 너비(px)보다 좁으면 "yyyy-mm-dd"가 다 안 보이고
+// "###..."으로 깨지므로, 그럴 때만 이 너비로 넓혀줍니다(이미 이보다
+// 넓으면 그대로 둠).
+const CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH = 80;
 const GRAND_TOTAL_LABEL = "합계";
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
@@ -605,9 +609,13 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
 
       CAUSE_SHEET_DATE_COLUMN_LABELS.forEach(function(label) {
         const colIndex = header.indexOf(label);
-        if (colIndex !== -1) {
-          targetSheet.getRange(dataStartRow, colIndex + 1, outputRows.length, 1)
-            .setNumberFormat(CAUSE_SHEET_DATE_NUMBER_FORMAT);
+        if (colIndex === -1) return;
+
+        targetSheet.getRange(dataStartRow, colIndex + 1, outputRows.length, 1)
+          .setNumberFormat(CAUSE_SHEET_DATE_NUMBER_FORMAT);
+
+        if (targetSheet.getColumnWidth(colIndex + 1) < CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH) {
+          targetSheet.setColumnWidth(colIndex + 1, CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH);
         }
       });
     }
