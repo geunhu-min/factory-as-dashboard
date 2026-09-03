@@ -459,6 +459,13 @@ function cleanMonthlyOutsourceListAction_() {
     summarySheet.deleteRows(dataStartRow + neededRowCount, removeRowCount);
   }
 
+  // getLastRow()는 내용이 있는 행까지만 세기 때문에, 맨 처음 수동으로
+  // 만든 양식에 내용 없이 테두리만 미리 그어둔 행이 있으면
+  // existingDataRowCount에 안 잡혀서 위 삭제 로직을 피해갑니다. 그래서
+  // 합계 바로 아래 일정 범위는 테두리를 확실하게 지워서 빈 칸에
+  // 테두리만 남아있는 문제를 없앱니다.
+  clearStrayBordersBelow_(summarySheet, dataStartRow + neededRowCount, totalColumnCount);
+
   // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
   // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
   updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
@@ -661,7 +668,29 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
       const removeRowCount = existingDataRowCount - neededRowCount;
       targetSheet.deleteRows(dataStartRow + neededRowCount, removeRowCount);
     }
+
+    clearStrayBordersBelow_(targetSheet, dataStartRow + neededRowCount, lastColumn);
   });
+}
+
+
+/**************************************************************
+ * fromRow부터 아래로 일정 범위(최대 CLEAR_STRAY_BORDER_ROW_COUNT행)의
+ * 테두리를 전부 지웁니다. getLastRow()는 내용이 있는 행까지만 세서,
+ * 맨 처음 수동으로 만든 양식에 내용 없이 테두리만 그어둔 행은 그
+ * 기준으로는 안 잡히는데, 그런 빈 칸이 표 바로 아래 그대로 남아있는
+ * 것처럼 보이는 문제를 막기 위한 안전장치입니다.
+ **************************************************************/
+const CLEAR_STRAY_BORDER_ROW_COUNT = 50;
+
+function clearStrayBordersBelow_(sheet, fromRow, columnCount) {
+  const maxRows = sheet.getMaxRows();
+  const rowCount = Math.min(CLEAR_STRAY_BORDER_ROW_COUNT, maxRows - fromRow + 1);
+
+  if (rowCount > 0) {
+    sheet.getRange(fromRow, 1, rowCount, columnCount)
+      .setBorder(false, false, false, false, false, false);
+  }
 }
 
 
