@@ -17,10 +17,9 @@
  *   띄운 뒤 이 스프레드시트를 새 탭에서 열 때 씁니다(마감된 외작
  *   월마감 자료로 시트1을 바꾸는 실제 작업은 그 스프레드시트에서
  *   직접 함).
- *
- * [예정] "자료정리" 버튼에 쓸 doPost 액션은 아직 없습니다(요청 시 추가
- * 예정 — 지금은 대시보드 버튼만 만들어둔 상태. 월마감 내작건정리의
- * 자료정리보다 규칙이 복잡해서 별도로 요청받기로 함).
+ * - doPost action="clean": "자료정리" 버튼 액션. "시트1"에서 "종합"
+ *   시트로 자료를 정리해 옮깁니다. 자세한 내용은
+ *   cleanMonthlyOutsourceListAction_ 참고.
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -31,10 +30,40 @@
  *
  * 주의
  * ------------------------------------------------------------
- * - 토큰 검증이 없으므로 URL을 아는 사람은 누구나 이 시트를 읽을 수 있습니다.
+ * - 토큰 검증이 없으므로 URL을 아는 사람은 누구나 이 시트를 읽고
+ *   수정할 수 있습니다.
+ * - "종합" 시트의 제목/기준 안내/헤더(순번~조치결과, "패널티 금액(원)"
+ *   묶음 헤더 포함)는 이 스크립트가 만들지 않습니다 — 이미 만들어진
+ *   양식이 있다고 가정하고, "순번" 글자가 있는 헤더 행을 찾아 그
+ *   바로 아래부터만 데이터를 새로 씁니다. 그래서 열 너비/글자
+ *   크기/정렬 같은 서식은 원래 양식 그대로 유지됩니다.
  **************************************************************/
 
 const SOURCE_SHEET_NAME = "시트1"; // 대시보드가 기본으로 읽는 탭
+const SUMMARY_SHEET_NAME = "종합";
+
+// "종합" 시트에서 이 글자가 있는 행을 헤더 행으로 보고, 그 열 이름들로
+// 실제 열 위치를 찾습니다(양식의 열 순서가 바뀌어도 이름으로 찾으므로
+// 안전합니다). 헤더 바로 다음 행부터 데이터를 씁니다.
+const SUMMARY_HEADER_MARKER = "순번";
+
+// "시트1"에서 그대로 옮기는 열(이름이 "종합"과 동일)
+const DIRECT_COLUMN_LABELS = [
+  "브랜드", "지역센터", "접수번호", "구분", "형태",
+  "고객명", "부품명", "제품코드", "색상", "수량"
+];
+
+// "시트1" 금액 → "종합" 제품가
+const AMOUNT_SOURCE_LABEL = "금액";
+// "시트1"에서 그대로 옮기는 열(제품가 다음 순서)
+const AFTER_AMOUNT_SOURCE_LABELS = ["유형", "세부유형"];
+// "시트1" 원인 → 그룹 기준이면서 동시에 "종합" 업체 열 값
+const CAUSE_SOURCE_LABEL = "원인";
+const ACTION_RESULT_SOURCE_LABEL = "조치결과";
+
+// 패널티는 건당 고정 금액, 합계 = 제품가 + 패널티
+const PENALTY_AMOUNT = 60000;
+const GRAND_TOTAL_LABEL = "합계";
 
 
 function doGet(e) {
@@ -67,10 +96,232 @@ function doPost(e) {
     const body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
     const action = body.action || "";
 
+    if (action === "clean") {
+      return jsonOutput_(cleanMonthlyOutsourceListAction_());
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
   }
+}
+
+
+/**************************************************************
+ * "자료정리" 액션
+ *
+ * "시트1"에서 완전히 빈 행을 뺀 나머지 행을, 원인(→업체) 열 값
+ * 기준으로 묶어서 행이 많은 그룹부터(내림차순) 정렬해 "종합" 시트에
+ * 씁니다. 같은 그룹 안에서는 시트1의 원래 순서를 유지합니다.
+ *
+ * 각 행에는 1부터 순차적인 순번을 매기고, 제품가(시트1 금액)+패널티
+ * (건당 60,000원 고정)=합계를 계산합니다. 그룹이 끝날 때마다 순번~
+ * 수량 열을 하나로 병합한 구분행을 넣어 그 안에 원인 값을 표시하고,
+ * 합계 열에는 그 그룹의 합계 소계를 넣습니다. 맨 마지막에는 "합계"
+ * 라벨과 전체 총합을 넣은 행을 하나 더 추가합니다.
+ *
+ * "종합" 시트의 제목/기준 안내/헤더 행은 그대로 두고, "순번" 글자가
+ * 있는 헤더 행 바로 아래 데이터 영역만 지우고 새로 씁니다(서식은
+ * clearContent만 사용해 그대로 유지 — 열 너비/글자 크기/정렬 불변).
+ **************************************************************/
+function cleanMonthlyOutsourceListAction_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheet = ss.getSheetByName(SOURCE_SHEET_NAME);
+
+  if (!sourceSheet) {
+    throw new Error("'" + SOURCE_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+  }
+
+  const summarySheet = ss.getSheetByName(SUMMARY_SHEET_NAME);
+
+  if (!summarySheet) {
+    throw new Error("'" + SUMMARY_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+  }
+
+  const source = readSheetObject_(sourceSheet);
+  const header = source.header;
+
+  function sourceIdx(label) {
+    const idx = header.indexOf(label);
+    if (idx === -1) throw new Error("'" + SOURCE_SHEET_NAME + "'에서 '" + label + "' 열을 찾을 수 없습니다.");
+    return idx;
+  }
+
+  const directIdx = DIRECT_COLUMN_LABELS.map(sourceIdx);
+  const amountIdx = sourceIdx(AMOUNT_SOURCE_LABEL);
+  const afterAmountIdx = AFTER_AMOUNT_SOURCE_LABELS.map(sourceIdx);
+  const causeIdx = sourceIdx(CAUSE_SOURCE_LABEL);
+  const actionResultIdx = sourceIdx(ACTION_RESULT_SOURCE_LABEL);
+
+  const parsedRows = source.rows
+    .map(function(row) {
+      const values = row.values;
+      return {
+        direct: directIdx.map(function(idx) { return values[idx]; }),
+        amount: values[amountIdx],
+        afterAmount: afterAmountIdx.map(function(idx) { return values[idx]; }),
+        cause: values[causeIdx],
+        actionResult: values[actionResultIdx]
+      };
+    })
+    .filter(function(item) {
+      return item.direct.some(function(value) { return normalizeText_(value) !== ""; }) ||
+        normalizeText_(item.amount) !== "" || normalizeText_(item.cause) !== "";
+    });
+
+  // 원인 값 기준으로 그룹핑(먼저 나온 순서 기억 — 개수가 같을 때 유지용)
+  const groups = {};
+  const groupOrder = [];
+
+  parsedRows.forEach(function(item) {
+    const key = normalizeText_(item.cause);
+
+    if (!groups[key]) {
+      groups[key] = { causeValue: item.cause, rows: [] };
+      groupOrder.push(key);
+    }
+
+    groups[key].rows.push(item);
+  });
+
+  // 행이 많은 그룹부터(내림차순). 개수가 같으면 먼저 나온 순서 유지(안정 정렬).
+  groupOrder.sort(function(a, b) { return groups[b].rows.length - groups[a].rows.length; });
+
+  // "종합" 시트의 실제 헤더 행을 찾아서, 그 열 이름으로 각 열 위치를 파악합니다.
+  const summaryLastColumn = Math.max(summarySheet.getLastColumn(), 1);
+  const headerScanRowCount = Math.min(30, summarySheet.getLastRow() || 30);
+  const headerScanValues = headerScanRowCount > 0
+    ? summarySheet.getRange(1, 1, headerScanRowCount, summaryLastColumn).getValues()
+    : [];
+
+  let headerRowNumber = -1;
+  let summaryHeader = null;
+
+  for (let i = 0; i < headerScanValues.length; i++) {
+    if (normalizeText_(headerScanValues[i][0]) === SUMMARY_HEADER_MARKER) {
+      headerRowNumber = i + 1;
+      summaryHeader = headerScanValues[i];
+      break;
+    }
+  }
+
+  if (headerRowNumber === -1) {
+    throw new Error("'" + SUMMARY_SHEET_NAME + "' 시트에서 '" + SUMMARY_HEADER_MARKER + "' 헤더 행을 찾을 수 없습니다.");
+  }
+
+  function summaryIdx(label) {
+    const idx = summaryHeader.indexOf(label);
+    if (idx === -1) throw new Error("'" + SUMMARY_SHEET_NAME + "' 헤더에서 '" + label + "' 열을 찾을 수 없습니다.");
+    return idx;
+  }
+
+  const outPos = {
+    brand: summaryIdx("브랜드"),
+    region: summaryIdx("지역센터"),
+    accession: summaryIdx("접수번호"),
+    category: summaryIdx("구분"),
+    type: summaryIdx("형태"),
+    customer: summaryIdx("고객명"),
+    partName: summaryIdx("부품명"),
+    productCode: summaryIdx("제품코드"),
+    color: summaryIdx("색상"),
+    qty: summaryIdx("수량"),
+    price: summaryIdx("제품가"),
+    penalty: summaryIdx("패널티"),
+    total: summaryIdx("합계"),
+    kind: summaryIdx("유형"),
+    subKind: summaryIdx("세부유형"),
+    vendor: summaryIdx("업체"),
+    actionResult: summaryIdx("조치결과")
+  };
+
+  const totalColumnCount = summaryHeader.length;
+  const mergeColumnCount = outPos.qty + 1; // 순번(A열)부터 수량 열까지
+
+  const outputRows = [];
+  const mergeRowOffsets = []; // 데이터 시작 행 기준 상대 위치(0-based) — 나중에 실제 시트 행으로 변환
+  let sequence = 0;
+  let grandTotal = 0;
+
+  groupOrder.forEach(function(key) {
+    const group = groups[key];
+    let groupTotal = 0;
+
+    group.rows.forEach(function(item) {
+      sequence++;
+
+      const priceValue = item.amount;
+      const priceNumber = Number(priceValue) || 0;
+      const total = priceNumber + PENALTY_AMOUNT;
+      groupTotal += total;
+
+      const row = new Array(totalColumnCount).fill("");
+      row[0] = sequence; // 순번은 항상 첫 열
+      row[outPos.brand] = item.direct[0];
+      row[outPos.region] = item.direct[1];
+      row[outPos.accession] = item.direct[2];
+      row[outPos.category] = item.direct[3];
+      row[outPos.type] = item.direct[4];
+      row[outPos.customer] = item.direct[5];
+      row[outPos.partName] = item.direct[6];
+      row[outPos.productCode] = item.direct[7];
+      row[outPos.color] = item.direct[8];
+      row[outPos.qty] = item.direct[9];
+      row[outPos.price] = priceValue;
+      row[outPos.penalty] = PENALTY_AMOUNT;
+      row[outPos.total] = total;
+      row[outPos.kind] = item.afterAmount[0];
+      row[outPos.subKind] = item.afterAmount[1];
+      row[outPos.vendor] = item.cause;
+      row[outPos.actionResult] = item.actionResult;
+
+      outputRows.push(row);
+    });
+
+    const dividerRow = new Array(totalColumnCount).fill("");
+    dividerRow[0] = group.causeValue;
+    dividerRow[outPos.total] = groupTotal;
+    outputRows.push(dividerRow);
+    mergeRowOffsets.push(outputRows.length - 1);
+
+    grandTotal += groupTotal;
+  });
+
+  const grandTotalRow = new Array(totalColumnCount).fill("");
+  grandTotalRow[0] = GRAND_TOTAL_LABEL;
+  grandTotalRow[outPos.total] = grandTotal;
+  outputRows.push(grandTotalRow);
+  mergeRowOffsets.push(outputRows.length - 1);
+
+  const dataStartRow = headerRowNumber + 1;
+
+  // 기존 데이터 영역만 지웁니다(제목/안내/헤더는 그대로 둠). clearContent만
+  // 써서 열 너비·글자 크기·정렬 같은 서식은 손대지 않고, 이전에 남아있을
+  // 수 있는 병합은 breakApart로 먼저 풀어서 새 데이터와 충돌하지 않게 합니다.
+  const existingLastRow = summarySheet.getLastRow();
+  const wipeRowCount = Math.max(existingLastRow - dataStartRow + 1, outputRows.length, 0);
+
+  if (wipeRowCount > 0) {
+    const wipeRange = summarySheet.getRange(dataStartRow, 1, wipeRowCount, totalColumnCount);
+    wipeRange.breakApart();
+    wipeRange.clearContent();
+  }
+
+  if (outputRows.length) {
+    summarySheet.getRange(dataStartRow, 1, outputRows.length, totalColumnCount).setValues(outputRows);
+  }
+
+  mergeRowOffsets.forEach(function(offset) {
+    const sheetRow = dataStartRow + offset;
+    summarySheet.getRange(sheetRow, 1, 1, mergeColumnCount).merge();
+  });
+
+  return {
+    ok: true,
+    resultSheet: SUMMARY_SHEET_NAME,
+    rowCount: parsedRows.length,
+    groupCount: groupOrder.length
+  };
 }
 
 
@@ -143,6 +394,11 @@ function readSheetObject_(sheet) {
   }
 
   return { sheet: sheet.getName(), gid: sheet.getSheetId(), header: header, rows: rows };
+}
+
+
+function normalizeText_(value) {
+  return String(value === null || value === undefined ? "" : value).trim();
 }
 
 
