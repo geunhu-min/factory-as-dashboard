@@ -451,6 +451,14 @@ function cleanMonthlyOutsourceListAction_() {
     summarySheet.getRange(sheetRow, 1, 1, mergeColumnCount).merge();
   });
 
+  // merge()가 방금 합친 셀의 테두리를 다시 정리해버리는 경우가 있어서
+  // (특히 맨 아래 합계 행), 병합을 다 끝낸 뒤 전체 데이터 범위에
+  // 테두리를 한 번에 다시 그려서 확실하게 맞춥니다.
+  if (outputRows.length) {
+    summarySheet.getRange(dataStartRow, 1, outputRows.length, totalColumnCount)
+      .setBorder(true, true, true, true, true, true);
+  }
+
   // 이번에 필요한 행 수가 지난번보다 적으면(건수가 줄어든 경우), 남는
   // 아래쪽 행은 값만 지워서는 테두리 등 서식이 그대로 남아 빈 칸에
   // 테두리만 보이는 문제가 생기므로, 그 행들을 아예 삭제합니다.
