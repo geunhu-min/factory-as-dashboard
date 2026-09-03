@@ -18,8 +18,9 @@
  *   월마감 자료로 시트1을 바꾸는 실제 작업은 그 스프레드시트에서
  *   직접 함).
  * - doPost action="clean": "자료정리" 버튼 액션. "시트1"에서 "종합"
- *   시트로 자료를 정리해 옮깁니다. 자세한 내용은
- *   cleanMonthlyOutsourceListAction_ 참고.
+ *   시트로 자료를 정리해 옮기고, 원인별 상세 시트("진산" 양식을
+ *   복사해 원인 이름으로 만듦)도 함께 채웁니다. 자세한 내용은
+ *   cleanMonthlyOutsourceListAction_, updateOutsourceCauseSheets_ 참고.
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -67,6 +68,15 @@ const ACTION_RESULT_SOURCE_LABEL = "조치결과";
 
 // 패널티는 건당 고정 금액, 합계 = 제품가 + 패널티
 const PENALTY_AMOUNT = 60000;
+
+// 원인별 상세 시트 양식(이미 만들어져 있는 시트 이름 — 헤더 1행 + 예시
+// 데이터 2행짜리 구조). 원인 값과 이름이 같은 시트가 없으면 이 시트를
+// 복사해서 그 원인 이름으로 새로 만듭니다.
+const CAUSE_SHEET_TEMPLATE_NAME = "진산";
+// 원인별 상세 시트에서 순번 역할을 하는 열 이름(시트1의 "구분"과는
+// 별개 — 이 열만 1부터 순차적으로 새로 채우고, 나머지 열은 이름이
+// 같은 시트1 열 값을 그대로 복사합니다).
+const CAUSE_SHEET_SEQUENCE_COLUMN_LABEL = "구분";
 const GRAND_TOTAL_LABEL = "합계";
 
 
@@ -161,6 +171,7 @@ function cleanMonthlyOutsourceListAction_() {
     .map(function(row) {
       const values = row.values;
       return {
+        raw: values, // 원인별 시트용 — 이름 매칭으로 아무 열이나 그대로 옮길 때 씀
         direct: directIdx.map(function(idx) { return values[idx]; }),
         amount: values[amountIdx],
         afterAmount: afterAmountIdx.map(function(idx) { return values[idx]; }),
@@ -387,6 +398,10 @@ function cleanMonthlyOutsourceListAction_() {
     summarySheet.getRange(sheetRow, 1, 1, mergeColumnCount).merge();
   });
 
+  // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
+  // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
+  updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
+
   return {
     ok: true,
     resultSheet: SUMMARY_SHEET_NAME,
@@ -465,6 +480,91 @@ function readSheetObject_(sheet) {
   }
 
   return { sheet: sheet.getName(), gid: sheet.getSheetId(), header: header, rows: rows };
+}
+
+
+/**************************************************************
+ * 원인별 상세 시트를 채웁니다.
+ *
+ * 원인 값과 이름이 같은 시트가 이미 있으면 그 시트를, 없으면
+ * CAUSE_SHEET_TEMPLATE_NAME("진산") 시트를 복사해서 그 원인 이름으로
+ * 만듭니다(양식은 헤더 1행 + 예시 데이터 2행 구조라고 가정).
+ *
+ * 대상 시트의 헤더(1행)를 그대로 읽어서, CAUSE_SHEET_SEQUENCE_COLUMN_LABEL
+ * ("구분") 열은 1부터 순차 번호를 새로 채우고, 나머지 열은 이름이 같은
+ * "시트1" 열 값을 그대로 복사합니다. 필요한 행 수가 기존(2행 기준
+ * 1건)보다 많으면 부족한 만큼 2행 서식을 복사해서 행을 늘립니다.
+ * 열 너비 등은 건드리지 않고 값만 채웁니다.
+ **************************************************************/
+function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
+  const templateSheet = ss.getSheetByName(CAUSE_SHEET_TEMPLATE_NAME);
+
+  if (!templateSheet) {
+    throw new Error("'" + CAUSE_SHEET_TEMPLATE_NAME + "' 시트(원인별 상세 시트 양식)를 찾을 수 없습니다.");
+  }
+
+  const dataStartRow = 2;
+
+  groupOrder.forEach(function(key) {
+    const group = groups[key];
+    const causeLabel = normalizeText_(group.causeValue);
+
+    if (!causeLabel) return; // 원인 값이 없는 행은 상세 시트를 만들 대상이 없음
+
+    let targetSheet = ss.getSheetByName(causeLabel);
+    if (!targetSheet) {
+      targetSheet = templateSheet.copyTo(ss);
+      targetSheet.setName(causeLabel);
+    }
+
+    const lastColumn = targetSheet.getLastColumn();
+    const header = targetSheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+    const sequenceColIndex = header.indexOf(CAUSE_SHEET_SEQUENCE_COLUMN_LABEL);
+
+    const sourceColByTargetCol = header.map(function(label, idx) {
+      return idx === sequenceColIndex ? -1 : sourceHeader.indexOf(label);
+    });
+
+    const rowsForCause = group.rows;
+    const neededRowCount = rowsForCause.length;
+    const existingLastRow = targetSheet.getLastRow();
+    const existingDataRowCount = Math.max(existingLastRow - dataStartRow + 1, 0);
+
+    // 지우기/삽입 전에 서식 기준(2행)을 미리 잡아둡니다.
+    const dataRowFormatSource = existingDataRowCount > 0
+      ? targetSheet.getRange(dataStartRow, 1, 1, lastColumn)
+      : null;
+
+    if (neededRowCount > existingDataRowCount) {
+      const extraRowCount = neededRowCount - existingDataRowCount;
+      const insertAfterRow = existingDataRowCount > 0 ? existingLastRow : dataStartRow - 1;
+      targetSheet.insertRowsAfter(insertAfterRow, extraRowCount);
+
+      if (dataRowFormatSource) {
+        dataRowFormatSource.copyTo(
+          targetSheet.getRange(dataStartRow + existingDataRowCount, 1, extraRowCount, lastColumn),
+          { formatOnly: true }
+        );
+      }
+    }
+
+    const wipeRowCount = Math.max(neededRowCount, existingDataRowCount);
+    if (wipeRowCount > 0) {
+      targetSheet.getRange(dataStartRow, 1, wipeRowCount, lastColumn).clearContent();
+    }
+
+    const outputRows = rowsForCause.map(function(item, i) {
+      return header.map(function(label, colIndex) {
+        if (colIndex === sequenceColIndex) return i + 1;
+        const srcIdx = sourceColByTargetCol[colIndex];
+        return srcIdx === -1 ? "" : item.raw[srcIdx];
+      });
+    });
+
+    if (outputRows.length) {
+      targetSheet.getRange(dataStartRow, 1, outputRows.length, lastColumn).setValues(outputRows);
+    }
+  });
 }
 
 
