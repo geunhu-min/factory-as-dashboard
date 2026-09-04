@@ -18,11 +18,11 @@
  *   월마감 자료로 시트1을 바꾸는 실제 작업은 그 스프레드시트에서
  *   직접 함).
  * - doPost action="clean": "자료정리" 버튼 액션. "시트1"에서 "종합"
- *   시트로 자료를 정리해 옮기고, 원인별 상세 시트("진산" 양식을
+ *   시트로 자료를 정리해 옮기고, 원인별 상세 시트("시트2" 양식을
  *   복사해 원인 이름으로 만듦)도 함께 채웁니다. 자세한 내용은
  *   cleanMonthlyOutsourceListAction_, updateOutsourceCauseSheets_ 참고.
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
- *   "시트1"과 "진산"(양식 시트)을 뺀 나머지 모든 시트(종합 + 원인별
+ *   "시트1"과 "시트2"(양식 시트)을 뺀 나머지 모든 시트(종합 + 원인별
  *   상세 시트)를 담은 xlsx를 base64로 반환합니다.
  *
  * 배포 방법
@@ -78,7 +78,7 @@ const PENALTY_AMOUNT = 60000;
 // 원인별 상세 시트 양식(이미 만들어져 있는 시트 이름 — 헤더 1행 + 예시
 // 데이터 2행짜리 구조). 원인 값과 이름이 같은 시트가 없으면 이 시트를
 // 복사해서 그 원인 이름으로 새로 만듭니다.
-const CAUSE_SHEET_TEMPLATE_NAME = "진산";
+const CAUSE_SHEET_TEMPLATE_NAME = "시트2";
 // 원인별 상세 시트에서 순번 역할을 하는 열 이름(시트1의 "구분"과는
 // 별개 — 이 열만 1부터 순차적으로 새로 채우고, 나머지 열은 이름이
 // 같은 시트1 열 값을 그대로 복사합니다).
@@ -479,7 +479,7 @@ function cleanMonthlyOutsourceListAction_() {
       .setBorder(true, true, true, true, true, true);
   }
 
-  // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
+  // 원인별로 "시트2" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
   // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
   // "종합"은 이미 위에서 다 갱신된 뒤라, 여기서 실패해도 종합만 갱신되고
   // 원인별 시트는 예전 상태로 남을 수 있습니다 — 그 사실을 에러 메시지에
@@ -577,12 +577,12 @@ function readSheetObject_(sheet) {
 /**************************************************************
  * 원인별 상세 시트를 채웁니다.
  *
- * 먼저 "시트1"/"종합"/양식 시트("진산") 이 셋을 뺀 나머지 시트를
+ * 먼저 "시트1"/"종합"/양식 시트("시트2") 이 셋을 뺀 나머지 시트를
  * 전부 지웁니다 — 지난 실행 때 만들어졌던, 이번엔 없어진 원인의
  * 시트가 계속 남아있지 않게 하기 위함입니다. 그 다음 이번 원인
  * 목록으로 새로 만듭니다: 원인 값과 이름이 같은 시트가 있으면(양식
  * 시트 자신이 실제 원인 값과 같은 경우) 그 시트를, 없으면
- * CAUSE_SHEET_TEMPLATE_NAME("진산") 시트를 복사해서 그 원인 이름으로
+ * CAUSE_SHEET_TEMPLATE_NAME("시트2") 시트를 복사해서 그 원인 이름으로
  * 만듭니다(양식은 헤더 1행 + 예시 데이터 2행 구조라고 가정).
  *
  * 대상 시트의 헤더(1행)를 그대로 읽어서, CAUSE_SHEET_SEQUENCE_COLUMN_LABEL
@@ -599,7 +599,7 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
   }
 
   // 이전 실행에서 만들어졌던 원인별 시트는 전부 지우고, 이번 정리
-  // 결과로만 새로 채웁니다("시트1"/"종합"/양식 시트("진산")는 항상
+  // 결과로만 새로 채웁니다("시트1"/"종합"/양식 시트("시트2")는 항상
   // 남겨둠). 그래서 이번에 없어진 원인의 옛날 시트가 계속 남아있지
   // 않습니다.
   const permanentSheetNames = [SOURCE_SHEET_NAME, SUMMARY_SHEET_NAME, CAUSE_SHEET_TEMPLATE_NAME];
@@ -685,7 +685,7 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
       });
     }
 
-    // 이번 건수가 지난번(이 시트가 "진산"처럼 재사용된 경우)보다 적으면
+    // 이번 건수가 지난번(이 시트가 "시트2"처럼 재사용된 경우)보다 적으면
     // 남는 아래쪽 행은 값만 지워선 서식(테두리 등)이 남으므로 아예 삭제합니다.
     if (existingDataRowCount > neededRowCount) {
       const removeRowCount = existingDataRowCount - neededRowCount;
