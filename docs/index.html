@@ -5328,6 +5328,8 @@
           el.dailyRecoveryResultViewBtn.classList.remove("active");
           el.dailyRecoveryResultActions.classList.remove("visible");
           viewDailyRecoveryDoc_();
+        } else {
+          resetDailyTableView_();
         }
       });
       el.dailyRecoveryReplaceBtn.addEventListener("click", replaceDailyRecoveryData);
@@ -5339,6 +5341,8 @@
         if (isActive) {
           el.dailyRecoveryViewBtn.classList.remove("active");
           viewDailyRecoveryResult_();
+        } else {
+          resetDailyTableView_();
         }
       });
       el.dailyRecoveryResultSaveBtn.addEventListener("click", saveDailyRecoveryResultEdits);
@@ -5360,6 +5364,15 @@
       // 2공장유상마감/월마감 내작건/월마감 외작건은 같은 자리에 서로 다른
       // 표를 보여주는 탭이라 하나만 켜져 있게 합니다. tab이 "" 이면 전부 끔.
       function setActiveMonthlyTab_(tab) {
+        // 세 탭이 같은 표(monthlyClosingTable)를 같이 쓰기 때문에, 탭을
+        // 바꿀 때마다 이전 탭에서 보던 내용(편집 가능한 정리시트 표와
+        // "저장" 버튼 포함)이 새 탭에서도 그대로 남아있지 않게 비웁니다.
+        el.monthlyClosingTabs.forEach(function(b) { b.classList.remove("active"); });
+        monthlyClosingCurrentSheet = "";
+        el.monthlyClosingSaveBtn.style.display = "none";
+        renderMonthlyClosingTable_([], []);
+        setMonthlyClosingStatus_("", "");
+
         el.monthlyClosingFactory2Btn.classList.toggle("active", tab === "factory2");
         el.monthlyClosingFactory2Actions.classList.toggle("visible", tab === "factory2");
 
@@ -5407,9 +5420,13 @@
         const isActive = el.dailyReceiptStatusToggleBtn.classList.toggle("active");
         el.dailyReceiptStatusActions.classList.toggle("visible", isActive);
 
+        // 포장일자확인은 이 탭 안의 하위 보기라, 탭을 켜거나(다른 하위
+        // 보기가 남아있지 않게) 끄거나(하위 보기가 부모 없이 떠 있지
+        // 않게) 항상 같이 꺼줍니다.
+        el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
+        el.dailyPackagingActions.classList.remove("visible");
+
         if (isActive) {
-          el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
-          el.dailyPackagingActions.classList.remove("visible");
           el.dailyRecoveryStatusToggleBtn.classList.remove("active");
           el.dailyRecoveryStatusActions.classList.remove("visible");
           el.dailyServiceShipmentToggleBtn.classList.remove("active");

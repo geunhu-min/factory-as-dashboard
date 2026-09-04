@@ -481,7 +481,17 @@ function cleanMonthlyOutsourceListAction_() {
 
   // 원인별로 "진산" 양식 시트를 복사(또는 이름이 같은 기존 시트를 재사용)해서
   // 원인 이름의 상세 시트를 만들고, 시트1에서 해당 원인 행만 옮겨 채웁니다.
-  updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
+  // "종합"은 이미 위에서 다 갱신된 뒤라, 여기서 실패해도 종합만 갱신되고
+  // 원인별 시트는 예전 상태로 남을 수 있습니다 — 그 사실을 에러 메시지에
+  // 명확히 남겨서 사용자가 상태가 서로 안 맞는 걸 바로 알 수 있게 합니다.
+  try {
+    updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
+  } catch (causeSheetError) {
+    throw new Error(
+      "'" + SUMMARY_SHEET_NAME + "'은(는) 갱신됐지만, 원인별 상세 시트 갱신에 실패했습니다: " +
+      causeSheetError.message
+    );
+  }
 
   return {
     ok: true,
