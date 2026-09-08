@@ -84,9 +84,21 @@ const CURRENT_PROCESS_COLOR_MAP = {
   "보링": "#f4cccc", // 빨강 20%
   "엣지": "#c9daf8", // 파랑 20%
   "엣지(곡면)": "#c9daf8", // 파랑 20%
+  "루타": "#c9daf8", // 파랑 20% (엣지와 동일)
   "포장": "#fff2cc", // 노랑 20%
   "재단": "#d9ead3" // 녹색 20%
 };
+
+// 최초포장일 지연 표시 — 오늘 기준 워킹데이(평일)로 며칠 전인지 계산해
+// -2워킹데이 이상이면 진하게, -1워킹데이면 더 옅게 "빨강, 강조2"
+// 계열로 칠합니다. 정확한 색은 이 스프레드시트의 실제 테마에서
+// "강조2" 색을 읽어와 흰색 쪽으로 섞어(tint) 계산합니다(스프레드시트
+// 테마가 바뀌어도 항상 "강조2, N% 더 밝게"와 맞도록).
+const FIRST_PACKAGING_DATE_COLUMN_LABEL = "최초포장일";
+const FIRST_PACKAGING_DATE_OVERDUE_WORKING_DAYS_DARK = 2; // -2워킹데이 이상 → 40% 더 밝게
+const FIRST_PACKAGING_DATE_OVERDUE_WORKING_DAYS_LIGHT = 1; // -1워킹데이 → 80% 더 밝게
+const FIRST_PACKAGING_DATE_OVERDUE_DARK_LIGHTER_PERCENT = 40;
+const FIRST_PACKAGING_DATE_OVERDUE_LIGHT_LIGHTER_PERCENT = 80;
 
 
 /**************************************************************
@@ -292,6 +304,13 @@ function cleanServiceShipmentListAction_() {
     if (currentProcessColIndex !== -1) {
       applyCurrentProcessColors_(resultSheet, 2, rows, currentProcessColIndex);
     }
+
+    const firstPackagingDateColIndex = finalHeader.indexOf(FIRST_PACKAGING_DATE_COLUMN_LABEL);
+    if (firstPackagingDateColIndex !== -1) {
+      const darkHex = getAccent2LighterHex_(ss, FIRST_PACKAGING_DATE_OVERDUE_DARK_LIGHTER_PERCENT);
+      const lightHex = getAccent2LighterHex_(ss, FIRST_PACKAGING_DATE_OVERDUE_LIGHT_LIGHTER_PERCENT);
+      applyFirstPackagingDateOverdueColors_(resultSheet, 2, rows, firstPackagingDateColIndex, getTodayDateOnly_(), darkHex, lightHex);
+    }
   }
 
   // 수동으로 맞춰둔 가운데 정렬도 clear() 때문에 매번 풀리므로, 값을
@@ -319,6 +338,96 @@ function applyCurrentProcessColors_(sheet, startRow, valueRows, currentProcessCo
   });
 
   sheet.getRange(startRow, currentProcessColIndex + 1, valueRows.length, 1).setBackgrounds(backgrounds);
+}
+
+
+/**************************************************************
+ * 이 스프레드시트의 실제 테마에서 "강조2"(ACCENT2) 색을 읽어와
+ * lighterPercent(%)만큼 흰색 쪽으로 섞은 hex 색을 돌려줍니다
+ * ("강조2, N% 더 밝게"와 같은 계산 방식).
+ **************************************************************/
+function getAccent2LighterHex_(ss, lighterPercent) {
+  const rgb = ss.getSpreadsheetTheme()
+    .getConcreteColor(SpreadsheetApp.ThemeColorType.ACCENT2)
+    .asRgbColor();
+
+  const blend = function(channel) {
+    return Math.round(channel + (255 - channel) * (lighterPercent / 100));
+  };
+  const toHex = function(n) {
+    return ("0" + n.toString(16)).slice(-2);
+  };
+
+  return "#" + toHex(blend(rgb.getRed())) + toHex(blend(rgb.getGreen())) + toHex(blend(rgb.getBlue()));
+}
+
+
+/**************************************************************
+ * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)를 시각 없는
+ * Date로 파싱합니다. 날짜로 못 읽으면 null.
+ **************************************************************/
+function parseDateOnly_(value) {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+
+/**************************************************************
+ * fromDate(시각 없는 Date) 다음 날부터 toDate까지 주말(토/일)을 뺀
+ * 평일 수를 셉니다 — "오늘 기준 -N워킹데이"의 N.
+ **************************************************************/
+function countWorkingDaysBetween_(fromDate, toDate) {
+  if (fromDate >= toDate) return 0;
+
+  let count = 0;
+  const cursor = new Date(fromDate);
+  cursor.setDate(cursor.getDate() + 1);
+
+  while (cursor <= toDate) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count++;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return count;
+}
+
+
+/**************************************************************
+ * "오늘"(Asia/Seoul 기준, 시각 없음)을 Date로 돌려줍니다.
+ **************************************************************/
+function getTodayDateOnly_() {
+  const parts = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd").split("-");
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+}
+
+
+/**************************************************************
+ * 최초포장일 열에 지연 배경색을 칠합니다 — 오늘 기준 워킹데이로
+ * -2일 이상 지난 행은 dark 색, -1일 지난 행은 light 색, 그 외에는
+ * 배경색 없음으로 되돌립니다.
+ **************************************************************/
+function applyFirstPackagingDateOverdueColors_(sheet, startRow, valueRows, dateColIndex, today, darkHex, lightHex) {
+  if (!valueRows.length) return;
+
+  const backgrounds = valueRows.map(function(values) {
+    const dateOnly = parseDateOnly_(values[dateColIndex]);
+    if (!dateOnly) return [null];
+
+    const workingDaysAgo = countWorkingDaysBetween_(dateOnly, today);
+    if (workingDaysAgo >= FIRST_PACKAGING_DATE_OVERDUE_WORKING_DAYS_DARK) return [darkHex];
+    if (workingDaysAgo === FIRST_PACKAGING_DATE_OVERDUE_WORKING_DAYS_LIGHT) return [lightHex];
+    return [null];
+  });
+
+  sheet.getRange(startRow, dateColIndex + 1, valueRows.length, 1).setBackgrounds(backgrounds);
 }
 
 
@@ -360,6 +469,11 @@ function saveRowsAction_(sheet, rows) {
   const header = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   const currentProcessColIndex = header.indexOf(CURRENT_PROCESS_COLUMN_LABEL);
 
+  const firstPackagingDateColIndex = header.indexOf(FIRST_PACKAGING_DATE_COLUMN_LABEL);
+  const today = getTodayDateOnly_();
+  const darkHex = getAccent2LighterHex_(sheet.getParent(), FIRST_PACKAGING_DATE_OVERDUE_DARK_LIGHTER_PERCENT);
+  const lightHex = getAccent2LighterHex_(sheet.getParent(), FIRST_PACKAGING_DATE_OVERDUE_LIGHT_LIGHTER_PERCENT);
+
   rows.forEach(function(row) {
     const rowIndex = Number(row.rowIndex);
 
@@ -385,6 +499,10 @@ function saveRowsAction_(sheet, rows) {
 
     if (currentProcessColIndex !== -1) {
       applyCurrentProcessColors_(sheet, rowIndex, [newValues], currentProcessColIndex);
+    }
+
+    if (firstPackagingDateColIndex !== -1) {
+      applyFirstPackagingDateOverdueColors_(sheet, rowIndex, [newValues], firstPackagingDateColIndex, today, darkHex, lightHex);
     }
 
     updatedCount++;
