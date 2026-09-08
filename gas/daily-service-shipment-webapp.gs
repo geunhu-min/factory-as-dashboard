@@ -265,6 +265,16 @@ function cleanServiceShipmentListAction_() {
   const rows = allRows.map(function(values) { return values.slice(0, finalHeader.length); });
 
   const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
+
+  // clear()는 열 너비는 그대로 두지만 정렬 같은 셀 서식은 다 지우므로,
+  // 수동으로 맞춰둔 열 너비를 미리 기억해뒀다가 다시 쓴 뒤 그대로
+  // 되돌려서 "리스트 정리"를 다시 실행해도 항상 고정되게 합니다.
+  const columnCountForWidths = Math.max(resultSheet.getLastColumn(), finalHeader.length);
+  const preservedWidths = [];
+  for (let col = 1; col <= columnCountForWidths; col++) {
+    preservedWidths.push(resultSheet.getColumnWidth(col));
+  }
+
   resultSheet.clear();
   resultSheet.getRange(1, 1, 1, finalHeader.length).setValues([finalHeader]);
 
@@ -283,6 +293,15 @@ function cleanServiceShipmentListAction_() {
       applyCurrentProcessColors_(resultSheet, 2, rows, currentProcessColIndex);
     }
   }
+
+  // 수동으로 맞춰둔 가운데 정렬도 clear() 때문에 매번 풀리므로, 값을
+  // 다 쓴 뒤 헤더+데이터 전체 범위에 가운데 정렬을 다시 지정합니다.
+  const totalRowCount = rows.length + 1; // 헤더 포함
+  resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setHorizontalAlignment("center");
+
+  preservedWidths.forEach(function(width, idx) {
+    resultSheet.setColumnWidth(idx + 1, width);
+  });
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
 }
