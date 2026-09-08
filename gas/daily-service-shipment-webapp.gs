@@ -319,6 +319,9 @@ function cleanServiceShipmentListAction_() {
   resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setHorizontalAlignment("center");
   resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setVerticalAlignment("middle");
 
+  // 값이 있는 행(헤더+데이터)은 행 크기를 30으로 고정합니다.
+  resultSheet.setRowHeights(1, totalRowCount, 30);
+
   preservedWidths.forEach(function(width, idx) {
     resultSheet.setColumnWidth(idx + 1, width);
   });
