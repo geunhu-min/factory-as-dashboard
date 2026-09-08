@@ -313,10 +313,11 @@ function cleanServiceShipmentListAction_() {
     }
   }
 
-  // 수동으로 맞춰둔 가운데 정렬도 clear() 때문에 매번 풀리므로, 값을
-  // 다 쓴 뒤 헤더+데이터 전체 범위에 가운데 정렬을 다시 지정합니다.
+  // 수동으로 맞춰둔 가로/세로 가운데 정렬도 clear() 때문에 매번 풀리므로,
+  // 값을 다 쓴 뒤 헤더+데이터 전체 범위에 다시 지정합니다.
   const totalRowCount = rows.length + 1; // 헤더 포함
   resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setHorizontalAlignment("center");
+  resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setVerticalAlignment("middle");
 
   preservedWidths.forEach(function(width, idx) {
     resultSheet.setColumnWidth(idx + 1, width);
