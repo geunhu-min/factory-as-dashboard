@@ -126,6 +126,10 @@ function doPost(e) {
       return jsonOutput_(deleteArchivedOldMonthlySheetsAction_());
     }
 
+    if (action === "deleteSheetByName") {
+      return jsonOutput_(deleteSheetByNameAction_(body.sheetName));
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
@@ -355,6 +359,25 @@ function deleteArchivedOldMonthlySheetsAction_() {
   });
 
   return { ok: true, deletedSheetNames: deletedNames, count: deletedNames.length };
+}
+
+
+/**************************************************************
+ * 이름으로 지정한 탭 하나를 삭제합니다(되돌릴 수 없음). 이미 없는
+ * 이름이면 에러 없이 "이미 없음"으로 응답합니다.
+ **************************************************************/
+function deleteSheetByNameAction_(sheetName) {
+  if (!sheetName) throw new Error("sheetName이 필요합니다.");
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    return { ok: true, deleted: false, sheetName: sheetName, message: "'" + sheetName + "' 탭이 이미 없습니다." };
+  }
+
+  ss.deleteSheet(sheet);
+  return { ok: true, deleted: true, sheetName: sheetName };
 }
 
 
