@@ -118,6 +118,14 @@ function doPost(e) {
       return jsonOutput_(exportFullWorkbookAction_());
     }
 
+    if (action === "archiveOldMonthlySheets") {
+      return jsonOutput_(archiveOldMonthlySheetsAction_());
+    }
+
+    if (action === "deleteArchivedOldMonthlySheets") {
+      return jsonOutput_(deleteArchivedOldMonthlySheetsAction_());
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
@@ -266,6 +274,87 @@ function exportFullWorkbookAction_() {
     Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmm") + ".xlsx";
 
   return { ok: true, fileName: fileName, base64: base64 };
+}
+
+
+// 22~24년 월별 탭 이름 형식(예: "22.01", "24.12")과, 보관용으로
+// 새로 만들 스프레드시트 이름. 파일이 탭 57개(22.01~26.09)로 무거워져
+// 편집 화면이 안 열리는 문제 때문에, 오래된 3년치를 별도 파일로
+// 옮기고 원본에서는 지워서 가볍게 만드는 용도입니다.
+const ARCHIVE_SHEET_NAME_PATTERN = /^(22|23|24)\.\d{2}$/;
+const ARCHIVE_SPREADSHEET_NAME = "회수데이터_보관용(22~24)";
+
+
+/**************************************************************
+ * 1단계: 22~24년 월별 탭(ARCHIVE_SHEET_NAME_PATTERN에 맞는 이름)을
+ * 전부 새 스프레드시트로 복사합니다. 원본은 전혀 건드리지 않습니다
+ * (삭제는 이 함수가 하지 않고, 결과를 확인한 뒤 별도로
+ * deleteArchivedOldMonthlySheetsAction_을 실행해야 지워집니다).
+ * 복사한 탭 이름 목록은 스크립트 속성에 저장해뒀다가 삭제 단계에서
+ * 그대로 사용합니다.
+ **************************************************************/
+function archiveOldMonthlySheetsAction_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const targetSheets = ss.getSheets().filter(function(sheet) {
+    return ARCHIVE_SHEET_NAME_PATTERN.test(sheet.getName());
+  });
+
+  if (!targetSheets.length) {
+    throw new Error("22~24년 형식(YY.MM)의 탭을 찾지 못했습니다.");
+  }
+
+  const archiveSs = SpreadsheetApp.create(ARCHIVE_SPREADSHEET_NAME);
+  const placeholderSheet = archiveSs.getSheets()[0];
+
+  const copiedNames = [];
+  targetSheets.forEach(function(sheet) {
+    const copied = sheet.copyTo(archiveSs);
+    copied.setName(sheet.getName());
+    copiedNames.push(sheet.getName());
+  });
+
+  archiveSs.deleteSheet(placeholderSheet);
+
+  PropertiesService.getScriptProperties().setProperties({
+    archiveSpreadsheetUrl: archiveSs.getUrl(),
+    archivedSheetNames: JSON.stringify(copiedNames)
+  });
+
+  return {
+    ok: true,
+    archiveSpreadsheetUrl: archiveSs.getUrl(),
+    archivedSheetNames: copiedNames,
+    count: copiedNames.length
+  };
+}
+
+
+/**************************************************************
+ * 2단계: archiveOldMonthlySheetsAction_이 저장해둔 탭 이름 목록을
+ * 원본에서 실제로 삭제합니다(되돌릴 수 없음). 보관용 파일 내용을
+ * 먼저 확인한 뒤에만 호출해야 합니다.
+ **************************************************************/
+function deleteArchivedOldMonthlySheetsAction_() {
+  const props = PropertiesService.getScriptProperties();
+  const archivedNamesJson = props.getProperty("archivedSheetNames");
+
+  if (!archivedNamesJson) {
+    throw new Error("먼저 archiveOldMonthlySheets를 실행해서 보관용 파일을 만들어야 합니다.");
+  }
+
+  const archivedNames = JSON.parse(archivedNamesJson);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const deletedNames = [];
+
+  archivedNames.forEach(function(name) {
+    const sheet = ss.getSheetByName(name);
+    if (sheet) {
+      ss.deleteSheet(sheet);
+      deletedNames.push(name);
+    }
+  });
+
+  return { ok: true, deletedSheetNames: deletedNames, count: deletedNames.length };
 }
 
 
