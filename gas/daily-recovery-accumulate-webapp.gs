@@ -130,6 +130,10 @@ function doPost(e) {
       return jsonOutput_(deleteSheetByNameAction_(body.sheetName));
     }
 
+    if (action === "migrateAllSheetsToNewSpreadsheet") {
+      return jsonOutput_(migrateAllSheetsToNewSpreadsheetAction_());
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
@@ -378,6 +382,45 @@ function deleteSheetByNameAction_(sheetName) {
 
   ss.deleteSheet(sheet);
   return { ok: true, deleted: true, sheetName: sheetName };
+}
+
+
+// 원본 스프레드시트 편집 화면이 안 열려서(구글 쪽 렌더링 문제로 추정,
+// 탭 수/데이터 분량을 줄여도 동일) 새 스프레드시트로 통째로 옮기는
+// 용도의 이름입니다.
+const MIGRATION_SPREADSHEET_NAME = "회수데이터(마이그레이션)";
+
+
+/**************************************************************
+ * 지금 이 스프레드시트에 남아있는 모든 탭을 새 스프레드시트로
+ * 통째로 복사합니다(원본은 전혀 건드리지 않음). 새로 만든 파일의
+ * URL을 반환합니다 — 그 파일에 별도로 Apps Script를 추가/배포하고,
+ * 대시보드 설정(dailyRecoveryAccumulateUrl, recoveryCsvUrl)을 그
+ * 파일 기준으로 다시 잡아야 합니다.
+ **************************************************************/
+function migrateAllSheetsToNewSpreadsheetAction_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sourceSheets = ss.getSheets();
+
+  const newSs = SpreadsheetApp.create(MIGRATION_SPREADSHEET_NAME);
+  const placeholderSheet = newSs.getSheets()[0];
+
+  const copiedNames = [];
+  sourceSheets.forEach(function(sheet) {
+    const copied = sheet.copyTo(newSs);
+    copied.setName(sheet.getName());
+    copiedNames.push(sheet.getName());
+  });
+
+  newSs.deleteSheet(placeholderSheet);
+
+  return {
+    ok: true,
+    newSpreadsheetUrl: newSs.getUrl(),
+    newSpreadsheetId: newSs.getId(),
+    copiedSheetNames: copiedNames,
+    count: copiedNames.length
+  };
 }
 
 
