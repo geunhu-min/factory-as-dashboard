@@ -79,6 +79,23 @@ function testAuth() {
 }
 
 
+/**************************************************************
+ * "이동" 버튼용 매크로 — 예전 파일에서 매크로 기록으로 만들어져
+ * 있던 것이라 새 파일로 옮길 때 같이 안 넘어와서 새로 만든
+ * 함수입니다. 현재 보고 있는 시트에서 값이 있는 맨 마지막 행 바로
+ * 아래, C열 칸으로 이동(선택)합니다.
+ *
+ * 이 함수는 배포와 무관합니다 — Apps Script 편집기에 저장만 하고,
+ * 시트의 "이동" 버튼(도형)을 우클릭 > 스크립트 할당 > 여기에
+ * moveToNextRowColumnC 입력하면 바로 연결됩니다.
+ **************************************************************/
+function moveToNextRowColumnC() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const nextRow = sheet.getLastRow() + 1;
+  sheet.getRange(nextRow, 3).activate();
+}
+
+
 function doGet(e) {
   try {
     const params = (e && e.parameter) || {};
