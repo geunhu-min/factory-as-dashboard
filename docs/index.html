@@ -4452,6 +4452,8 @@
         // 표시합니다(1/2공장추가건, 월현황/마감/로데이터/N주 전부 이 표를
         // 같이 씀).
         const packageColIndexForColor = state.header.indexOf(PACKAGE_COLUMN_LABEL);
+        // 하자상세가 "이의제기"인 칸은 눈에 띄게 노랑으로 채웁니다.
+        const defectDetailColIndexForColor = state.header.indexOf(WEEKLY_DEFECT_DETAIL_COLUMN_LABEL);
 
         el.tbody.innerHTML = "";
         state.rows.forEach(function(row, rowPos) {
@@ -4499,6 +4501,10 @@
 
             td.textContent = displayValue;
 
+            if (colIndex === defectDetailColIndexForColor && String(cellValue || "").trim() === DEFECT_DETAIL_OBJECTION_VALUE) {
+              td.style.backgroundColor = "yellow";
+            }
+
             if (isNarrowCol) {
               td.classList.add("narrow-hover-cell");
               td.title = String(displayValue);
@@ -4524,6 +4530,8 @@
       }
 
       const PACKAGE_COLUMN_LABEL = "포장";
+      const WEEKLY_DEFECT_DETAIL_COLUMN_LABEL = "하자상세";
+      const DEFECT_DETAIL_OBJECTION_VALUE = "이의제기";
 
       // 충주 = 1/4/7라인(내작) + 외주(외작)
       function classifyPackage_(value) {
