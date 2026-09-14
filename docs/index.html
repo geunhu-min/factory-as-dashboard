@@ -2526,8 +2526,33 @@
           const firstTab = el.dailyAddedEntriesTabs.querySelector("button[data-sheet]");
           if (firstTab) await selectDailyAddedEntriesTab_(firstTab);
         } catch (error) {
-          setDailyStatus_("추가건 확인 실패: " + error.message, "error");
-          if (error.message.includes("1행이 비어있으면")) alert(error.message);
+          // response.json() 파싱 실패(SyntaxError)는 서버 응답을 못 받아온
+          // 것일 뿐, checkAddedEntries 자체는 서버에서 이미 끝났을 수
+          // 있습니다(구글 앱스 스크립트가 응답을 돌려주는 단계에서만 가끔
+          // 실패하는 현상 확인됨). 이 액션은 "이전데이터"를 유형별자료로
+          // 덮어쓰고 "추가건"을 새로 쓰는 동작이라, 여기서 무작정
+          // "실패"로만 안내하면 사용자가 다시 눌러서 방금 계산된 "추가건"
+          // 결과를 빈 값으로 덮어쓰게 될 위험이 있습니다. 그래서 이
+          // 경우엔 재실행을 유도하지 않고, "추가건" 시트를 안전하게(읽기만)
+          // 다시 불러와서 실제 최신 상태를 보여줍니다.
+          if (error instanceof SyntaxError) {
+            setDailyStatus_("추가건 분석 응답을 받지 못했습니다 — 실제 결과를 다시 확인하는 중...", "");
+            try {
+              el.dailyAddedEntriesTabs.classList.add("visible");
+              const firstTab = el.dailyAddedEntriesTabs.querySelector("button[data-sheet]");
+              if (firstTab) await selectDailyAddedEntriesTab_(firstTab);
+              setDailyStatus_(
+                "추가건 분석 응답을 받지 못했지만, '추가건' 최신 상태를 다시 불러왔습니다. " +
+                "이미 완료됐을 수 있으니, 위 결과를 확인하신 뒤 필요한 경우에만 '추가건 분석'을 다시 눌러주세요.",
+                "error"
+              );
+            } catch (reloadError) {
+              setDailyStatus_("추가건 확인 실패: " + error.message, "error");
+            }
+          } else {
+            setDailyStatus_("추가건 확인 실패: " + error.message, "error");
+            if (error.message.includes("1행이 비어있으면")) alert(error.message);
+          }
         } finally {
           el.dailyCheckAddedConfirmBtn.disabled = false;
         }
