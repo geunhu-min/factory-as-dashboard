@@ -2626,8 +2626,14 @@
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, editable: true });
-          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+          const meetingMaterialRows = data.rows || [];
+          // "일일합계" 요약행은 실제 건이 아니므로 건수에서 제외합니다.
+          const meetingMaterialRealCount = meetingMaterialRows.filter(function(row) {
+            return row.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+          }).length;
+
+          renderDailyTable_(data.header || [], meetingMaterialRows, { checkable: true, editable: true });
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " " + meetingMaterialRealCount + "건 불러왔습니다.", "ok");
         } catch (error) {
           // 실패했는데 표는 이전 화면(다른 시트) 내용 그대로 남고 이
           // 버튼만 활성화된 것처럼 보이면 헷갈리므로, 화면을 완전히
