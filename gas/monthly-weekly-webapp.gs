@@ -82,6 +82,12 @@ const DEFAULT_FONT_COLOR = "#000000";
 // 종합(N) 원본 26열 기준 W열(포장) 인덱스 (classifyGroup_과 동일)
 const NATIVE_PACKAGE_COLUMN_INDEX = 22;
 
+// 종합(N) 원본 26열 기준 T열(하자상세) 인덱스. 값이 "이의제기"인 칸은
+// 화면 표(index.html renderTable의 노랑 강조)와 맞춰 배경색을 칠합니다.
+const NATIVE_DEFECT_DETAIL_COLUMN_INDEX = 19;
+const DEFECT_DETAIL_OBJECTION_VALUE = "이의제기";
+const DEFECT_DETAIL_OBJECTION_COLOR = "#ffff00";
+
 // 종합(N) 원본 26열 기준 J열(색상) 인덱스. "061"처럼 앞자리 0이 있는
 // 값을 텍스트로 유지하려면 새로 쓰는 범위는 항상 값을 쓰기 전에
 // 이 열만 먼저 "@"(텍스트) 서식으로 지정해야 합니다 — 서식이
@@ -802,6 +808,24 @@ function applyPackageFontColors_(sheet, startRow, rows, columnCount, packageIdx)
 
 
 /**************************************************************
+ * "하자상세" 값이 "이의제기"인 칸만 노랑으로 채웁니다(그 외에는
+ * 배경색 없음으로 되돌림). index.html의 renderTable 노랑 강조와
+ * 맞춰서, 엑셀 다운로드에도 그대로 반영되게 하기 위한 것입니다.
+ **************************************************************/
+function applyDefectDetailObjectionColors_(sheet, startRow, rows, defectDetailIdx) {
+  if (!rows.length || defectDetailIdx === -1) {
+    return;
+  }
+
+  const colors = rows.map(function(row) {
+    return [normalizeText_(row[defectDetailIdx]) === DEFECT_DETAIL_OBJECTION_VALUE ? DEFECT_DETAIL_OBJECTION_COLOR : null];
+  });
+
+  sheet.getRange(startRow, defectDetailIdx + 1, rows.length, 1).setBackgrounds(colors);
+}
+
+
+/**************************************************************
  * 시트 1행(헤더) 기준으로 필터를 새로 겁니다. 이미 필터가 있으면
  * 지우고 다시 걸어서, 늘어난/줄어든 행 범위에 맞춥니다.
  * totalRows가 0이면(데이터가 전혀 없으면) 아무 것도 하지 않습니다.
@@ -928,6 +952,7 @@ function writeWeeklySheet_(weekNumber, header, incomingRows) {
   });
 
   applyPackageFontColors_(sheet, 2, combinedRows, columnCount, packageIdx);
+  applyDefectDetailObjectionColors_(sheet, 2, combinedRows, header.indexOf("하자상세"));
 
   applySheetFilter_(sheet, data.length, columnCount);
 
@@ -1228,6 +1253,8 @@ function updateClosingSheet_(preloadedSummaryValues) {
     }
   });
 
+  applyDefectDetailObjectionColors_(sheet, 2, filteredRows, header.indexOf("하자상세"));
+
   applySheetFilter_(sheet, outputData.length, columnCount);
 
   // writeWeeklySheet_와 같은 이유로 새로 만든 시트일 때만 너비를 복사합니다.
@@ -1380,6 +1407,7 @@ function updateRawDataSheet_(preloadedSummaryValues) {
 
   const outputPackageIdx = RAW_DATA_HEADER.indexOf("포장");
   applyPackageFontColors_(sheet, 2, outputRows, columnCount, outputPackageIdx);
+  applyDefectDetailObjectionColors_(sheet, 2, outputRows, RAW_DATA_HEADER.indexOf("하자상세"));
 }
 
 /**************************************************************
@@ -1429,6 +1457,7 @@ function insertRowsAt_(sheet, afterRow, rows, columnCount) {
 
   sheet.getRange(afterRow + 1, 1, data.length, columnCount).setValues(data);
   applyPackageFontColors_(sheet, afterRow + 1, rows, columnCount, NATIVE_PACKAGE_COLUMN_INDEX);
+  applyDefectDetailObjectionColors_(sheet, afterRow + 1, rows, NATIVE_DEFECT_DETAIL_COLUMN_INDEX);
 
   return afterRow + rows.length;
 }
