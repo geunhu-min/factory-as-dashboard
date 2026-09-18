@@ -826,14 +826,23 @@ function matchRecovery_(config) {
     .getValues();
 
   const recoveryExactMap = {};
+  const recoveryByReceiptMap = {};
 
   /*
-   * 회수내역 C열을 기준으로 매칭표 생성
+   * 회수내역 C열(접수번호)+D열(품명, 추가건의 제품코드에 해당)을
+   * 합친 조합으로 매칭표를 만들고, 접수번호만으로도 하나 더 만들어
+   * 둡니다.
    *
    * "I202606230210-01"/"I202606230210-02"처럼 같은 접수번호에 순번이
    * 다른 여러 건이 있으면 접수번호 앞부분만으로는 서로 구분이 안 되어
    * 뒤섞일 수 있어서, 전체 문자열(접수번호+순번)이 정확히 같을 때만
-   * 매칭합니다. 정확히 일치하는 회수내역이 없으면 미회수로 처리됩니다.
+   * 매칭합니다. 그런데 같은 접수번호(순번까지 동일)로 회수내역에
+   * 행이 두 개 이상 있는 경우(한 접수건에 부품이 여러 개 딸린 경우)도
+   * 있어서, 접수번호만으로는 그 중 아무 행이나(먼저 나온 것) 걸려
+   * 엉뚱한 부품 정보가 들어갈 수 있었습니다. 그래서 접수번호+제품코드가
+   * 둘 다 일치하는 조합을 먼저 찾고, 그런 조합이 없을 때만(예: 제품코드
+   * 표기가 서로 다른 경우) 접수번호만 일치하는 것으로 대체합니다.
+   * 정확히 일치하는 회수내역이 없으면 미회수로 처리됩니다.
    */
   for (let i = 1; i < recoveryData.length; i++) {
     const sourceValue =
@@ -842,20 +851,33 @@ function matchRecovery_(config) {
     if (!sourceValue) continue;
 
     const exactKey = sourceValue.toLowerCase();
+    const productCode = normalizeText_(recoveryData[i][3]); // D열 품명(제품코드)
+    const compositeKey = exactKey + "||" + productCode.toLowerCase();
 
-    if (!recoveryExactMap[exactKey]) {
-      recoveryExactMap[exactKey] = recoveryData[i];
+    if (!recoveryExactMap[compositeKey]) {
+      recoveryExactMap[compositeKey] = recoveryData[i];
+    }
+
+    if (!recoveryByReceiptMap[exactKey]) {
+      recoveryByReceiptMap[exactKey] = recoveryData[i];
     }
   }
 
   /*
-   * 추가건 D열과 회수내역 C열 매칭 (전체 문자열 정확히 일치하는 것만)
+   * 추가건 D열(접수번호)+I열(제품코드)과 회수내역 매칭 — 접수번호+
+   * 제품코드가 둘 다 일치하는 것을 우선, 없으면 접수번호만 일치하는
+   * 것으로 대체합니다.
    */
   for (let i = 1; i < targetData.length; i++) {
     const targetValue =
       normalizeText_(targetData[i][3]);
+    const targetProductCode =
+      normalizeText_(targetData[i][8]); // I열 제품코드
 
-    const matchRow = recoveryExactMap[targetValue.toLowerCase()];
+    const receiptKey = targetValue.toLowerCase();
+    const compositeKey = receiptKey + "||" + targetProductCode.toLowerCase();
+
+    const matchRow = recoveryExactMap[compositeKey] || recoveryByReceiptMap[receiptKey];
 
     /*
      * R~Z열 이전 결과 초기화
