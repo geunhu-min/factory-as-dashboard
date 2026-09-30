@@ -53,10 +53,11 @@
 
 // 이미 있는 탭을 이름 패턴으로 찾습니다(뒤에 건수가 붙어 매번 이름이
 // 바뀌므로 정확한 이름 대신 "라벨(숫자)" 패턴으로 찾음). 숫자가 아직
-// 안 붙은 맨 처음 상태("종합"만 있고 "종합(76)"이 아직 아닌 경우)도
-// 찾을 수 있도록 숫자 부분은 선택 사항으로 둡니다.
+// 안 붙은 맨 처음 상태도 찾을 수 있도록 숫자 부분은 선택 사항으로
+// 둡니다 — 괄호 자체가 아예 없는 "종합"과, 괄호는 있지만 숫자가
+// 비어있는 템플릿 상태인 "종합()" 둘 다 포함합니다.
 function findMonthlyFinalSheet_(ss, label) {
-  const pattern = new RegExp("^" + label + "(\\(\\d+\\))?$");
+  const pattern = new RegExp("^" + label + "(\\(\\d*\\))?$");
   return ss.getSheets().find(function(sheet) { return pattern.test(sheet.getName()); }) || null;
 }
 
