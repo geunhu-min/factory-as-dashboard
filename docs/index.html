@@ -4954,27 +4954,23 @@
         URL.revokeObjectURL(url);
       }
 
-      // 월현황(주간)의 "종합(N)"/"마감(N)" 탭은 매번 뒤에 건수가 붙어
-      // 이름이 바뀌므로, 정확한 이름 대신 패턴으로 찾습니다
-      // (monthly-weekly-webapp.gs의 SUMMARY_SHEET_PATTERN/CLOSING_SHEET_PATTERN과 동일).
-      const MONTHLY_FINAL_SUMMARY_SHEET_PATTERN = /^종합\(\d+\)$/;
-      const MONTHLY_FINAL_CLOSING_SHEET_PATTERN = /^마감(\(\d+\))?$/;
-
       // "마감자료정리" 버튼 — 월현황(주간)의 최신 "종합"/"마감" 내용을
       // 그대로 가져와서, "월마감" 웹앱(별도 스프레드시트)에 통째로
       // 넘겨 종합/마감/VN/내작/설계/외작/구매 탭을 전부 다시 정리합니다.
       // 실제 필터링/정렬/서식 로직은 월마감 쪽 웹앱(GAS)에서 처리합니다.
+      // 결과(성공/실패)는 이 버튼이 있는 툴바 바로 아래 statusLine에
+      // 표시됩니다(설정 패널이 접혀있어도 항상 보이는 위치).
       async function cleanMonthlyFinalClosing() {
         const monthlyUrl = el.monthlyWebappUrl.value.trim();
         const finalClosingUrl = el.monthlyFinalClosingWebappUrl.value.trim();
 
         if (!monthlyUrl) {
-          setMonthlyStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          setStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
           return;
         }
 
         if (!finalClosingUrl) {
-          setMonthlyStatus("월마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          setStatus("월마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
           return;
         }
 
@@ -4984,36 +4980,23 @@
           "계속할까요?"
         )) return;
 
-        setMonthlyStatus("마감자료정리 중... (시간이 걸릴 수 있습니다)", "");
+        setStatus("마감자료정리 중... (시간이 걸릴 수 있습니다)", "");
         el.cleanMonthlyFinalClosingBtn.disabled = true;
 
         try {
-          const sheetsUrl = monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") + "action=sheets";
-          const sheetsResponse = await fetch(sheetsUrl);
-          const sheetsData = await sheetsResponse.json();
-          if (sheetsData.error) throw new Error("월현황(주간): " + sheetsData.error);
+          // monthly-weekly-webapp.gs는 "종합(N)"/"마감(N)"을 이름으로 찾지
+          // 않아도 되는 전용 action(summary/closing)을 이미 제공합니다.
+          const summaryResponse = await fetch(
+            monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") + "action=summary"
+          );
+          const summaryData = await summaryResponse.json();
+          if (summaryData.error) throw new Error("종합: " + summaryData.error);
 
-          const summarySheetInfo = (sheetsData.sheets || []).find(function(s) {
-            return MONTHLY_FINAL_SUMMARY_SHEET_PATTERN.test(s.name);
-          });
-          const closingSheetInfo = (sheetsData.sheets || []).find(function(s) {
-            return MONTHLY_FINAL_CLOSING_SHEET_PATTERN.test(s.name);
-          });
-
-          if (!summarySheetInfo) throw new Error("월현황(주간)에서 '종합(N)' 탭을 찾을 수 없습니다.");
-          if (!closingSheetInfo) throw new Error("월현황(주간)에서 '마감(N)' 탭을 찾을 수 없습니다.");
-
-          const readSheet_ = async function(sheetName) {
-            const readUrl = monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") +
-              "action=read&sheet=" + encodeURIComponent(sheetName);
-            const response = await fetch(readUrl);
-            const data = await response.json();
-            if (data.error) throw new Error("'" + sheetName + "': " + data.error);
-            return data;
-          };
-
-          const summaryData = await readSheet_(summarySheetInfo.name);
-          const closingData = await readSheet_(closingSheetInfo.name);
+          const closingResponse = await fetch(
+            monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") + "action=closing"
+          );
+          const closingData = await closingResponse.json();
+          if (closingData.error) throw new Error("마감: " + closingData.error);
 
           const rebuildResponse = await fetch(finalClosingUrl, {
             method: "POST",
@@ -5029,9 +5012,9 @@
           const rebuildData = await rebuildResponse.json();
           if (rebuildData.error) throw new Error("월마감: " + rebuildData.error);
 
-          setMonthlyStatus("마감자료정리 완료.", "ok");
+          setStatus("마감자료정리 완료.", "ok");
         } catch (error) {
-          setMonthlyStatus("마감자료정리 실패: " + error.message, "error");
+          setStatus("마감자료정리 실패: " + error.message, "error");
         } finally {
           el.cleanMonthlyFinalClosingBtn.disabled = false;
         }
