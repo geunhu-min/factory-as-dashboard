@@ -181,18 +181,22 @@ function appendReceiptRowsAction_(sheet, rows) {
     const existing = existingByKey.get(key);
 
     if (existing) {
-      let changed = false;
-
-      EDITABLE_FIELD_COLUMNS_.forEach(function(field) {
-        const incomingValue = normalizeText_(fixed[field.index]);
-        if (existing.fields[field.index] !== incomingValue) {
-          sheet.getRange(existing.rowNumber, field.column).setValue(fixed[field.index]);
-          existing.fields[field.index] = incomingValue;
-          changed = true;
-        }
+      const changedFields = EDITABLE_FIELD_COLUMNS_.filter(function(field) {
+        return existing.fields[field.index] !== normalizeText_(fixed[field.index]);
       });
 
-      if (changed) {
+      if (changedFields.length) {
+        // 바뀐 칸마다 setValue()를 따로 부르면(최대 8번) API 호출이
+        // 그만큼 늘어나므로, 현재 행 전체를 한 번 읽어서 바뀐 칸만
+        // 값을 바꾼 뒤 한 번에 다시 씁니다(읽기 1번 + 쓰기 1번).
+        const currentRow = sheet.getRange(existing.rowNumber, 1, 1, columnCount).getValues()[0];
+
+        changedFields.forEach(function(field) {
+          currentRow[field.index] = fixed[field.index];
+          existing.fields[field.index] = normalizeText_(fixed[field.index]);
+        });
+
+        sheet.getRange(existing.rowNumber, 1, 1, columnCount).setValues([currentRow]);
         updatedCount++;
       } else {
         skippedCount++;

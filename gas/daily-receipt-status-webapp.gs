@@ -674,14 +674,45 @@ function deleteMeetingMaterialEntriesAction_(rowIndexes) {
   const sheet = ss.getSheetByName(MEETING_MATERIAL_SHEET_NAME);
   if (!sheet) throw new Error("'" + MEETING_MATERIAL_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
 
-  const uniqueDescending = Array.from(new Set(rowIndexes)).sort(function(a, b) { return b - a; });
-  uniqueDescending.forEach(function(rowIndex) {
-    sheet.deleteRow(rowIndex);
-  });
+  const deletedCount = deleteRowsBatched_(sheet, rowIndexes);
 
   recomputeMeetingMaterialSummaryRow_(sheet);
 
-  return { ok: true, deletedCount: uniqueDescending.length };
+  return { ok: true, deletedCount: deletedCount };
+}
+
+
+/**************************************************************
+ * rowIndexes(1-based 시트 행 번호, 순서/중복 상관없음)를 지웁니다.
+ * 흩어진 행마다 deleteRow()를 따로 부르면 지울 행 수만큼 API 호출이
+ * 드는데(그때마다 시트 전체가 다시 정렬됨), 연속된 행 번호는 구간으로
+ * 묶어 deleteRows() 한 번으로 지워서 호출 수를 줄입니다
+ * (monthly-weekly-webapp.gs의 같은 방식과 동일).
+ **************************************************************/
+function deleteRowsBatched_(sheet, rowIndexes) {
+  const uniqueDescending = Array.from(new Set(rowIndexes)).sort(function(a, b) { return b - a; });
+
+  let i = 0;
+  let deletedCount = 0;
+
+  while (i < uniqueDescending.length) {
+    const runEndRow = uniqueDescending[i];
+    let runLength = 1;
+
+    while (
+      i + runLength < uniqueDescending.length &&
+      uniqueDescending[i + runLength] === runEndRow - runLength
+    ) {
+      runLength++;
+    }
+
+    const runStartRow = runEndRow - runLength + 1;
+    sheet.deleteRows(runStartRow, runLength);
+    deletedCount += runLength;
+    i += runLength;
+  }
+
+  return deletedCount;
 }
 
 
@@ -702,17 +733,18 @@ function deletePreviousDaysMeetingMaterialAction_() {
   const today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
   const dataRows = sheet.getRange(2, 1, lastRow - 1, columnCount).getValues();
 
-  let deletedCount = 0;
+  const rowIndexesToDelete = [];
   for (let i = dataRows.length - 1; i >= 0; i--) {
     const row = dataRows[i];
     if (normalizeText_(row[0]) === MEETING_MATERIAL_SUMMARY_LABEL) continue; // 요약행은 남겨둠
 
     const receivedDate = formatDateOnly_(row[0]);
     if (receivedDate && receivedDate < today) {
-      sheet.deleteRow(2 + i);
-      deletedCount++;
+      rowIndexesToDelete.push(2 + i);
     }
   }
+
+  const deletedCount = deleteRowsBatched_(sheet, rowIndexesToDelete);
 
   recomputeMeetingMaterialSummaryRow_(sheet);
 
