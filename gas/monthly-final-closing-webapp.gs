@@ -97,6 +97,15 @@ function doGet(e) {
       return jsonOutput_(readSheetObject_(sheet));
     }
 
+    if (action === "summary") {
+      // "마감자료정리" 완료 직후 화면 아래쪽에 결과를 바로 보여주기
+      // 위한 전용 액션 — "종합" 탭은 정리할 때마다 이름 뒤 건수가
+      // 바뀌므로, 정확한 이름을 몰라도 되도록 패턴으로 찾아줍니다.
+      const summarySheet = findMonthlyFinalSheet_(SpreadsheetApp.getActiveSpreadsheet(), "종합");
+      if (!summarySheet) return jsonOutput_({ error: "'종합' 탭을 찾을 수 없습니다." });
+      return jsonOutput_(readSheetObject_(summarySheet));
+    }
+
     if (action === "spreadsheetUrl") {
       return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
     }
@@ -117,10 +126,62 @@ function doPost(e) {
       return jsonOutput_(rebuildMonthlyClosingSheetsAction_(body));
     }
 
+    if (action === "exportFull") {
+      return jsonOutput_(exportFullWorkbookAction_());
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
   }
+}
+
+
+/**************************************************************
+ * 권한 재승인용 임시 테스트 함수
+ *
+ * exportFull이 쓰는 UrlFetchApp(외부 요청) 권한을 승인받기 위한
+ * 함수입니다. 이름에 밑줄(_)이 없어야 Apps Script 편집기의
+ * "실행할 함수" 드롭다운에 보입니다. 드롭다운에서 testAuth를 선택해
+ * 실행하면 동의 화면이 뜹니다 — 승인한 뒤에는 이 함수를 지우고 다시
+ * 배포해도 되고, 그냥 남겨둬도 동작에는 영향이 없습니다.
+ **************************************************************/
+function testAuth() {
+  UrlFetchApp.fetch("https://www.google.com");
+}
+
+
+/**************************************************************
+ * "마감자료다운로드" 버튼 액션 — 이 스프레드시트 파일 전체(모든 시트)를
+ * xlsx로 내보내 base64로 반환합니다.
+ **************************************************************/
+function exportFullWorkbookAction_() {
+  const spreadsheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+  const base64 = exportSpreadsheetAsXlsxBase64_(spreadsheetId);
+  const fileName = SpreadsheetApp.getActiveSpreadsheet().getName() + "_" +
+    Utilities.formatDate(new Date(), "Asia/Seoul", "yyyyMMdd_HHmm") + ".xlsx";
+
+  return { ok: true, fileName: fileName, base64: base64 };
+}
+
+
+/**************************************************************
+ * 스프레드시트 ID로 xlsx 내보내기 → base64 문자열로 반환
+ * (이 스크립트 자신의 OAuth 토큰으로 export 엔드포인트를 호출합니다)
+ **************************************************************/
+function exportSpreadsheetAsXlsxBase64_(spreadsheetId) {
+  const url = "https://docs.google.com/spreadsheets/d/" + spreadsheetId + "/export?format=xlsx";
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+
+  if (response.getResponseCode() !== 200) {
+    throw new Error("엑셀 내보내기에 실패했습니다 (" + response.getResponseCode() + ")");
+  }
+
+  return Utilities.base64Encode(response.getBlob().getBytes());
 }
 
 
