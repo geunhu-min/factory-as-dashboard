@@ -636,6 +636,14 @@
           <button id="saveClaimClosingArchiveConfigBtn">26년 마감자료</button>
           <button type="button" id="openClaimClosingArchiveConfigBtn">열기</button>
         </div>
+        <div class="config-row">
+          <label>
+            웹 앱 URL
+            <input id="monthlyFinalClosingWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+          </label>
+          <button id="saveMonthlyFinalClosingConfigBtn">월마감</button>
+          <button type="button" id="openMonthlyFinalClosingConfigBtn">열기</button>
+        </div>
         <div id="monthlyStatusLine" class="status-line"></div>
       </div>
     </div>
@@ -698,6 +706,7 @@
       <button id="claimReshapeMonthBtn" class="warning" style="display:none;">다음달로 표 넘기기</button>
       <button id="runCleanupBtn" class="warning" style="display:none;">정리 실행 (매크로)</button>
       <span class="spacer"></span>
+      <button id="cleanMonthlyFinalClosingBtn">마감자료정리</button>
       <button id="downloadFullBtn">월현황엑셀다운로드</button>
       <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
       <span id="dirtyCount" class="dirty-count"></span>
@@ -1092,6 +1101,9 @@
         archiveWeekRunBadge: document.getElementById("archiveWeekRunBadge"),
         downloadFullBtn: document.getElementById("downloadFullBtn"),
         downloadClaimDashboardBtn: document.getElementById("downloadClaimDashboardBtn"),
+        monthlyFinalClosingWebappUrl: document.getElementById("monthlyFinalClosingWebappUrl"),
+        saveMonthlyFinalClosingConfigBtn: document.getElementById("saveMonthlyFinalClosingConfigBtn"),
+        cleanMonthlyFinalClosingBtn: document.getElementById("cleanMonthlyFinalClosingBtn"),
         monthlyStatusLine: document.getElementById("monthlyStatusLine"),
         weekPickerOverlay: document.getElementById("weekPickerOverlay"),
         weekPickerCancelBtn: document.getElementById("weekPickerCancelBtn"),
@@ -1198,6 +1210,7 @@
         openRecoveryConfigBtn: document.getElementById("openRecoveryConfigBtn"),
         openClaimDashboardConfigBtn: document.getElementById("openClaimDashboardConfigBtn"),
         openClaimClosingArchiveConfigBtn: document.getElementById("openClaimClosingArchiveConfigBtn"),
+        openMonthlyFinalClosingConfigBtn: document.getElementById("openMonthlyFinalClosingConfigBtn"),
         openMonthlyClosingConfigBtn: document.getElementById("openMonthlyClosingConfigBtn"),
         openMonthlyInhouseConfigBtn: document.getElementById("openMonthlyInhouseConfigBtn"),
         monthlyInhouseActions: document.getElementById("monthlyInhouseActions"),
@@ -1331,6 +1344,7 @@
         el.recoveryCsvUrl.value = saved.recoveryCsvUrl || "";
         el.claimDashboardWebappUrl.value = saved.claimDashboardUrl || "";
         el.claimClosingArchiveWebappUrl.value = saved.claimClosingArchiveUrl || "";
+        el.monthlyFinalClosingWebappUrl.value = saved.monthlyFinalClosingUrl || "";
         el.monthlyClosingWebappUrl.value = saved.monthlyClosingUrl || "";
         el.monthlyInhouseWebappUrl.value = saved.monthlyInhouseUrl || "";
         el.monthlyOutsourceWebappUrl.value = saved.monthlyOutsourceUrl || "";
@@ -1424,6 +1438,13 @@
         saveConfigField_(
           { claimClosingArchiveUrl: el.claimClosingArchiveWebappUrl.value.trim() },
           "26년 마감자료"
+        );
+      }
+
+      function saveMonthlyFinalClosingConfig() {
+        saveConfigField_(
+          { monthlyFinalClosingUrl: el.monthlyFinalClosingWebappUrl.value.trim() },
+          "월마감"
         );
       }
 
@@ -4933,6 +4954,89 @@
         URL.revokeObjectURL(url);
       }
 
+      // 월현황(주간)의 "종합(N)"/"마감(N)" 탭은 매번 뒤에 건수가 붙어
+      // 이름이 바뀌므로, 정확한 이름 대신 패턴으로 찾습니다
+      // (monthly-weekly-webapp.gs의 SUMMARY_SHEET_PATTERN/CLOSING_SHEET_PATTERN과 동일).
+      const MONTHLY_FINAL_SUMMARY_SHEET_PATTERN = /^종합\(\d+\)$/;
+      const MONTHLY_FINAL_CLOSING_SHEET_PATTERN = /^마감(\(\d+\))?$/;
+
+      // "마감자료정리" 버튼 — 월현황(주간)의 최신 "종합"/"마감" 내용을
+      // 그대로 가져와서, "월마감" 웹앱(별도 스프레드시트)에 통째로
+      // 넘겨 종합/마감/VN/내작/설계/외작/구매 탭을 전부 다시 정리합니다.
+      // 실제 필터링/정렬/서식 로직은 월마감 쪽 웹앱(GAS)에서 처리합니다.
+      async function cleanMonthlyFinalClosing() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+        const finalClosingUrl = el.monthlyFinalClosingWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setMonthlyStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!finalClosingUrl) {
+          setMonthlyStatus("월마감 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "월마감 스프레드시트의 종합/마감/VN/내작/설계/외작/구매 탭을\n" +
+          "월현황(주간)의 최신 종합/마감 내용 기준으로 전부 다시 정리합니다.\n" +
+          "계속할까요?"
+        )) return;
+
+        setMonthlyStatus("마감자료정리 중... (시간이 걸릴 수 있습니다)", "");
+        el.cleanMonthlyFinalClosingBtn.disabled = true;
+
+        try {
+          const sheetsUrl = monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") + "action=sheets";
+          const sheetsResponse = await fetch(sheetsUrl);
+          const sheetsData = await sheetsResponse.json();
+          if (sheetsData.error) throw new Error("월현황(주간): " + sheetsData.error);
+
+          const summarySheetInfo = (sheetsData.sheets || []).find(function(s) {
+            return MONTHLY_FINAL_SUMMARY_SHEET_PATTERN.test(s.name);
+          });
+          const closingSheetInfo = (sheetsData.sheets || []).find(function(s) {
+            return MONTHLY_FINAL_CLOSING_SHEET_PATTERN.test(s.name);
+          });
+
+          if (!summarySheetInfo) throw new Error("월현황(주간)에서 '종합(N)' 탭을 찾을 수 없습니다.");
+          if (!closingSheetInfo) throw new Error("월현황(주간)에서 '마감(N)' 탭을 찾을 수 없습니다.");
+
+          const readSheet_ = async function(sheetName) {
+            const readUrl = monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") +
+              "action=read&sheet=" + encodeURIComponent(sheetName);
+            const response = await fetch(readUrl);
+            const data = await response.json();
+            if (data.error) throw new Error("'" + sheetName + "': " + data.error);
+            return data;
+          };
+
+          const summaryData = await readSheet_(summarySheetInfo.name);
+          const closingData = await readSheet_(closingSheetInfo.name);
+
+          const rebuildResponse = await fetch(finalClosingUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "rebuildMonthlyClosingSheets",
+              summaryHeader: summaryData.header || [],
+              summaryRows: (summaryData.rows || []).map(function(r) { return r.values; }),
+              closingHeader: closingData.header || [],
+              closingRows: (closingData.rows || []).map(function(r) { return r.values; })
+            })
+          });
+          const rebuildData = await rebuildResponse.json();
+          if (rebuildData.error) throw new Error("월마감: " + rebuildData.error);
+
+          setMonthlyStatus("마감자료정리 완료.", "ok");
+        } catch (error) {
+          setMonthlyStatus("마감자료정리 실패: " + error.message, "error");
+        } finally {
+          el.cleanMonthlyFinalClosingBtn.disabled = false;
+        }
+      }
+
       async function downloadFullWorkbook() {
         const monthlyUrl = el.monthlyWebappUrl.value.trim();
 
@@ -5630,6 +5734,7 @@
       el.saveRecoveryConfigBtn.addEventListener("click", saveRecoveryConfig);
       el.saveClaimDashboardConfigBtn.addEventListener("click", saveClaimDashboardConfig);
       el.saveClaimClosingArchiveConfigBtn.addEventListener("click", saveClaimClosingArchiveConfig);
+      el.saveMonthlyFinalClosingConfigBtn.addEventListener("click", saveMonthlyFinalClosingConfig);
 
       el.openDailyPackagingConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.dailyPackagingWebappUrl.value, el.dailyPageStatusLine, "포장실적상세");
@@ -5662,6 +5767,9 @@
       el.openClaimClosingArchiveConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.claimClosingArchiveWebappUrl.value, el.statusLine, "26년 마감자료");
       });
+      el.openMonthlyFinalClosingConfigBtn.addEventListener("click", function() {
+        openConnectedSpreadsheet_(el.monthlyFinalClosingWebappUrl.value, el.statusLine, "월마감");
+      });
       el.openMonthlyClosingConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.monthlyClosingWebappUrl.value, el.monthlyPageStatusLine, "충주2유상마감");
       });
@@ -5673,6 +5781,7 @@
       });
 
       el.archiveWeekBtn.addEventListener("click", archiveWeek);
+      el.cleanMonthlyFinalClosingBtn.addEventListener("click", cleanMonthlyFinalClosing);
       el.downloadFullBtn.addEventListener("click", downloadFullWorkbook);
       el.downloadClaimDashboardBtn.addEventListener("click", downloadClaimDashboardWorkbook);
       el.reloadBtn.addEventListener("click", function() {
