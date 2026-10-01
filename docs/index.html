@@ -3901,7 +3901,10 @@
           return;
         }
 
-        const proceed = window.confirm("월마감 연결 시트에서 " + label + "건을 가져와서 덮어쓸까요?");
+        const proceed = window.confirm(
+          "★ 구매금액 및 재공가로 금액 변경 하셨는지 필히 확인해주세요\n" +
+          "월마감 연결 시트에서 " + label + "건을 가져와서 덮어쓸까요?"
+        );
         if (!proceed) return;
 
         setMonthlyClosingStatus_("월마감 연결 시트에서 " + label + "건 가져오는 중...", "");
