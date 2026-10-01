@@ -5175,7 +5175,13 @@
           refreshActionButtonsVisibility();
           renderTable();
 
-          setStatus("마감자료정리 완료 — " + state.rows.length + "건.", "ok");
+          // 종합의 충주1/충주2 블록 사이에 끼워진 빈 행은 실제 건수가
+          // 아니므로 빼고 셉니다.
+          const summaryRealRowCount = state.rows.filter(function(row) {
+            return row.current.some(function(value) { return String(value || "").trim() !== ""; });
+          }).length;
+
+          setStatus("마감자료정리 완료 — " + summaryRealRowCount + "건.", "ok");
         } catch (error) {
           setStatus("마감자료정리 실패: " + error.message, "error");
         } finally {
