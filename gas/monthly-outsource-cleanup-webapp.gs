@@ -151,6 +151,10 @@ function doPost(e) {
       return jsonOutput_(cleanMonthlyOutsourceListAction_());
     }
 
+    if (action === "replaceSourceData") {
+      return jsonOutput_(replaceSourceDataAction_(body.header || [], body.rows || []));
+    }
+
     if (action === "exportResult") {
       return jsonOutput_(exportAllExceptAsXlsxBase64_(EXPORT_EXCLUDED_SHEET_NAMES, "월마감외작건정리"));
     }
@@ -865,6 +869,55 @@ function exportSpreadsheetAsXlsxBase64_(spreadsheetId) {
   }
 
   return Utilities.base64Encode(response.getBlob().getBytes());
+}
+
+
+/**************************************************************
+ * "외작월마감 자료교체"/"구매월마감 자료교체" 버튼 액션 — "월마감"
+ * 스프레드시트에서 가져온 "외작(N)" 또는 "구매(N)" 탭의 header/rows를
+ * 그대로 "시트1"에 덮어씁니다(기존 내용은 전부 지움). 외작/구매 둘 다
+ * 양식이 같아서 이 웹앱을 같이 씁니다.
+ **************************************************************/
+function replaceSourceDataAction_(header, rows) {
+  if (!header.length) {
+    throw new Error("가져올 데이터의 헤더가 비어 있습니다.");
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(SOURCE_SHEET_NAME);
+  if (!sheet) throw new Error("'" + SOURCE_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+
+  const columnCount = header.length;
+  const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
+
+  sheet.clear();
+
+  // "061"처럼 앞자리 0이 있는 색상 값은, 서식이 기본값(General)인 채로
+  // 쓰면 그 즉시 숫자로 재해석되어 0이 사라집니다. 값을 쓰기 전에 이
+  // 열만 먼저 "@"(텍스트) 서식으로 지정해야 합니다.
+  const colorColIndex = header.indexOf("색상");
+  if (colorColIndex !== -1 && dataRows.length) {
+    sheet.getRange(2, colorColIndex + 1, dataRows.length, 1).setNumberFormat("@");
+  }
+
+  sheet.getRange(1, 1, dataRows.length + 1, columnCount).setValues([header].concat(dataRows));
+
+  const realRowCount = dataRows.filter(function(row) {
+    return row.some(function(cell) { return normalizeText_(cell) !== ""; });
+  }).length;
+
+  return { ok: true, rowCount: realRowCount };
+}
+
+
+function normalizeRowLength_(row, targetColumnCount) {
+  const result = row.slice(0, targetColumnCount);
+
+  while (result.length < targetColumnCount) {
+    result.push("");
+  }
+
+  return result;
 }
 
 
