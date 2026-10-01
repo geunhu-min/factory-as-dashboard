@@ -170,6 +170,21 @@ function replaceSourceDataAction_(header, rows) {
   const columnCount = header.length;
   const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
 
+  // 내작(N)은 JSON으로 건너온 값이라, 월현황(주간)/월마감에서는 진짜
+  // Date였던 값이 "2026-08-27T07:00:00.000Z" 같은 ISO 문자열로 바뀌어
+  // 있습니다. 문자열인 채로 쓰면 숫자 서식을 걸어도 텍스트라서 전혀
+  // 안 먹히므로, 날짜 열은 값을 쓰기 전에 시간대 영향 없는 순수
+  // "yyyy-mm-dd" 문자열로 바꿔둡니다.
+  const sourceDataColumnLabels = ["최종조치일", "반납일자"];
+  sourceDataColumnLabels.forEach(function(label) {
+    const colIndex = header.indexOf(label);
+    if (colIndex === -1) return;
+
+    dataRows.forEach(function(row) {
+      row[colIndex] = parseDateOnlyValue_(row[colIndex]);
+    });
+  });
+
   sheet.clear();
 
   // "061"처럼 앞자리 0이 있는 색상 값은, 서식이 기본값(General)인 채로
@@ -182,6 +197,13 @@ function replaceSourceDataAction_(header, rows) {
 
   sheet.getRange(1, 1, dataRows.length + 1, columnCount).setValues([header].concat(dataRows));
 
+  sourceDataColumnLabels.forEach(function(label) {
+    const colIndex = header.indexOf(label);
+    if (colIndex !== -1 && dataRows.length) {
+      sheet.getRange(2, colIndex + 1, dataRows.length, 1).setNumberFormat("yyyy-mm-dd");
+    }
+  });
+
   // 내작(N)은 1라인/3·4라인/7라인 그룹 사이에 구분용 빈 행이 끼워져
   // 있어서, 전체 행 수를 그대로 쓰면 실제 값이 있는 건수보다 많게
   // 보입니다(빈 행도 포함됨). 값이 하나라도 있는 행만 셉니다.
@@ -190,6 +212,36 @@ function replaceSourceDataAction_(header, rows) {
   }).length;
 
   return { ok: true, rowCount: realRowCount };
+}
+
+
+/**************************************************************
+ * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)에서 "yyyy-MM-dd"
+ * 문자열만 뽑아 돌려줍니다. 시각(Z)이 있는 문자열은 실제 Date로
+ * 파싱해서 한국 시간 기준 날짜로 바꾸고, 시각이 없는 "yyyy-mm-dd"는
+ * 그대로 날짜 부분만 뽑습니다(new Date()로 그냥 파싱하면 UTC 자정으로
+ * 해석되어 한국 시간으로는 전날이 되어버리는 문제를 피하기 위함).
+ * 날짜로 못 읽으면 원래 값을 그대로 돌려줍니다.
+ **************************************************************/
+function parseDateOnlyValue_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd");
+  }
+
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  if (!text) return value;
+
+  if (/T\d{2}:\d{2}/.test(text)) {
+    const parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, "Asia/Seoul", "yyyy-MM-dd");
+    }
+  }
+
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+
+  return match[1] + "-" + match[2] + "-" + match[3];
 }
 
 
