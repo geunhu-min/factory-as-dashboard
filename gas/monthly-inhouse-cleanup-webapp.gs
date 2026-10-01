@@ -170,7 +170,14 @@ function replaceSourceDataAction_(header, rows) {
   sheet.clear();
   sheet.getRange(1, 1, dataRows.length + 1, columnCount).setValues([header].concat(dataRows));
 
-  return { ok: true, rowCount: dataRows.length };
+  // 내작(N)은 1라인/3·4라인/7라인 그룹 사이에 구분용 빈 행이 끼워져
+  // 있어서, 전체 행 수를 그대로 쓰면 실제 값이 있는 건수보다 많게
+  // 보입니다(빈 행도 포함됨). 값이 하나라도 있는 행만 셉니다.
+  const realRowCount = dataRows.filter(function(row) {
+    return row.some(function(cell) { return normalizeText_(cell) !== ""; });
+  }).length;
+
+  return { ok: true, rowCount: realRowCount };
 }
 
 
