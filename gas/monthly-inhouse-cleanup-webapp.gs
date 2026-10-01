@@ -275,6 +275,7 @@ function cleanMonthlyInhouseListAction_() {
 
   const outputRows = [];
   const summaryRowNumbers = []; // 1-based 시트 행 번호(헤더 포함) — 서식/병합용
+  const summaryRowNumberByCompany = {}; // 업체명 → 그 합계 행 번호(특정 업체만 따로 서식 줄 때 씀)
   let sequence = 0;
 
   // groupRows를 데이터 행으로 이어 붙이고, 끝에 "업체명 합계(건수)"
@@ -300,7 +301,9 @@ function cleanMonthlyInhouseListAction_() {
     summaryRow[claimTotalColIndex] = amountSum + penaltySum;
 
     outputRows.push(summaryRow);
-    summaryRowNumbers.push(outputRows.length + 1); // +1은 헤더 행만큼의 오프셋
+    const summaryRowNumber = outputRows.length + 1; // +1은 헤더 행만큼의 오프셋
+    summaryRowNumbers.push(summaryRowNumber);
+    summaryRowNumberByCompany[companyName] = summaryRowNumber;
 
     return { amountSum: amountSum, penaltySum: penaltySum };
   }
@@ -377,6 +380,15 @@ function cleanMonthlyInhouseListAction_() {
   summaryRowNumbers.forEach(function(rowNumber) {
     resultSheet.getRange(rowNumber, 1, 1, summaryMergeColumnCount).merge();
   });
+
+  // "다올산업 합계" 행은 로트 열까지 모든 테두리를 그려서, 마지막
+  // 그룹과 그 아래 총합계 사이를 시각적으로 구분합니다.
+  const daolCompanyName = PACKAGE_GROUPS[PACKAGE_GROUPS.length - 1].companyName;
+  const daolSummaryRowNumber = summaryRowNumberByCompany[daolCompanyName];
+  if (daolSummaryRowNumber) {
+    resultSheet.getRange(daolSummaryRowNumber, 1, 1, columnCount)
+      .setBorder(true, true, true, true, true, true);
+  }
 
   // 맨 아래 총합계 행은 배경은 그대로 두고 굵게만 적용합니다.
   if (grandTotalRowNumber !== null) {
