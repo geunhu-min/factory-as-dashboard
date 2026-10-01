@@ -3825,6 +3825,16 @@
           const replaceData = await replaceResponse.json();
           if (replaceData.error) throw new Error("월마감 내작건정리: " + replaceData.error);
 
+          // 교체된 "시트1" 내용을 바로 아래 표에 보여줍니다.
+          const sheet1Response = await fetch(
+            inhouseUrl + (inhouseUrl.includes("?") ? "&" : "?") + "action=read&sheet=" + encodeURIComponent("시트1")
+          );
+          const sheet1Data = await sheet1Response.json();
+          if (sheet1Data.error) throw new Error("시트1: " + sheet1Data.error);
+
+          monthlyClosingCurrentSheet = "";
+          renderMonthlyClosingTable_(sheet1Data.header || [], sheet1Data.rows || []);
+
           setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건.", "ok");
         } catch (error) {
           setMonthlyClosingStatus_("내작월마감 자료교체 실패: " + error.message, "error");
