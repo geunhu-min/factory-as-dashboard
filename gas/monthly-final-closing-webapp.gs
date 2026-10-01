@@ -106,6 +106,16 @@ function doGet(e) {
       return jsonOutput_(readSheetObject_(summarySheet));
     }
 
+    if (action === "tab") {
+      // 종합/마감/VN/내작/설계/외작/구매 중 하나를 label로 지정해서
+      // 가져옵니다. 다른 월마감 관련 웹앱들이 이 스프레드시트의 특정
+      // 탭을 가져다 쓸 때(예: 내작월마감 자료교체) 공통으로 씁니다.
+      const label = params.label || "";
+      const tabSheet = findMonthlyFinalSheet_(SpreadsheetApp.getActiveSpreadsheet(), label);
+      if (!tabSheet) return jsonOutput_({ error: "'" + label + "' 형식의 탭을 찾을 수 없습니다." });
+      return jsonOutput_(readSheetObject_(tabSheet));
+    }
+
     if (action === "spreadsheetUrl") {
       return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
     }

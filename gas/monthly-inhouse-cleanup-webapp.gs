@@ -111,6 +111,10 @@ function doPost(e) {
       return jsonOutput_(cleanMonthlyInhouseListAction_());
     }
 
+    if (action === "replaceSourceData") {
+      return jsonOutput_(replaceSourceDataAction_(body.header || [], body.rows || []));
+    }
+
     if (action === "exportResult") {
       return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([CLEAN_RESULT_SHEET_NAME], "월마감내작건정리"));
     }
@@ -119,6 +123,38 @@ function doPost(e) {
   } catch (error) {
     return jsonOutput_({ error: error.message });
   }
+}
+
+
+/**************************************************************
+ * "내작월마감 자료교체" 버튼 액션 — "월마감" 스프레드시트에서 가져온
+ * "내작(N)" 탭의 header/rows를 그대로 "시트1"에 덮어씁니다(기존
+ * 내용은 전부 지움). 화면에서 직접 입력/붙여넣기 하던 걸 대신합니다.
+ **************************************************************/
+function replaceSourceDataAction_(header, rows) {
+  if (!header.length) {
+    throw new Error("가져올 데이터의 헤더가 비어 있습니다.");
+  }
+
+  const sheet = getOrCreateSheet_(SpreadsheetApp.getActiveSpreadsheet(), SOURCE_SHEET_NAME);
+  const columnCount = header.length;
+  const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
+
+  sheet.clear();
+  sheet.getRange(1, 1, dataRows.length + 1, columnCount).setValues([header].concat(dataRows));
+
+  return { ok: true, rowCount: dataRows.length };
+}
+
+
+function normalizeRowLength_(row, targetColumnCount) {
+  const result = row.slice(0, targetColumnCount);
+
+  while (result.length < targetColumnCount) {
+    result.push("");
+  }
+
+  return result;
 }
 
 

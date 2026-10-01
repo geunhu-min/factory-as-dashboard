@@ -3782,34 +3782,52 @@
       // 현재 값+서식을 "전월" 시트에 그대로 덮어씁니다(전월 기존
       // 내용은 전부 지워짐). 새 달로 넘어갈 때 "이번달데이터변경"
       // 전에 먼저 눌러야 합니다.
-      // "내작월마감 자료교체" 버튼 — 시트1 내용을 마감된 월마감 자료로
-      // 바꾸도록 안내한 뒤, 연결한 스프레드시트를 새 탭으로 열어줍니다
-      // (반납내역서 정리 교체와 같은 방식 — 실제 교체는 그 스프레드시트에서 직접 함).
+      // "내작월마감 자료교체" 버튼 — "월마감" 연결 스프레드시트의 "내작(N)"
+      // 탭 내용을 그대로 가져와서, 월마감 내작건정리의 "시트1"을 지우고
+      // 새로 채웁니다(예전처럼 직접 붙여넣을 필요 없음).
       async function replaceMonthlyInhouseData() {
-        const url = el.monthlyInhouseWebappUrl.value.trim();
+        const finalClosingUrl = el.monthlyFinalClosingWebappUrl.value.trim();
+        const inhouseUrl = el.monthlyInhouseWebappUrl.value.trim();
 
-        if (!url) {
+        if (!finalClosingUrl) {
+          setMonthlyClosingStatus_("월마감 웹 앱 URL을 먼저 입력하고 저장하세요(주간업무 페이지).", "error");
+          return;
+        }
+
+        if (!inhouseUrl) {
           setMonthlyClosingStatus_("월마감 내작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
           return;
         }
 
-        const proceed = window.confirm("마감된 월마감 자료로 시트1 교체진행해주세요.");
+        const proceed = window.confirm("월마감 연결 시트에서 내작건을 가져와서 덮어쓸까요?");
         if (!proceed) return;
 
-        setMonthlyClosingStatus_("월마감 내작건정리 스프레드시트를 여는 중...", "");
+        setMonthlyClosingStatus_("월마감 연결 시트에서 내작건 가져오는 중...", "");
 
         try {
-          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=spreadsheetUrl";
-          const response = await fetch(requestUrl);
-          const data = await response.json();
+          const tabResponse = await fetch(
+            finalClosingUrl + (finalClosingUrl.includes("?") ? "&" : "?") + "action=tab&label=" + encodeURIComponent("내작")
+          );
+          const tabData = await tabResponse.json();
+          if (tabData.error) throw new Error("월마감: " + tabData.error);
 
-          if (data.error) throw new Error(data.error);
-          if (!data.url) throw new Error("스프레드시트 주소를 가져오지 못했습니다.");
+          setMonthlyClosingStatus_("월마감 내작건정리 시트1 교체 중...", "");
 
-          window.open(data.url, "_blank");
-          setMonthlyClosingStatus_("월마감 내작건정리 스프레드시트를 새 탭에서 열었습니다.", "ok");
+          const replaceResponse = await fetch(inhouseUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "replaceSourceData",
+              header: tabData.header || [],
+              rows: (tabData.rows || []).map(function(r) { return r.values; })
+            })
+          });
+          const replaceData = await replaceResponse.json();
+          if (replaceData.error) throw new Error("월마감 내작건정리: " + replaceData.error);
+
+          setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건.", "ok");
         } catch (error) {
-          setMonthlyClosingStatus_("월마감 내작건정리 스프레드시트 열기 실패: " + error.message, "error");
+          setMonthlyClosingStatus_("내작월마감 자료교체 실패: " + error.message, "error");
         }
       }
 
