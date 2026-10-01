@@ -13,18 +13,23 @@
  * - doGet action="read"(기본값): sheet/gid 파라미터로 지정한 탭을
  *   header+rows로 반환합니다. 둘 다 없으면 "시트1"을 읽습니다.
  * - doGet action="spreadsheetUrl": 이 스프레드시트의 편집 URL을
- *   반환합니다. 대시보드의 "내작월마감 자료교체" 버튼이 확인창을
- *   띄운 뒤 이 스프레드시트를 새 탭에서 열 때 씁니다(마감된 월마감
- *   자료로 시트1을 바꾸는 실제 작업은 그 스프레드시트에서 직접 함).
+ *   반환합니다("열기" 버튼용).
+ * - doPost action="replaceSourceData": "내작월마감 자료교체" 버튼
+ *   액션. "월마감" 연결 스프레드시트에서 가져온 "내작(N)" 탭의
+ *   header/rows를 받아 "시트1"을 통째로 덮어씁니다(기존 내용은 전부
+ *   지움). 더 이상 직접 입력/붙여넣기 하지 않습니다.
  * - doPost action="clean": "자료정리" 버튼 액션. "시트1"에서
- *   SOURCE_COLUMN_LABELS 순서로 열만 뽑고 맨 앞에 번호를 새로 매겨
- *   "정리" 시트에 덮어씁니다(기존 내용은 전부 지움). 포장 값 기준으로
- *   정렬하고, 포장 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
- *   기존에 맞춰둔 열 너비는 그대로 유지하고, 금액 열만 오른쪽 정렬
- *   +천단위 콤마, 나머지 열은 가운데 정렬로 맞춥니다. 자세한 내용은
- *   cleanMonthlyInhouseListAction_ 참고.
+ *   PULLED_COLUMN_LABELS 순서로 열을 뽑고 금액 뒤에 패널티(고정
+ *   60,000)/클레임 계 열을 끼워 넣습니다. 포장 값으로 1라인/3·4라인
+ *   (바른산업)/7라인 세 그룹(PACKAGE_GROUPS)으로 나눠 그룹별로 번호를
+ *   매기고, 그룹 끝마다 "번호~수량"을 병합한 "업체명 합계(건수)" 행에
+ *   금액/패널티/클레임계 합계를 채웁니다. 맨 끝에는 세 그룹 전체
+ *   합계 행을 추가합니다. 헤더/업체별 합계 행은 흰색을 어둡게 한
+ *   배경+굵은 글씨로 강조하고, 전체 글꼴은 맑은 고딕 11입니다. 자세한
+ *   내용은 cleanMonthlyInhouseListAction_ 참고.
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
- *   "정리" 시트 하나만 담은 xlsx를 base64로 반환합니다.
+ *   "정리" 시트 하나만 담은 xlsx를 base64로 반환합니다(서식/글꼴
+ *   그대로 유지됨).
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -44,20 +49,42 @@
 const SOURCE_SHEET_NAME = "시트1"; // 대시보드가 기본으로 읽는 탭
 const CLEAN_RESULT_SHEET_NAME = "정리";
 
-// "자료정리" 결과에 이 순서로 열을 남깁니다(번호는 시트1에 없는 열로,
-// 정리하면서 순차적으로 새로 매깁니다).
+// "자료정리"가 "시트1"에서 그대로 뽑아오는 열(번호/패널티/클레임 계는
+// 시트1에 없고 정리하면서 새로 계산해 끼워 넣습니다).
 const NUMBER_COLUMN_LABEL = "번호";
-const SOURCE_COLUMN_LABELS = [
+const PULLED_COLUMN_LABELS = [
   "브랜드", "지역센터", "접수번호", "구분", "형태", "포장",
   "제품코드", "색상", "수량", "금액", "하자상세", "로트"
 ];
 
-// 정렬/그룹 구분 기준 열 — 이 값이 바뀌는 경계마다 빈 행을 하나 끼워 넣습니다.
+// 정렬/그룹 구분 기준 열
 const PACKAGE_COLUMN_LABEL = "포장";
-
-// 금액 열만 오른쪽 정렬 + 천단위 콤마, 나머지 열은 전부 가운데 정렬
 const AMOUNT_COLUMN_LABEL = "금액";
 const AMOUNT_NUMBER_FORMAT = "#,##0";
+
+// 금액 바로 뒤에 끼워 넣는 계산 열 — 패널티는 건당 고정 금액, 클레임
+// 계는 데이터 행에서는 비워두고 합계 행에서만 채웁니다.
+const PENALTY_COLUMN_LABEL = "패널티";
+const PENALTY_AMOUNT = 60000;
+const CLAIM_TOTAL_COLUMN_LABEL = "클레임 계";
+
+// 포장 값(1/3/4/7라인)별 담당 업체 — 그룹 순서, 묶음, 합계 행 레이블에
+// 그대로 씁니다. 3라인/4라인은 같은 업체라 한 그룹으로 묶습니다.
+const PACKAGE_GROUPS = [
+  { packageValues: ["1라인"], companyName: "아름산업" },
+  { packageValues: ["3라인", "4라인"], companyName: "바른산업" },
+  { packageValues: ["7라인"], companyName: "다올산업" }
+];
+// 위 3개 그룹 중 어디에도 안 맞는 포장 값이 섞여 있으면 묶어서 보여줄
+// 이름(합계는 구하되, 맨 아래 총합계에는 포함하지 않음 — 원래 예상된
+// 값이 아니라서).
+const OTHER_PACKAGE_GROUP_NAME = "기타";
+
+// 헤더/업체별 합계 행 서식 — 흰색을 이 비율만큼 어둡게 한 배경 +
+// 굵은 글씨. 전체 글꼴은 맑은 고딕 11(정리파일다운로드에도 그대로 반영됨).
+const SUMMARY_ROW_BACKGROUND_DARKEN_PERCENT = 25;
+const RESULT_FONT_FAMILY = "Malgun Gothic";
+const RESULT_FONT_SIZE = 11;
 
 
 /**************************************************************
@@ -161,11 +188,14 @@ function normalizeRowLength_(row, targetColumnCount) {
 /**************************************************************
  * "자료정리" 액션
  *
- * "시트1"에서 SOURCE_COLUMN_LABELS 순서로 열만 뽑아, 포장 값 기준으로
- * 정렬한 뒤 맨 앞에 1부터 순차적으로 번호를 매겨 "정리" 시트에
- * 덮어씁니다(기존 내용은 전부 지우고 다시 씀). 완전히 빈 행은
- * 건너뜁니다. 포장 값이 바로 앞 행과 달라지는 경계마다(첫 행 제외)
- * 빈 행을 하나 끼워 넣어서 포장별로 시각적으로 구분되게 합니다.
+ * "시트1"에서 PULLED_COLUMN_LABELS 순서로 열을 뽑고, 금액 뒤에
+ * 패널티(고정 60,000)/클레임 계(데이터 행은 비움) 열을 끼워 넣습니다.
+ * 포장 값으로 1라인/3·4라인/7라인 세 그룹(PACKAGE_GROUPS)으로 나눠
+ * 그룹 순서대로 번호를 새로 매기고, 각 그룹 끝에는 "번호~수량"을
+ * 병합한 "업체명 합계(건수)" 행을 넣어 금액/패널티/클레임계 합계를
+ * 채웁니다. 맨 끝에는 빈 행 하나를 두고 세 그룹 전체 합계 행을
+ * 추가합니다. 헤더와 업체별 합계 행은 흰색을 어둡게 한 배경 + 굵은
+ * 글씨로 강조하고, 전체 글꼴은 맑은 고딕 11로 맞춥니다.
  **************************************************************/
 function cleanMonthlyInhouseListAction_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -178,42 +208,113 @@ function cleanMonthlyInhouseListAction_() {
   const source = readSheetObject_(sourceSheet);
   const header = source.header;
 
-  const columnIndexes = SOURCE_COLUMN_LABELS.map(function(label) {
+  const pulledColumnIndexes = PULLED_COLUMN_LABELS.map(function(label) {
     const idx = header.indexOf(label);
     if (idx === -1) throw new Error("'" + SOURCE_SHEET_NAME + "'에서 '" + label + "' 열을 찾을 수 없습니다.");
     return idx;
   });
 
-  const packageColPos = SOURCE_COLUMN_LABELS.indexOf(PACKAGE_COLUMN_LABEL);
+  const packagePulledPos = PULLED_COLUMN_LABELS.indexOf(PACKAGE_COLUMN_LABEL);
+  const amountPulledPos = PULLED_COLUMN_LABELS.indexOf(AMOUNT_COLUMN_LABEL);
 
-  const rows = source.rows
-    .map(function(row) { return columnIndexes.map(function(idx) { return row.values[idx]; }); })
+  const pulledRows = source.rows
+    .map(function(row) { return pulledColumnIndexes.map(function(idx) { return row.values[idx]; }); })
     .filter(function(values) {
       return values.some(function(value) { return normalizeText_(value) !== ""; });
     });
 
-  rows.sort(function(a, b) {
-    return normalizeText_(a[packageColPos])
-      .localeCompare(normalizeText_(b[packageColPos]), "ko", { numeric: true, sensitivity: "base" });
-  });
+  // 번호 + (브랜드~금액) + 패널티 + 클레임 계 + (하자상세~로트)
+  const finalHeader = [NUMBER_COLUMN_LABEL]
+    .concat(PULLED_COLUMN_LABELS.slice(0, amountPulledPos + 1))
+    .concat([PENALTY_COLUMN_LABEL, CLAIM_TOTAL_COLUMN_LABEL])
+    .concat(PULLED_COLUMN_LABELS.slice(amountPulledPos + 1));
 
-  const finalHeader = [NUMBER_COLUMN_LABEL].concat(SOURCE_COLUMN_LABELS);
-  const blankRow = finalHeader.map(function() { return ""; });
-  const outputRows = [];
-  let sequence = 0;
-  let previousPackage = null;
+  const columnCount = finalHeader.length;
+  const amountColIndex = finalHeader.indexOf(AMOUNT_COLUMN_LABEL);
+  const penaltyColIndex = finalHeader.indexOf(PENALTY_COLUMN_LABEL);
+  const claimTotalColIndex = finalHeader.indexOf(CLAIM_TOTAL_COLUMN_LABEL);
+  const summaryMergeColumnCount = finalHeader.indexOf("수량") + 1; // 번호~수량
 
-  rows.forEach(function(values) {
-    const packageValue = normalizeText_(values[packageColPos]);
+  function buildDataRow_(sequence, pulledValues) {
+    return [sequence]
+      .concat(pulledValues.slice(0, amountPulledPos + 1))
+      .concat([PENALTY_AMOUNT, ""])
+      .concat(pulledValues.slice(amountPulledPos + 1));
+  }
 
-    if (previousPackage !== null && packageValue !== previousPackage) {
-      outputRows.push(blankRow.slice());
+  // 포장 값 기준으로 1라인/3·4라인(바른산업)/7라인 세 그룹으로 나눕니다.
+  // 세 그룹 어디에도 안 맞는 값은 "기타"로 따로 모읍니다(원래 월마감
+  // 내작(N)에는 이 4개 값만 들어오지만, 혹시 다른 값이 섞여도 자료가
+  // 누락되지 않도록 — 다만 기타 그룹 합계는 맨 아래 총합계에는
+  // 포함하지 않습니다).
+  const matchedGroups = PACKAGE_GROUPS.map(function() { return []; });
+  const otherGroupRows = [];
+
+  pulledRows.forEach(function(pulledValues) {
+    const packageValue = normalizeText_(pulledValues[packagePulledPos]);
+    const groupIdx = PACKAGE_GROUPS.findIndex(function(group) {
+      return group.packageValues.indexOf(packageValue) !== -1;
+    });
+
+    if (groupIdx === -1) {
+      otherGroupRows.push(pulledValues);
+    } else {
+      matchedGroups[groupIdx].push(pulledValues);
     }
-    previousPackage = packageValue;
-
-    sequence++;
-    outputRows.push([sequence].concat(values));
   });
+
+  const outputRows = [];
+  const summaryRowNumbers = []; // 1-based 시트 행 번호(헤더 포함) — 서식/병합용
+  let sequence = 0;
+
+  // groupRows를 데이터 행으로 이어 붙이고, 끝에 "업체명 합계(건수)"
+  // 병합 행을 추가합니다. 반환값은 이 그룹의 금액/패널티 합계(총합계
+  // 계산용) — groupRows가 비어 있으면 아무 것도 하지 않고 null을 반환.
+  function appendGroup_(groupRows, companyName) {
+    if (!groupRows.length) return null;
+
+    groupRows.forEach(function(pulledValues) {
+      sequence++;
+      outputRows.push(buildDataRow_(sequence, pulledValues));
+    });
+
+    const amountSum = groupRows.reduce(function(sum, values) {
+      return sum + (Number(values[amountPulledPos]) || 0);
+    }, 0);
+    const penaltySum = PENALTY_AMOUNT * groupRows.length;
+
+    const summaryRow = new Array(columnCount).fill("");
+    summaryRow[0] = companyName + " 합계(" + groupRows.length + ")";
+    summaryRow[amountColIndex] = amountSum;
+    summaryRow[penaltyColIndex] = penaltySum;
+    summaryRow[claimTotalColIndex] = amountSum + penaltySum;
+
+    outputRows.push(summaryRow);
+    summaryRowNumbers.push(outputRows.length + 1); // +1은 헤더 행만큼의 오프셋
+
+    return { amountSum: amountSum, penaltySum: penaltySum };
+  }
+
+  const groupTotals = [];
+  PACKAGE_GROUPS.forEach(function(group, idx) {
+    const totals = appendGroup_(matchedGroups[idx], group.companyName);
+    if (totals) groupTotals.push(totals);
+  });
+
+  appendGroup_(otherGroupRows, OTHER_PACKAGE_GROUP_NAME);
+
+  if (groupTotals.length) {
+    outputRows.push(new Array(columnCount).fill("")); // 총합계 앞 빈 행
+
+    const grandAmount = groupTotals.reduce(function(sum, t) { return sum + t.amountSum; }, 0);
+    const grandPenalty = groupTotals.reduce(function(sum, t) { return sum + t.penaltySum; }, 0);
+
+    const grandTotalRow = new Array(columnCount).fill("");
+    grandTotalRow[amountColIndex] = grandAmount;
+    grandTotalRow[penaltyColIndex] = grandPenalty;
+    grandTotalRow[claimTotalColIndex] = grandAmount + grandPenalty;
+    outputRows.push(grandTotalRow);
+  }
 
   const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
 
@@ -221,17 +322,17 @@ function cleanMonthlyInhouseListAction_() {
   // 대비해 직접 맞춰둔 열 너비를 미리 기억해뒀다가 다시 쓴 뒤 그대로
   // 되돌려서, 수동으로 조절한 폭이 "자료정리"를 다시 실행해도 항상
   // 고정되게 합니다.
-  const columnCountForWidths = Math.max(resultSheet.getLastColumn(), finalHeader.length);
+  const columnCountForWidths = Math.max(resultSheet.getLastColumn(), columnCount);
   const preservedWidths = [];
   for (let col = 1; col <= columnCountForWidths; col++) {
     preservedWidths.push(resultSheet.getColumnWidth(col));
   }
 
   resultSheet.clear();
-  resultSheet.getRange(1, 1, 1, finalHeader.length).setValues([finalHeader]);
+  resultSheet.getRange(1, 1, 1, columnCount).setValues([finalHeader]);
 
   if (outputRows.length) {
-    resultSheet.getRange(2, 1, outputRows.length, finalHeader.length).setValues(outputRows);
+    resultSheet.getRange(2, 1, outputRows.length, columnCount).setValues(outputRows);
   }
 
   preservedWidths.forEach(function(width, idx) {
@@ -239,17 +340,53 @@ function cleanMonthlyInhouseListAction_() {
   });
 
   const totalRowCount = outputRows.length + 1; // 헤더 포함
-  resultSheet.getRange(1, 1, totalRowCount, finalHeader.length).setHorizontalAlignment("center");
+  resultSheet.getRange(1, 1, totalRowCount, columnCount)
+    .setHorizontalAlignment("center")
+    .setFontFamily(RESULT_FONT_FAMILY)
+    .setFontSize(RESULT_FONT_SIZE);
 
-  const amountColIndex = finalHeader.indexOf(AMOUNT_COLUMN_LABEL);
-  if (amountColIndex !== -1) {
-    resultSheet.getRange(1, amountColIndex + 1, totalRowCount, 1).setHorizontalAlignment("right");
+  [amountColIndex, penaltyColIndex, claimTotalColIndex].forEach(function(colIndex) {
+    resultSheet.getRange(1, colIndex + 1, totalRowCount, 1).setHorizontalAlignment("right");
     if (outputRows.length) {
-      resultSheet.getRange(2, amountColIndex + 1, outputRows.length, 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
+      resultSheet.getRange(2, colIndex + 1, outputRows.length, 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
     }
-  }
+  });
 
-  return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: rows.length };
+  // 헤더 + 업체별 합계 행: 로트 열까지 배경(흰색을 어둡게) + 굵게,
+  // 업체별 합계 행은 "번호~수량"을 하나로 병합합니다.
+  const summaryBackgroundHex = getDarkenedWhiteBackgroundHex_(ss, SUMMARY_ROW_BACKGROUND_DARKEN_PERCENT);
+  [1].concat(summaryRowNumbers).forEach(function(rowNumber) {
+    resultSheet.getRange(rowNumber, 1, 1, columnCount)
+      .setBackground(summaryBackgroundHex)
+      .setFontWeight("bold");
+  });
+
+  summaryRowNumbers.forEach(function(rowNumber) {
+    resultSheet.getRange(rowNumber, 1, 1, summaryMergeColumnCount).merge();
+  });
+
+  return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: pulledRows.length };
+}
+
+
+/**************************************************************
+ * "흰색"(배경 1 테마 색) 기준으로 darkenPercent(%)만큼 검정 쪽으로
+ * 섞은 hex 색을 돌려줍니다("흰색, N% 더 어둡게"와 같은 계산 방식 —
+ * daily-service-shipment-webapp.gs의 강조2 라이터 계산과 반대 방향).
+ **************************************************************/
+function getDarkenedWhiteBackgroundHex_(ss, darkenPercent) {
+  const rgb = ss.getSpreadsheetTheme()
+    .getConcreteColor(SpreadsheetApp.ThemeColorType.BACKGROUND1)
+    .asRgbColor();
+
+  const blend = function(channel) {
+    return Math.round(channel * (1 - darkenPercent / 100));
+  };
+  const toHex = function(n) {
+    return ("0" + n.toString(16)).slice(-2);
+  };
+
+  return "#" + toHex(blend(rgb.getRed())) + toHex(blend(rgb.getGreen())) + toHex(blend(rgb.getBlue()));
 }
 
 
