@@ -707,6 +707,7 @@
       <button id="runCleanupBtn" class="warning" style="display:none;">정리 실행 (매크로)</button>
       <span class="spacer"></span>
       <button id="cleanMonthlyFinalClosingBtn">마감자료정리</button>
+      <button id="openMonthlyFinalClosingAmountBtn" type="button">외작/구매 금액입력</button>
       <button id="downloadMonthlyFinalClosingBtn">마감자료다운로드</button>
       <button id="downloadFullBtn">월현황엑셀다운로드</button>
       <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
@@ -1116,6 +1117,7 @@
         monthlyFinalClosingWebappUrl: document.getElementById("monthlyFinalClosingWebappUrl"),
         saveMonthlyFinalClosingConfigBtn: document.getElementById("saveMonthlyFinalClosingConfigBtn"),
         cleanMonthlyFinalClosingBtn: document.getElementById("cleanMonthlyFinalClosingBtn"),
+        openMonthlyFinalClosingAmountBtn: document.getElementById("openMonthlyFinalClosingAmountBtn"),
         downloadMonthlyFinalClosingBtn: document.getElementById("downloadMonthlyFinalClosingBtn"),
         monthlyStatusLine: document.getElementById("monthlyStatusLine"),
         weekPickerOverlay: document.getElementById("weekPickerOverlay"),
@@ -5990,6 +5992,11 @@
 
       el.archiveWeekBtn.addEventListener("click", archiveWeek);
       el.cleanMonthlyFinalClosingBtn.addEventListener("click", cleanMonthlyFinalClosing);
+      // "외작/구매 금액입력" 버튼 — 빈 금액을 직접 채워 넣을 수 있도록
+      // "월마감" 연결 스프레드시트를 새 탭으로 엽니다.
+      el.openMonthlyFinalClosingAmountBtn.addEventListener("click", function() {
+        openConnectedSpreadsheet_(el.monthlyFinalClosingWebappUrl.value, el.statusLine, "월마감");
+      });
       el.downloadMonthlyFinalClosingBtn.addEventListener("click", downloadMonthlyFinalClosing);
       el.downloadFullBtn.addEventListener("click", downloadFullWorkbook);
       el.downloadClaimDashboardBtn.addEventListener("click", downloadClaimDashboardWorkbook);
