@@ -60,13 +60,16 @@ const PULLED_COLUMN_LABELS = [
 // 정렬/그룹 구분 기준 열
 const PACKAGE_COLUMN_LABEL = "포장";
 const AMOUNT_COLUMN_LABEL = "금액";
-const AMOUNT_NUMBER_FORMAT = "#,##0";
+// 구글 시트 "서식 > 숫자 > 회계"와 같은 표시 형식(₩115,000 스타일).
+const AMOUNT_NUMBER_FORMAT = '_-"₩"* #,##0_-;-"₩"* #,##0_-;_-"₩"* "-"_-;_-@_-';
 
 // 금액 바로 뒤에 끼워 넣는 계산 열 — 패널티는 건당 고정 금액, 클레임
-// 계는 데이터 행에서는 비워두고 합계 행에서만 채웁니다.
+// 계는 데이터 행에서는 비워두고 합계 행에서만 채웁니다. 값이 있는
+// 클레임 계 칸(합계 행들)은 빨간 글자로 강조합니다.
 const PENALTY_COLUMN_LABEL = "패널티";
 const PENALTY_AMOUNT = 60000;
 const CLAIM_TOTAL_COLUMN_LABEL = "클레임 계";
+const CLAIM_TOTAL_FONT_COLOR = "#cc0000";
 
 // 포장 값(1/3/4/7라인)별 담당 업체 — 그룹 순서, 묶음, 합계 행 레이블에
 // 그대로 씁니다. 3라인/4라인은 같은 업체라 한 그룹으로 묶습니다.
@@ -310,6 +313,8 @@ function cleanMonthlyInhouseListAction_() {
 
   appendGroup_(otherGroupRows, OTHER_PACKAGE_GROUP_NAME);
 
+  let grandTotalRowNumber = null;
+
   if (groupTotals.length) {
     outputRows.push(new Array(columnCount).fill("")); // 총합계 앞 빈 행
 
@@ -321,6 +326,7 @@ function cleanMonthlyInhouseListAction_() {
     grandTotalRow[penaltyColIndex] = grandPenalty;
     grandTotalRow[claimTotalColIndex] = grandAmount + grandPenalty;
     outputRows.push(grandTotalRow);
+    grandTotalRowNumber = outputRows.length + 1; // +1은 헤더 행만큼의 오프셋
   }
 
   const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
@@ -370,6 +376,18 @@ function cleanMonthlyInhouseListAction_() {
 
   summaryRowNumbers.forEach(function(rowNumber) {
     resultSheet.getRange(rowNumber, 1, 1, summaryMergeColumnCount).merge();
+  });
+
+  // 맨 아래 총합계 행은 배경은 그대로 두고 굵게만 적용합니다.
+  if (grandTotalRowNumber !== null) {
+    resultSheet.getRange(grandTotalRowNumber, 1, 1, columnCount).setFontWeight("bold");
+  }
+
+  // 클레임 계 값이 있는 칸(업체별 합계 행 + 총합계 행)은 빨간 글자로.
+  const claimTotalHighlightRows = summaryRowNumbers.slice();
+  if (grandTotalRowNumber !== null) claimTotalHighlightRows.push(grandTotalRowNumber);
+  claimTotalHighlightRows.forEach(function(rowNumber) {
+    resultSheet.getRange(rowNumber, claimTotalColIndex + 1).setFontColor(CLAIM_TOTAL_FONT_COLOR);
   });
 
   return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: pulledRows.length };
