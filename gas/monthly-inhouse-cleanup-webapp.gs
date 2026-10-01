@@ -381,12 +381,13 @@ function cleanMonthlyInhouseListAction_() {
     resultSheet.getRange(rowNumber, 1, 1, summaryMergeColumnCount).merge();
   });
 
-  // "다올산업 합계" 행은 로트 열까지 모든 테두리를 그려서, 마지막
-  // 그룹과 그 아래 총합계 사이를 시각적으로 구분합니다.
+  // 헤더(1행)부터 "다올산업 합계" 행까지 전체(로트 열까지)에 모든
+  // 테두리를 그려서, 본문 전체를 표 형태로 만들고 그 아래(빈 행 +
+  // 총합계)는 테두리 없이 구분합니다.
   const daolCompanyName = PACKAGE_GROUPS[PACKAGE_GROUPS.length - 1].companyName;
   const daolSummaryRowNumber = summaryRowNumberByCompany[daolCompanyName];
   if (daolSummaryRowNumber) {
-    resultSheet.getRange(daolSummaryRowNumber, 1, 1, columnCount)
+    resultSheet.getRange(1, 1, daolSummaryRowNumber, columnCount)
       .setBorder(true, true, true, true, true, true);
   }
 
