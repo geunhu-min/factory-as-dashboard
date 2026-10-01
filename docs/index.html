@@ -809,8 +809,10 @@
       <div class="toolbar">
         <button id="monthlyInhouseViewSourceBtn" style="display:none;">내작월마감자료</button>
         <button id="monthlyInhouseViewResultBtn" style="display:none;">정리자료</button>
-        <button id="monthlyOutsourceRefreshBtn" style="display:none;">새로고침</button>
-        <button id="monthlyPurchaseRefreshBtn" style="display:none;">새로고침</button>
+        <button id="monthlyOutsourceViewSourceBtn" style="display:none;">외작월마감자료</button>
+        <button id="monthlyOutsourceViewResultBtn" style="display:none;">정리자료</button>
+        <button id="monthlyPurchaseViewSourceBtn" style="display:none;">구매월마감자료</button>
+        <button id="monthlyPurchaseViewResultBtn" style="display:none;">정리자료</button>
         <span class="spacer"></span>
         <button id="monthlyInhouseDownloadBtn" style="display:none;">정리파일다운로드</button>
         <button id="monthlyOutsourceDownloadBtn" style="display:none;">정리파일다운로드</button>
@@ -1237,13 +1239,15 @@
         monthlyOutsourceActions: document.getElementById("monthlyOutsourceActions"),
         monthlyOutsourceReplaceBtn: document.getElementById("monthlyOutsourceReplaceBtn"),
         monthlyOutsourceCleanBtn: document.getElementById("monthlyOutsourceCleanBtn"),
-        monthlyOutsourceRefreshBtn: document.getElementById("monthlyOutsourceRefreshBtn"),
+        monthlyOutsourceViewSourceBtn: document.getElementById("monthlyOutsourceViewSourceBtn"),
+        monthlyOutsourceViewResultBtn: document.getElementById("monthlyOutsourceViewResultBtn"),
         monthlyOutsourceDownloadBtn: document.getElementById("monthlyOutsourceDownloadBtn"),
         monthlyPurchaseToggleBtn: document.getElementById("monthlyPurchaseToggleBtn"),
         monthlyPurchaseActions: document.getElementById("monthlyPurchaseActions"),
         monthlyPurchaseReplaceBtn: document.getElementById("monthlyPurchaseReplaceBtn"),
         monthlyPurchaseCleanBtn: document.getElementById("monthlyPurchaseCleanBtn"),
-        monthlyPurchaseRefreshBtn: document.getElementById("monthlyPurchaseRefreshBtn"),
+        monthlyPurchaseViewSourceBtn: document.getElementById("monthlyPurchaseViewSourceBtn"),
+        monthlyPurchaseViewResultBtn: document.getElementById("monthlyPurchaseViewResultBtn"),
         monthlyPurchaseDownloadBtn: document.getElementById("monthlyPurchaseDownloadBtn"),
         monthlyClosingDownloadBtn: document.getElementById("monthlyClosingDownloadBtn"),
         monthlyClosingDownloadDetailBtn: document.getElementById("monthlyClosingDownloadDetailBtn"),
@@ -3923,6 +3927,10 @@
           const replaceData = await replaceResponse.json();
           if (replaceData.error) throw new Error("월마감 외작건정리: " + replaceData.error);
 
+          setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건. 내용을 불러오는 중...", "ok");
+
+          // 교체된 "시트1" 내용을 바로 아래 표에 보여줍니다.
+          await viewMonthlyOutsourceSource_();
           setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건.", "ok");
         } catch (error) {
           setMonthlyClosingStatus_(label + "월마감 자료교체 실패: " + error.message, "error");
@@ -3937,9 +3945,38 @@
         await replaceMonthlyOutsourceSourceData_("구매");
       }
 
+      // "외작월마감자료"/"구매월마감자료" 버튼 — 월마감 외작건정리의
+      // "시트1" 현재 내용을 바로 아래 표에 보여줍니다(읽기 전용).
+      // 외작/구매가 같은 웹앱을 쓰므로 하나로 공유합니다.
+      async function viewMonthlyOutsourceSource_() {
+        const url = el.monthlyOutsourceWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 외작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("시트1 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("시트1");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          monthlyClosingCurrentSheet = "";
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+          setMonthlyClosingStatus_("시트1 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          renderMonthlyClosingTable_([], []);
+          setMonthlyClosingStatus_("시트1 불러오기 실패: " + error.message, "error");
+        }
+      }
+
       // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
       // 실행해서 "종합" 시트를 원인별로 묶어 새로 채웁니다.
-      // "새로고침" 버튼 — 연결한 스프레드시트의 "종합" 시트를 읽어와
+      // "정리자료" 버튼 — 연결한 스프레드시트의 "종합" 시트를 읽어와
       // 아래 표에 보여줍니다(2공장유상마감의 monthlyClosingTable을
       // 재사용 — 읽기 전용으로 보이도록 monthlyClosingCurrentSheet를 비움).
       async function viewMonthlyOutsourceResult_() {
@@ -5666,14 +5703,16 @@
         el.monthlyOutsourceToggleBtn.classList.toggle("active", tab === "outsource");
         el.monthlyOutsourceActions.classList.toggle("visible", tab === "outsource");
         el.monthlyOutsourceDownloadBtn.style.display = tab === "outsource" ? "" : "none";
-        el.monthlyOutsourceRefreshBtn.style.display = tab === "outsource" ? "" : "none";
+        el.monthlyOutsourceViewSourceBtn.style.display = tab === "outsource" ? "" : "none";
+        el.monthlyOutsourceViewResultBtn.style.display = tab === "outsource" ? "" : "none";
 
         // 구매건은 외작건정리와 같은 웹앱/시트(종합/시트1)를 그대로
         // 같이 쓰는 탭입니다(양식이 같아서) — 연결 설정은 별도로 없음.
         el.monthlyPurchaseToggleBtn.classList.toggle("active", tab === "purchase");
         el.monthlyPurchaseActions.classList.toggle("visible", tab === "purchase");
         el.monthlyPurchaseDownloadBtn.style.display = tab === "purchase" ? "" : "none";
-        el.monthlyPurchaseRefreshBtn.style.display = tab === "purchase" ? "" : "none";
+        el.monthlyPurchaseViewSourceBtn.style.display = tab === "purchase" ? "" : "none";
+        el.monthlyPurchaseViewResultBtn.style.display = tab === "purchase" ? "" : "none";
 
         refreshMonthlyClosingTabsVisibility_();
       }
@@ -5703,14 +5742,16 @@
       el.saveMonthlyOutsourceConfigBtn.addEventListener("click", saveMonthlyOutsourceConfig);
       el.monthlyOutsourceReplaceBtn.addEventListener("click", replaceMonthlyOutsourceData);
       el.monthlyOutsourceCleanBtn.addEventListener("click", cleanMonthlyOutsourceData);
-      el.monthlyOutsourceRefreshBtn.addEventListener("click", viewMonthlyOutsourceResult_);
+      el.monthlyOutsourceViewSourceBtn.addEventListener("click", viewMonthlyOutsourceSource_);
+      el.monthlyOutsourceViewResultBtn.addEventListener("click", viewMonthlyOutsourceResult_);
       el.monthlyOutsourceDownloadBtn.addEventListener("click", downloadMonthlyOutsourceExcel);
       // 구매건은 외작건정리와 같은 웹앱을 그대로 쓰므로, 자료교체만
-      // 구매 전용 함수를 쓰고 자료정리/새로고침/다운로드는 외작건과
+      // 구매 전용 함수를 쓰고 자료정리/보기/다운로드는 외작건과
       // 완전히 같은 함수를 그대로 재사용합니다.
       el.monthlyPurchaseReplaceBtn.addEventListener("click", replaceMonthlyPurchaseData);
       el.monthlyPurchaseCleanBtn.addEventListener("click", cleanMonthlyOutsourceData);
-      el.monthlyPurchaseRefreshBtn.addEventListener("click", viewMonthlyOutsourceResult_);
+      el.monthlyPurchaseViewSourceBtn.addEventListener("click", viewMonthlyOutsourceSource_);
+      el.monthlyPurchaseViewResultBtn.addEventListener("click", viewMonthlyOutsourceResult_);
       el.monthlyPurchaseDownloadBtn.addEventListener("click", downloadMonthlyOutsourceExcel);
 
       // 일일접수현황 탭을 새로 켤 때는, 그 안의 하위 보기(포장일자확인 등)
