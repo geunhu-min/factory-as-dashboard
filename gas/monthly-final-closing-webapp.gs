@@ -551,20 +551,39 @@ function normalizeRowLength_(row, targetColumnCount) {
 
 
 /**************************************************************
- * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)를 시각 없는
- * Date로 파싱합니다. 날짜로 못 읽으면 원래 값을 그대로 돌려줍니다
- * (빈 문자열 등).
+ * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)에서 "yyyy-MM-dd"
+ * 문자열만 뽑아 돌려줍니다. Date 객체를 직접 new Date(y,m,d)로 다시
+ * 만들면 이 스크립트 프로젝트의 기본 시간대(스프레드시트와 다를 수
+ * 있음)가 끼어들어 날짜가 하루 밀리거나 시각이 붙어 보일 수 있어서,
+ * 시간대 영향이 없는 순수 날짜 문자열로 돌려줍니다 — 이 문자열을
+ * 그대로 쓰면 시트가 알아서 날짜로 인식합니다. 날짜로 못 읽으면
+ * 원래 값을 그대로 돌려줍니다(빈 문자열 등).
  **************************************************************/
 function parseFinalDateValue_(value) {
   if (value instanceof Date) {
-    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+    return Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd");
   }
 
   const text = String(value === null || value === undefined ? "" : value).trim();
+  if (!text) return value;
+
+  // "2026-08-28T07:00:00.000Z"처럼 시각(Z)이 있는 문자열은 그 시각이
+  // 정확히 명시돼 있으므로 실제 Date로 파싱해서 한국 시간 기준
+  // 날짜로 바꿉니다(그래야 자정 근처 시각에서도 날짜가 안 밀림).
+  // "2026-08-28"처럼 시각이 없는 문자열을 new Date()로 그냥 파싱하면
+  // UTC 자정으로 해석되어 한국 시간으로는 전날이 되어버리므로, 이
+  // 경우는 문자열에서 날짜 부분만 그대로 뽑아 씁니다.
+  if (/T\d{2}:\d{2}/.test(text)) {
+    const parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, "Asia/Seoul", "yyyy-MM-dd");
+    }
+  }
+
   const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return value;
 
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return match[1] + "-" + match[2] + "-" + match[3];
 }
 
 
