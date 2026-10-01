@@ -357,6 +357,20 @@ function writeMonthlyFinalSheet_(ss, label, header, rows) {
   const columnCount = header.length;
   const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
 
+  // summaryRows/closingRows는 클라이언트가 JSON으로 보내온 값이라,
+  // 월현황(주간)에서는 진짜 Date였던 값이 "2026-08-28T07:00:00.000Z"
+  // 같은 ISO 문자열로 바뀌어 있습니다. 문자열인 채로 쓰면 아래
+  // setNumberFormat을 걸어도 텍스트라서 서식이 전혀 안 먹히므로,
+  // 날짜 열은 값을 쓰기 전에 실제 Date로 되돌려 놓습니다.
+  FINAL_DATE_FORMAT_COLUMN_LABELS.forEach(function(fieldLabel) {
+    const colIndex = header.indexOf(fieldLabel);
+    if (colIndex === -1) return;
+
+    dataRows.forEach(function(row) {
+      row[colIndex] = parseFinalDateValue_(row[colIndex]);
+    });
+  });
+
   const preservedWidths = [];
   const widthColumnCount = Math.max(sheet.getLastColumn(), columnCount);
   for (let col = 1; col <= widthColumnCount; col++) {
@@ -533,6 +547,24 @@ function normalizeRowLength_(row, targetColumnCount) {
   }
 
   return result;
+}
+
+
+/**************************************************************
+ * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)를 시각 없는
+ * Date로 파싱합니다. 날짜로 못 읽으면 원래 값을 그대로 돌려줍니다
+ * (빈 문자열 등).
+ **************************************************************/
+function parseFinalDateValue_(value) {
+  if (value instanceof Date) {
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 }
 
 
