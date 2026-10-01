@@ -802,7 +802,8 @@
       <div id="monthlyClosingStatusLine" class="status-line"></div>
 
       <div class="toolbar">
-        <button id="monthlyInhouseRefreshBtn" style="display:none;">새로고침</button>
+        <button id="monthlyInhouseViewSourceBtn" style="display:none;">내작월마감자료</button>
+        <button id="monthlyInhouseViewResultBtn" style="display:none;">정리자료</button>
         <button id="monthlyOutsourceRefreshBtn" style="display:none;">새로고침</button>
         <span class="spacer"></span>
         <button id="monthlyInhouseDownloadBtn" style="display:none;">정리파일다운로드</button>
@@ -1220,7 +1221,8 @@
         monthlyInhouseReplaceBtn: document.getElementById("monthlyInhouseReplaceBtn"),
         monthlyInhouseCleanBtn: document.getElementById("monthlyInhouseCleanBtn"),
         monthlyInhouseDownloadBtn: document.getElementById("monthlyInhouseDownloadBtn"),
-        monthlyInhouseRefreshBtn: document.getElementById("monthlyInhouseRefreshBtn"),
+        monthlyInhouseViewSourceBtn: document.getElementById("monthlyInhouseViewSourceBtn"),
+        monthlyInhouseViewResultBtn: document.getElementById("monthlyInhouseViewResultBtn"),
         monthlyOutsourceWebappUrl: document.getElementById("monthlyOutsourceWebappUrl"),
         saveMonthlyOutsourceConfigBtn: document.getElementById("saveMonthlyOutsourceConfigBtn"),
         openMonthlyOutsourceConfigBtn: document.getElementById("openMonthlyOutsourceConfigBtn"),
@@ -3825,19 +3827,41 @@
           const replaceData = await replaceResponse.json();
           if (replaceData.error) throw new Error("월마감 내작건정리: " + replaceData.error);
 
+          setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건. 내용을 불러오는 중...", "ok");
+
           // 교체된 "시트1" 내용을 바로 아래 표에 보여줍니다.
-          const sheet1Response = await fetch(
-            inhouseUrl + (inhouseUrl.includes("?") ? "&" : "?") + "action=read&sheet=" + encodeURIComponent("시트1")
-          );
-          const sheet1Data = await sheet1Response.json();
-          if (sheet1Data.error) throw new Error("시트1: " + sheet1Data.error);
-
-          monthlyClosingCurrentSheet = "";
-          renderMonthlyClosingTable_(sheet1Data.header || [], sheet1Data.rows || []);
-
+          await viewMonthlyInhouseSource_();
           setMonthlyClosingStatus_("시트1 교체 완료 — " + replaceData.rowCount + "건.", "ok");
         } catch (error) {
           setMonthlyClosingStatus_("내작월마감 자료교체 실패: " + error.message, "error");
+        }
+      }
+
+      // "내작월마감자료" 버튼 — 월마감 내작건정리의 "시트1" 현재 내용을
+      // 바로 아래 표에 보여줍니다(읽기 전용).
+      async function viewMonthlyInhouseSource_() {
+        const url = el.monthlyInhouseWebappUrl.value.trim();
+
+        if (!url) {
+          setMonthlyClosingStatus_("월마감 내작건정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setMonthlyClosingStatus_("시트1 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") +
+            "action=read&sheet=" + encodeURIComponent("시트1");
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          monthlyClosingCurrentSheet = "";
+          renderMonthlyClosingTable_(data.header || [], data.rows || []);
+          setMonthlyClosingStatus_("시트1 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          renderMonthlyClosingTable_([], []);
+          setMonthlyClosingStatus_("시트1 불러오기 실패: " + error.message, "error");
         }
       }
 
@@ -5589,7 +5613,8 @@
         el.monthlyInhouseToggleBtn.classList.toggle("active", tab === "inhouse");
         el.monthlyInhouseActions.classList.toggle("visible", tab === "inhouse");
         el.monthlyInhouseDownloadBtn.style.display = tab === "inhouse" ? "" : "none";
-        el.monthlyInhouseRefreshBtn.style.display = tab === "inhouse" ? "" : "none";
+        el.monthlyInhouseViewSourceBtn.style.display = tab === "inhouse" ? "" : "none";
+        el.monthlyInhouseViewResultBtn.style.display = tab === "inhouse" ? "" : "none";
 
         el.monthlyOutsourceToggleBtn.classList.toggle("active", tab === "outsource");
         el.monthlyOutsourceActions.classList.toggle("visible", tab === "outsource");
@@ -5615,7 +5640,8 @@
       el.monthlyInhouseReplaceBtn.addEventListener("click", replaceMonthlyInhouseData);
       el.monthlyInhouseCleanBtn.addEventListener("click", cleanMonthlyInhouseData);
       el.monthlyInhouseDownloadBtn.addEventListener("click", downloadMonthlyInhouseExcel);
-      el.monthlyInhouseRefreshBtn.addEventListener("click", viewMonthlyInhouseResult_);
+      el.monthlyInhouseViewSourceBtn.addEventListener("click", viewMonthlyInhouseSource_);
+      el.monthlyInhouseViewResultBtn.addEventListener("click", viewMonthlyInhouseResult_);
       el.saveMonthlyOutsourceConfigBtn.addEventListener("click", saveMonthlyOutsourceConfig);
       el.monthlyOutsourceReplaceBtn.addEventListener("click", replaceMonthlyOutsourceData);
       el.monthlyOutsourceCleanBtn.addEventListener("click", cleanMonthlyOutsourceData);
