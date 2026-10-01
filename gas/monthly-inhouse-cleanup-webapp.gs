@@ -171,6 +171,15 @@ function replaceSourceDataAction_(header, rows) {
   const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
 
   sheet.clear();
+
+  // "061"처럼 앞자리 0이 있는 색상 값은, 서식이 기본값(General)인 채로
+  // 쓰면 그 즉시 숫자로 재해석되어 0이 사라집니다. 값을 쓰기 전에 이
+  // 열만 먼저 "@"(텍스트) 서식으로 지정해야 합니다.
+  const colorColIndex = header.indexOf("색상");
+  if (colorColIndex !== -1 && dataRows.length) {
+    sheet.getRange(2, colorColIndex + 1, dataRows.length, 1).setNumberFormat("@");
+  }
+
   sheet.getRange(1, 1, dataRows.length + 1, columnCount).setValues([header].concat(dataRows));
 
   // 내작(N)은 1라인/3·4라인/7라인 그룹 사이에 구분용 빈 행이 끼워져
@@ -345,6 +354,15 @@ function cleanMonthlyInhouseListAction_() {
   }
 
   resultSheet.clear();
+
+  // "061"처럼 앞자리 0이 있는 색상 값은 서식이 기본값(General)인 채로
+  // 쓰면 숫자로 재해석되어 0이 사라지므로, 값을 쓰기 전에 이 열만
+  // 먼저 "@"(텍스트) 서식으로 지정합니다.
+  const colorColIndex = finalHeader.indexOf("색상");
+  if (colorColIndex !== -1 && outputRows.length) {
+    resultSheet.getRange(2, colorColIndex + 1, outputRows.length, 1).setNumberFormat("@");
+  }
+
   resultSheet.getRange(1, 1, 1, columnCount).setValues([finalHeader]);
 
   if (outputRows.length) {
