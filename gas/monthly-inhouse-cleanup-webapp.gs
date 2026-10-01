@@ -383,7 +383,7 @@ function cleanMonthlyInhouseListAction_() {
  **************************************************************/
 function getDarkenedWhiteBackgroundHex_(ss, darkenPercent) {
   const rgb = ss.getSpreadsheetTheme()
-    .getConcreteColor(SpreadsheetApp.ThemeColorType.BACKGROUND1)
+    .getConcreteColor(SpreadsheetApp.ThemeColorType.BACKGROUND)
     .asRgbColor();
 
   const blend = function(channel) {
