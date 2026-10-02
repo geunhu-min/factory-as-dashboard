@@ -344,6 +344,7 @@ function cleanMonthlyInhouseListAction_() {
   const outputRows = [];
   const summaryRowNumbers = []; // 1-based 시트 행 번호(헤더 포함) — 서식/병합용
   const summaryRowNumberByCompany = {}; // 업체명 → 그 합계 행 번호(특정 업체만 따로 서식 줄 때 씀)
+  const groupTotalsByCompany = {}; // 업체명 → {amountSum, penaltySum}(업체별 단독 시트의 합계 행에 재사용)
   let sequence = 0;
 
   // groupRows를 데이터 행으로 이어 붙이고, 끝에 "업체명 합계(건수)"
@@ -373,7 +374,9 @@ function cleanMonthlyInhouseListAction_() {
     summaryRowNumbers.push(summaryRowNumber);
     summaryRowNumberByCompany[companyName] = summaryRowNumber;
 
-    return { amountSum: amountSum, penaltySum: penaltySum };
+    const totals = { amountSum: amountSum, penaltySum: penaltySum };
+    groupTotalsByCompany[companyName] = totals;
+    return totals;
   }
 
   const groupTotals = [];
@@ -432,6 +435,13 @@ function cleanMonthlyInhouseListAction_() {
     resultSheet.setColumnWidth(idx + 1, width);
   });
 
+  // 업체별 단독 시트(아름산업/바른산업/다올산업)도 "정리(N)"와 똑같은
+  // 열 너비를 쓰도록, 지금 막 맞춘 "정리(N)"의 폭을 그대로 기억해둡니다.
+  const resultColumnWidths = [];
+  for (let col = 1; col <= columnCount; col++) {
+    resultColumnWidths.push(resultSheet.getColumnWidth(col));
+  }
+
   const totalRowCount = outputRows.length + 1; // 헤더 포함
   resultSheet.getRange(1, 1, totalRowCount, columnCount)
     .setHorizontalAlignment("center")
@@ -488,14 +498,26 @@ function cleanMonthlyInhouseListAction_() {
   }
 
   // 업체별(아름산업/바른산업/다올산업) 단독 시트도 각각
-  // "업체명(건수)"로 따로 만듭니다 — 묶음 합계/병합/구분 행 없이,
-  // 그 업체 데이터만 1번부터 다시 번호를 매겨서 담습니다.
+  // "업체명(건수)"로 따로 만듭니다 — "정리(N)"와 같은 열 너비를 쓰고,
+  // 그 업체 데이터만 1번부터 다시 번호를 매긴 뒤 "정리(N)"의 업체별
+  // 합계 행과 똑같은 합계 행을 맨 아래에 추가합니다.
   PACKAGE_GROUPS.forEach(function(group, idx) {
     writeCompanySheet_(
       ss, group.companyName, finalHeader, matchedGroups[idx], amountPulledPos,
       columnCount, colorColIndex, amountColIndex, penaltyColIndex, claimTotalColIndex,
-      summaryBackgroundHex
+      summaryMergeColumnCount, summaryBackgroundHex, resultColumnWidths,
+      groupTotalsByCompany[group.companyName]
     );
+  });
+
+  // 시트 순서를 "시트1, 정리(N), 아름산업(N), 바른산업(N), 다올산업(N)"
+  // 순으로 고정합니다(moveActiveSheet는 활성 시트를 옮기는 방식이라
+  // 하나씩 순서대로 처리 — 시트1 바로 다음 자리부터 차례로 꽂음).
+  [resultSheet].concat(PACKAGE_GROUPS.map(function(group) {
+    return findOrCreateSuffixedSheet_(ss, group.companyName);
+  })).forEach(function(sheet, idx) {
+    ss.setActiveSheet(sheet);
+    ss.moveActiveSheet(2 + idx);
   });
 
   return { ok: true, resultSheet: resultSheet.getName(), rowCount: pulledRows.length };
@@ -504,16 +526,18 @@ function cleanMonthlyInhouseListAction_() {
 
 /**************************************************************
  * 업체별(아름산업/바른산업/다올산업) 단독 시트 하나를 채웁니다.
- * "정리" 시트와 같은 열 구성/서식(가운데 정렬, 맑은 고딕 11, 색상
- * 텍스트 서식, 금액/패널티/클레임 계 회계 서식, 테두리, 헤더
- * 배경+굵게)을 적용하되, 업체가 하나뿐이라 묶음 합계/병합/구분 행은
- * 두지 않고 그 업체 데이터만 1번부터 번호를 다시 매겨 담습니다.
+ * "정리(N)" 시트와 같은 열 너비/구성/서식(가운데 정렬, 맑은 고딕 11,
+ * 색상 텍스트 서식, 금액/패널티/클레임 계 회계 서식)을 그대로 쓰고,
+ * 그 업체 데이터만 1번부터 번호를 다시 매긴 뒤 맨 아래에 "정리(N)"의
+ * 업체별 합계 행과 똑같은 합계 행(번호~수량 병합 + 금액/패널티/
+ * 클레임계 합계)을 추가합니다. 헤더+합계 행은 배경/굵게, 전체 범위는
+ * 테두리, 클레임계 값은 빨간 글자로 "정리(N)"와 동일하게 맞춥니다.
  * 끝나면 "업체명(실제 건수)"로 탭 이름을 바꿉니다.
  **************************************************************/
 function writeCompanySheet_(
   ss, companyName, finalHeader, groupRows, amountPulledPos,
   columnCount, colorColIndex, amountColIndex, penaltyColIndex, claimTotalColIndex,
-  summaryBackgroundHex
+  summaryMergeColumnCount, summaryBackgroundHex, sourceColumnWidths, groupTotals
 ) {
   const dataRows = groupRows.map(function(pulledValues, idx) {
     return [idx + 1]
@@ -522,13 +546,18 @@ function writeCompanySheet_(
       .concat(pulledValues.slice(amountPulledPos + 1));
   });
 
-  const sheet = findOrCreateSuffixedSheet_(ss, companyName);
-
-  const preservedWidths = [];
-  const widthColumnCount = Math.max(sheet.getLastColumn(), columnCount);
-  for (let col = 1; col <= widthColumnCount; col++) {
-    preservedWidths.push(sheet.getColumnWidth(col));
+  const summaryRow = new Array(columnCount).fill("");
+  summaryRow[0] = companyName + " 합계(" + dataRows.length + ")";
+  if (groupTotals) {
+    summaryRow[amountColIndex] = groupTotals.amountSum;
+    summaryRow[penaltyColIndex] = groupTotals.penaltySum;
+    summaryRow[claimTotalColIndex] = groupTotals.amountSum + groupTotals.penaltySum;
   }
+
+  const outputRows = dataRows.concat([summaryRow]);
+  const summaryRowNumber = outputRows.length + 1; // +1은 헤더 행만큼의 오프셋
+
+  const sheet = findOrCreateSuffixedSheet_(ss, companyName);
 
   sheet.clear();
 
@@ -537,15 +566,13 @@ function writeCompanySheet_(
   }
 
   sheet.getRange(1, 1, 1, columnCount).setValues([finalHeader]);
-  if (dataRows.length) {
-    sheet.getRange(2, 1, dataRows.length, columnCount).setValues(dataRows);
-  }
+  sheet.getRange(2, 1, outputRows.length, columnCount).setValues(outputRows);
 
-  preservedWidths.forEach(function(width, idx) {
+  sourceColumnWidths.forEach(function(width, idx) {
     sheet.setColumnWidth(idx + 1, width);
   });
 
-  const totalRowCount = dataRows.length + 1;
+  const totalRowCount = outputRows.length + 1; // 헤더 포함
   sheet.getRange(1, 1, totalRowCount, columnCount)
     .setHorizontalAlignment("center")
     .setFontFamily(RESULT_FONT_FAMILY)
@@ -556,10 +583,22 @@ function writeCompanySheet_(
     if (dataRows.length) {
       sheet.getRange(2, colIndex + 1, dataRows.length, 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
     }
+    sheet.getRange(summaryRowNumber, colIndex + 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
   });
 
-  sheet.getRange(1, 1, 1, columnCount).setBackground(summaryBackgroundHex).setFontWeight("bold");
+  // 헤더 + 합계 행: 배경(흰색을 어둡게) + 굵게, 합계 행은 "번호~수량"을
+  // 하나로 병합합니다.
+  [1, summaryRowNumber].forEach(function(rowNumber) {
+    sheet.getRange(rowNumber, 1, 1, columnCount)
+      .setBackground(summaryBackgroundHex)
+      .setFontWeight("bold");
+  });
+  sheet.getRange(summaryRowNumber, 1, 1, summaryMergeColumnCount).merge();
+
   sheet.getRange(1, 1, totalRowCount, columnCount).setBorder(true, true, true, true, true, true);
+
+  // 클레임 계 값은 빨간 글자로.
+  sheet.getRange(summaryRowNumber, claimTotalColIndex + 1).setFontColor(CLAIM_TOTAL_FONT_COLOR);
 
   const newName = companyName + "(" + dataRows.length + ")";
   if (sheet.getName() !== newName) {
