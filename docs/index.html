@@ -4944,11 +4944,15 @@
 
           renderTable();
 
-          setStatus(
-            (data.factoryName || state.currentSheet) + " 정리 완료 — 추가건 " +
-            data.addCount + "건, 삭제건 " + data.deleteCount + "건.",
-            "ok"
-          );
+          if (data.skipped) {
+            setStatus((data.factoryName || state.currentSheet) + " 자료 없음 — 정리를 건너뛰었습니다.", "ok");
+          } else {
+            setStatus(
+              (data.factoryName || state.currentSheet) + " 정리 완료 — 추가건 " +
+              data.addCount + "건, 삭제건 " + data.deleteCount + "건.",
+              "ok"
+            );
+          }
         } catch (error) {
           setStatus("정리 실행 실패: " + error.message, "error");
         } finally {
@@ -4984,6 +4988,9 @@
           if (data.error) throw new Error(data.error);
 
           const summary = (data.results || []).map(function(result) {
+            if (result.skipped) {
+              return result.factoryName + "(자료없음)";
+            }
             return result.factoryName + "(추가건 " + result.addCount + "건, 삭제건 " + result.deleteCount + "건)";
           }).join(", ");
 

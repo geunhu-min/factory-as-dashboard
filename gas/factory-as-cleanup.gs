@@ -92,7 +92,15 @@ function runFactory2() {
  **************************************************************/
 function runFactory_(config) {
   try {
-    runFactoryCore_(config);
+    const result = runFactoryCore_(config);
+
+    if (result && result.skipped) {
+      SpreadsheetApp.getUi().alert(
+        config.name + "에 정리할 자료가 없어 건너뛰었습니다.\n\n" +
+        result.reason
+      );
+      return;
+    }
 
     /*
      * 작업 완료 후 해당 추가건 시트로 이동
@@ -129,12 +137,20 @@ function runFactory_(config) {
  * 이런 컨텍스트에서 호출하면 오류가 나므로 여기서는 사용하지 않습니다.
  **************************************************************/
 function runFactoryCore_(config) {
-  cleanAndRemoveDuplicates_(config);
+  const cleanResult = cleanAndRemoveDuplicates_(config);
+
+  if (cleanResult && cleanResult.skipped) {
+    SpreadsheetApp.flush();
+    return { skipped: true, reason: cleanResult.reason };
+  }
+
   compareAddDelete_(config);
   matchRecovery_(config);
   sortAndFormat_(config);
 
   SpreadsheetApp.flush();
+
+  return { skipped: false };
 }
 
 
@@ -260,13 +276,17 @@ function cleanAndRemoveDuplicates_(config) {
   const sourceLastRow = original.getLastRow();
   const sourceLastColumn = original.getLastColumn();
 
+  // 그 주에 해당 공장 하자 자료가 아예 없어서 원본 시트가 비어 있는
+  // 경우는 오류가 아니라 정상 상황입니다 — 이 공장은 건너뛰고(정리/
+  // 비교/매칭/정렬 단계를 전부 생략) 나머지 공장은 그대로 처리합니다.
   if (
     sourceLastRow < 2 ||
     sourceLastColumn < 1
   ) {
-    throw new Error(
-      "'" + config.originalSheet + "' 시트에 정리할 데이터가 없습니다."
-    );
+    return {
+      skipped: true,
+      reason: "'" + config.originalSheet + "' 시트에 정리할 데이터가 없습니다."
+    };
   }
 
   const sourceRange = original.getRange(
@@ -307,11 +327,13 @@ function cleanAndRemoveDuplicates_(config) {
     }
   }
 
+  // 헤더는 있지만(A열 기준) 실제로 입력된 행이 하나도 없는 경우도
+  // 위와 같은 "자료 없음" 상황이라 똑같이 건너뜁니다.
   if (sourceRows.length === 0) {
-    throw new Error(
-      "'" + config.originalSheet + "' 시트에서 " +
-      "A열이 입력된 자료를 찾을 수 없습니다."
-    );
+    return {
+      skipped: true,
+      reason: "'" + config.originalSheet + "' 시트에서 A열이 입력된 자료를 찾을 수 없습니다."
+    };
   }
 
   /*
@@ -443,6 +465,8 @@ function cleanAndRemoveDuplicates_(config) {
   );
 
   cleanSheet.setFrozenRows(1);
+
+  return { skipped: false };
 }
 
 

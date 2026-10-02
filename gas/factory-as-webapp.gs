@@ -176,13 +176,14 @@ function runCleanupAction_(addSheetName) {
     return { error: "허용되지 않은 시트입니다: " + addSheetName };
   }
 
-  runFactoryCore_(config);
+  const result = runFactoryCore_(config);
 
   const addFresh = readSheet_(config.addSheet);
   const deleteFresh = readSheet_(config.deleteSheet);
 
   return {
     ok: true,
+    skipped: !!(result && result.skipped),
     factoryName: config.name,
     addCount: addFresh.rows.length,
     deleteCount: deleteFresh.rows.length,
@@ -203,13 +204,14 @@ function runCleanupBothAction_() {
   const configs = [FACTORY_CONFIG.FACTORY_1, FACTORY_CONFIG.FACTORY_2];
 
   const results = configs.map(function(config) {
-    runFactoryCore_(config);
+    const result = runFactoryCore_(config);
 
     const addFresh = readSheet_(config.addSheet);
     const deleteFresh = readSheet_(config.deleteSheet);
 
     return {
       factoryName: config.name,
+      skipped: !!(result && result.skipped),
       addCount: addFresh.rows.length,
       deleteCount: deleteFresh.rows.length
     };
