@@ -258,6 +258,9 @@
         background: var(--bg-soft);
         cursor: default;
       }
+      #dailyRecoveryStatusResultTable tbody td {
+        padding: 5px 8px;
+      }
       #dailyTable thead th.seq-header-cell,
       #dailyTable tbody td.seq-cell {
         width: 44px;
@@ -578,6 +581,14 @@
           <tbody></tbody>
         </table>
       </div>
+
+      <div id="dailyRecoveryStatusResultWrap" class="table-wrap" style="display:none;">
+        <table id="dailyRecoveryStatusResultTable">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <input type="file" id="dailyRecoveryStatusImageInput" accept="image/*" hidden />
 
       <div id="dailyPackagingDatePickerOverlay" class="week-picker-overlay" hidden>
         <div class="week-picker-box">
@@ -1180,6 +1191,10 @@
         dailyRecoveryResultSaveBtn: document.getElementById("dailyRecoveryResultSaveBtn"),
         dailyRecoveryResultDownloadBtn: document.getElementById("dailyRecoveryResultDownloadBtn"),
         dailyRecoveryAccumulateBtn: document.getElementById("dailyRecoveryAccumulateBtn"),
+        dailyRecoveryStatusResultBtn: document.getElementById("dailyRecoveryStatusResultBtn"),
+        dailyRecoveryStatusResultWrap: document.getElementById("dailyRecoveryStatusResultWrap"),
+        dailyRecoveryStatusResultTable: document.getElementById("dailyRecoveryStatusResultTable"),
+        dailyRecoveryStatusImageInput: document.getElementById("dailyRecoveryStatusImageInput"),
         dailyReceiptStatusReplaceBtn: document.getElementById("dailyReceiptStatusReplaceBtn"),
         dailyReceiptStatusCheckAddedBtn: document.getElementById("dailyReceiptStatusCheckAddedBtn"),
         dailyMeetingMaterialViewBtn: document.getElementById("dailyMeetingMaterialViewBtn"),
@@ -1567,6 +1582,7 @@
         el.dailyRecoveryResultActions.classList.remove("visible");
         el.dailyServiceShipmentResultViewBtn.classList.remove("active");
         el.dailyServiceShipmentResultActions.classList.remove("visible");
+        hideDailyRecoveryStatusResult_();
         dailyCheckedRowPositions = new Set();
         dailyCurrentRows = [];
         dailyCurrentAddedFactory = "";
@@ -1650,6 +1666,12 @@
       let dailyCurrentHeader = [];
       let dailyTableOptions_ = { checkable: false, editable: false };
       let dailySelectAllCheckboxEl_ = null;
+
+      // "회수현황" 표 — 일반 dailyTable(renderDailyTable_)과는 별도의
+      // 전용 표를 씁니다(이미지 칸에 썸네일+"추가" 버튼이 필요해서).
+      let dailyRecoveryStatusRows = [];
+      let dailyRecoveryStatusHeader = [];
+      let pendingDailyRecoveryStatusRowIndex = null;
 
       // 부품명 정렬 상태
       let dailySortColIndex = -1;
@@ -2920,6 +2942,187 @@
           setDailyStatus_("회수데이터 스프레드시트를 새 탭에서 열었습니다.", "ok");
         } catch (error) {
           setDailyStatus_("회수데이터 스프레드시트 열기 실패: " + error.message, "error");
+        }
+      }
+
+      // "회수현황" 버튼 — 연결한 "회수데이터" 스프레드시트의 "회수누적"
+      // 탭에서 회수 날짜/문서번호/품명/색상/부적합내역/포장라인·원인공정/
+      // 고객명과 이미지(Q열) 링크를 가져와 전용 표(dailyRecoveryStatusResultTable)에
+      // 보여줍니다. 일반 dailyTable(renderDailyTable_)은 모든 칸이 똑같은
+      // 텍스트 칸이라 이미지 칸에 썸네일+"추가" 버튼을 넣을 수 없어서
+      // 별도의 표를 씁니다.
+      function hideDailyRecoveryStatusResult_() {
+        el.dailyRecoveryStatusResultBtn.classList.remove("active");
+        el.dailyRecoveryStatusResultWrap.style.display = "none";
+        el.dailyRecoveryStatusResultTable.querySelector("thead").innerHTML = "";
+        el.dailyRecoveryStatusResultTable.querySelector("tbody").innerHTML = "";
+        dailyRecoveryStatusRows = [];
+        dailyRecoveryStatusHeader = [];
+      }
+
+      async function viewDailyRecoveryStatusResult_() {
+        const url = el.dailyRecoveryAccumulateWebappUrl.value.trim();
+
+        if (!url) {
+          setDailyStatus_("회수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("회수현황 불러오는 중...", "");
+
+        try {
+          const requestUrl = url + (url.includes("?") ? "&" : "?") + "action=recoveryStatus";
+          const response = await fetch(requestUrl);
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          dailyRecoveryStatusHeader = data.header || [];
+          dailyRecoveryStatusRows = data.rows || [];
+          renderDailyRecoveryStatusTable_();
+          setDailyStatus_("회수현황 " + dailyRecoveryStatusRows.length + "건 불러왔습니다.", "ok");
+        } catch (error) {
+          hideDailyRecoveryStatusResult_();
+          setDailyStatus_("회수현황 불러오기 실패: " + error.message, "error");
+        }
+      }
+
+      function renderDailyRecoveryStatusTable_() {
+        el.dailyRecoveryStatusResultWrap.style.display = "";
+
+        const thead = el.dailyRecoveryStatusResultTable.querySelector("thead");
+        const tbody = el.dailyRecoveryStatusResultTable.querySelector("tbody");
+
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+
+        const headTr = document.createElement("tr");
+        const seqTh = document.createElement("th");
+        seqTh.textContent = "구분";
+        headTr.appendChild(seqTh);
+        dailyRecoveryStatusHeader.forEach(function(label) {
+          const th = document.createElement("th");
+          th.textContent = label || "";
+          headTr.appendChild(th);
+        });
+        thead.appendChild(headTr);
+
+        const textColumnCount = dailyRecoveryStatusHeader.length - 1; // 마지막 열은 이미지
+
+        dailyRecoveryStatusRows.forEach(function(row, rowPos) {
+          const tr = document.createElement("tr");
+
+          const seqTd = document.createElement("td");
+          seqTd.textContent = String(rowPos + 1);
+          seqTd.classList.add("seq-cell");
+          tr.appendChild(seqTd);
+
+          for (let i = 0; i < textColumnCount; i++) {
+            const td = document.createElement("td");
+            const cellValue = row.values[i];
+            td.textContent = cellValue === null || cellValue === undefined ? "" : cellValue;
+            tr.appendChild(td);
+          }
+
+          const imageTd = document.createElement("td");
+          imageTd.appendChild(buildDailyRecoveryStatusImageCell_(row));
+          tr.appendChild(imageTd);
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      function buildDailyRecoveryStatusImageCell_(row) {
+        const wrap = document.createElement("div");
+        wrap.style.display = "flex";
+        wrap.style.alignItems = "center";
+        wrap.style.gap = "6px";
+
+        const imageUrl = String(row.values[row.values.length - 1] || "").trim();
+
+        if (imageUrl) {
+          const link = document.createElement("a");
+          link.href = imageUrl;
+          link.target = "_blank";
+          link.rel = "noopener";
+          const thumb = document.createElement("img");
+          thumb.src = imageUrl;
+          thumb.alt = "이미지";
+          thumb.style.maxHeight = "48px";
+          thumb.style.maxWidth = "64px";
+          thumb.style.objectFit = "cover";
+          thumb.style.borderRadius = "4px";
+          link.appendChild(thumb);
+          wrap.appendChild(link);
+        }
+
+        const addBtn = document.createElement("button");
+        addBtn.type = "button";
+        addBtn.textContent = "추가";
+        addBtn.addEventListener("click", function() {
+          pendingDailyRecoveryStatusRowIndex = row.rowIndex;
+          el.dailyRecoveryStatusImageInput.click();
+        });
+        wrap.appendChild(addBtn);
+
+        return wrap;
+      }
+
+      // 선택한 파일을 base64(데이터 URL의 ";base64," 뒤쪽)로 읽어옵니다.
+      function dailyFileToBase64_(file) {
+        return new Promise(function(resolve, reject) {
+          const reader = new FileReader();
+          reader.onload = function() {
+            const result = String(reader.result || "");
+            const marker = ";base64,";
+            const idx = result.indexOf(marker);
+            resolve(idx >= 0 ? result.slice(idx + marker.length) : result);
+          };
+          reader.onerror = function() { reject(reader.error || new Error("파일을 읽지 못했습니다.")); };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // "추가" 버튼으로 고른 사진 파일을 업로드합니다 — 연결된 "회수데이터"
+      // 스프레드시트의 "회수누적" 탭 Q열에 드라이브 공유 링크가 바로
+      // 저장되어 다른 사람도 그 링크로 사진을 볼 수 있습니다.
+      async function uploadDailyRecoveryStatusImage_(file) {
+        const rowIndex = pendingDailyRecoveryStatusRowIndex;
+        pendingDailyRecoveryStatusRowIndex = null;
+
+        if (!file || !rowIndex) return;
+
+        const url = el.dailyRecoveryAccumulateWebappUrl.value.trim();
+        if (!url) {
+          setDailyStatus_("회수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("사진 업로드 중...", "");
+
+        try {
+          const base64 = await dailyFileToBase64_(file);
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "uploadRecoveryImage",
+              rowIndex: rowIndex,
+              fileName: file.name,
+              mimeType: file.type || "image/jpeg",
+              base64: base64
+            })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          const targetRow = dailyRecoveryStatusRows.find(function(r) { return r.rowIndex === rowIndex; });
+          if (targetRow) {
+            targetRow.values[targetRow.values.length - 1] = data.url;
+          }
+          renderDailyRecoveryStatusTable_();
+          setDailyStatus_("사진 업로드 완료.", "ok");
+        } catch (error) {
+          setDailyStatus_("사진 업로드 실패: " + error.message, "error");
         }
       }
 
@@ -5664,6 +5867,7 @@
         if (isActive) {
           el.dailyRecoveryResultViewBtn.classList.remove("active");
           el.dailyRecoveryResultActions.classList.remove("visible");
+          hideDailyRecoveryStatusResult_();
           viewDailyRecoveryDoc_();
         } else {
           resetDailyTableView_();
@@ -5677,6 +5881,7 @@
 
         if (isActive) {
           el.dailyRecoveryViewBtn.classList.remove("active");
+          hideDailyRecoveryStatusResult_();
           viewDailyRecoveryResult_();
         } else {
           resetDailyTableView_();
@@ -5684,6 +5889,27 @@
       });
       el.dailyRecoveryResultSaveBtn.addEventListener("click", saveDailyRecoveryResultEdits);
       el.dailyRecoveryResultDownloadBtn.addEventListener("click", downloadDailyRecoveryResultExcel);
+      // "회수현황" — 위 둘과 같은 자리에 보여주는 전용 표(이미지 칸이
+      // 있어서 일반 dailyTable은 못 씀). 켤 때 다른 두 표는 꺼줍니다.
+      el.dailyRecoveryStatusResultBtn.addEventListener("click", function() {
+        const isActive = el.dailyRecoveryStatusResultBtn.classList.toggle("active");
+
+        if (isActive) {
+          el.dailyRecoveryViewBtn.classList.remove("active");
+          el.dailyRecoveryResultViewBtn.classList.remove("active");
+          el.dailyRecoveryResultActions.classList.remove("visible");
+          el.dailyThead.innerHTML = "";
+          el.dailyTbody.innerHTML = "";
+          viewDailyRecoveryStatusResult_();
+        } else {
+          resetDailyTableView_();
+        }
+      });
+      el.dailyRecoveryStatusImageInput.addEventListener("change", function(event) {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        uploadDailyRecoveryStatusImage_(file);
+      });
       el.dailyPackagingReplaceBtn.addEventListener("click", replaceDailyPackagingData);
       el.dailyPackagingDateCheckBtn.addEventListener("click", checkDailyPackagingDate);
       el.dailyPackagingDownloadBtn.addEventListener("click", downloadDailyPackagingExcel);

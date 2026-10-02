@@ -39,6 +39,17 @@
  * - doPost action="exportFull": 이 스프레드시트 파일 전체(모든 시트)를
  *   xlsx로 내보내 base64로 반환합니다(범용 백업용, 화면 버튼과는
  *   아직 연결되어 있지 않음).
+ * - doGet action="recoveryStatus": [신규] "일일업무 > 일일회수현황 >
+ *   회수현황" 버튼 전용. "회수누적" 탭에서 회수 날짜/문서번호/품명/
+ *   색상/부적합내역/포장라인·원인공정/고객명 7개 열을 헤더 이름으로
+ *   찾아 뽑고, 이미지는 헤더와 무관하게 Q열(17번째 열) 값을 그대로
+ *   돌려줍니다.
+ * - doPost action="uploadRecoveryImage": [신규] 위 "회수현황" 표의
+ *   "추가" 버튼에서 사진 파일을 직접 선택했을 때 전용. body에
+ *   rowIndex/fileName/mimeType/base64를 담아 보내면, 드라이브 폴더
+ *   ("회수현황_사진첨부", 없으면 자동 생성)에 저장하고 "링크 있는
+ *   사람 모두 보기" 권한을 준 뒤, 그 링크를 "회수누적" 탭의 Q열에
+ *   바로 씁니다(다른 사람도 그 링크로 사진을 볼 수 있음).
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -125,6 +136,10 @@ function doGet(e) {
       return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
     }
 
+    if (action === "recoveryStatus") {
+      return jsonOutput_(recoveryStatusAction_());
+    }
+
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
   } catch (error) {
     return jsonOutput_({ error: error.message });
@@ -140,6 +155,10 @@ function doPost(e) {
     if (action === "save") {
       const sheet = resolveSheet_(body.sheet, body.gid);
       return jsonOutput_(saveRowsAction_(sheet, body.rows || []));
+    }
+
+    if (action === "uploadRecoveryImage") {
+      return jsonOutput_(uploadRecoveryImageAction_(body));
     }
 
     if (action === "exportFull") {
@@ -166,6 +185,118 @@ function doPost(e) {
   } catch (error) {
     return jsonOutput_({ error: error.message });
   }
+}
+
+
+// "일일업무 > 일일회수현황 > 회수현황" 버튼 전용. 이 탭에서 7개 열을
+// 헤더 이름으로 찾아 보여주고, 이미지는 헤더 이름과 무관하게 Q열
+// (고정 위치)을 그대로 씁니다.
+const RECOVERY_STATUS_SHEET_NAME = "회수누적";
+const RECOVERY_STATUS_COLUMN_LABELS = [
+  "회수 날짜", "문서번호", "품명", "색상", "부적합내역", "포장라인/원인공정", "고객명"
+];
+const RECOVERY_STATUS_IMAGE_COLUMN = 17; // Q열(1-based)
+
+
+/**************************************************************
+ * "회수현황" 표 전용 — "회수누적" 탭에서 RECOVERY_STATUS_COLUMN_LABELS
+ * 7개 열을 헤더 이름으로 찾아 뽑고, 이미지는 Q열(RECOVERY_STATUS_
+ * IMAGE_COLUMN, 헤더 이름과 무관한 고정 위치) 값을 그대로 돌려줍니다.
+ * 7개 값과 이미지 값이 전부 빈 행은 건너뜁니다. rowIndex를 같이
+ * 돌려줘서, "추가" 업로드 시 그 행을 그대로 다시 찾아 Q열에 씁니다.
+ **************************************************************/
+function recoveryStatusAction_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RECOVERY_STATUS_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error("'" + RECOVERY_STATUS_SHEET_NAME + "' 탭을 찾을 수 없습니다.");
+  }
+
+  const outputHeader = RECOVERY_STATUS_COLUMN_LABELS.concat(["이미지"]);
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastRow < 2 || lastColumn < 1) {
+    return { sheet: RECOVERY_STATUS_SHEET_NAME, header: outputHeader, rows: [] };
+  }
+
+  const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  const header = values[0];
+  const columnIndexes = RECOVERY_STATUS_COLUMN_LABELS.map(function(label) {
+    return header.indexOf(label);
+  });
+  const imageColIndex = RECOVERY_STATUS_IMAGE_COLUMN - 1;
+
+  const rows = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const sourceRow = values[i];
+    const pickedValues = columnIndexes.map(function(idx) {
+      return idx === -1 ? "" : sourceRow[idx];
+    });
+    const imageValue = imageColIndex < sourceRow.length ? sourceRow[imageColIndex] : "";
+
+    const isBlankRow = pickedValues.every(function(v) { return normalizeText_(v) === ""; }) &&
+      normalizeText_(imageValue) === "";
+
+    if (isBlankRow) continue;
+
+    rows.push({ rowIndex: i + 1, values: pickedValues.concat([imageValue]) });
+  }
+
+  return { sheet: RECOVERY_STATUS_SHEET_NAME, header: outputHeader, rows: rows };
+}
+
+
+/**************************************************************
+ * "회수현황" 표의 "추가" 버튼 — 고른 사진 파일을 드라이브 폴더
+ * ("회수현황_사진첨부", 없으면 자동 생성)에 저장하고 "링크 있는 사람
+ * 모두 보기"로 공유한 뒤, 그 링크를 "회수누적" 탭의 Q열(고정 위치)에
+ * 바로 씁니다. rowIndex는 recoveryStatus 응답의 실제 시트 행 번호를
+ * 그대로 돌려받아 사용합니다.
+ **************************************************************/
+function getOrCreateRecoveryImageFolder_() {
+  const name = "회수현황_사진첨부";
+  const folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(name);
+}
+
+function uploadRecoveryImageAction_(body) {
+  const rowIndex = Number(body.rowIndex);
+  const base64 = String(body.base64 || "");
+
+  if (!rowIndex || rowIndex < 2) {
+    throw new Error("rowIndex가 올바르지 않습니다.");
+  }
+
+  if (!base64) {
+    throw new Error("업로드할 파일 데이터가 없습니다.");
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RECOVERY_STATUS_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error("'" + RECOVERY_STATUS_SHEET_NAME + "' 탭을 찾을 수 없습니다.");
+  }
+
+  if (rowIndex > sheet.getLastRow()) {
+    throw new Error("시트 범위를 벗어난 행입니다: " + rowIndex);
+  }
+
+  const fileName = String(body.fileName || "upload");
+  const mimeType = String(body.mimeType || "image/jpeg");
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+
+  const folder = getOrCreateRecoveryImageFolder_();
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  const url = file.getUrl();
+
+  sheet.getRange(rowIndex, RECOVERY_STATUS_IMAGE_COLUMN).setValue(url);
+
+  return { ok: true, url: url, rowIndex: rowIndex };
 }
 
 
