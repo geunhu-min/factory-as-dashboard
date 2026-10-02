@@ -25,10 +25,14 @@
  *   매기고, 그룹 끝마다 "번호~수량"을 병합한 "업체명 합계(건수)" 행에
  *   금액/패널티/클레임계 합계를 채웁니다. 맨 끝에는 세 그룹 전체
  *   합계 행을 추가합니다. 헤더/업체별 합계 행은 흰색을 어둡게 한
- *   배경+굵은 글씨로 강조하고, 전체 글꼴은 맑은 고딕 11입니다. 자세한
- *   내용은 cleanMonthlyInhouseListAction_ 참고.
+ *   배경+굵은 글씨로 강조하고, 전체 글꼴은 맑은 고딕 11입니다. 이
+ *   결과를 담는 시트는 실제 건수를 담아 "정리(N)"으로 이름 붙습니다
+ *   (종합(N) 등과 같은 규칙). 그와 별도로 "아름산업(N)"/"바른산업(N)"/
+ *   "다올산업(N)" 단독 시트도 각각 만들어서, 그 업체 데이터만(묶음
+ *   합계 없이) 1번부터 다시 번호 매겨 같은 서식으로 담습니다. 자세한
+ *   내용은 cleanMonthlyInhouseListAction_/writeCompanySheet_ 참고.
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
- *   "정리" 시트 하나만 담은 xlsx를 base64로 반환합니다(서식/글꼴
+ *   "정리(N)" 시트 하나만 담은 xlsx를 base64로 반환합니다(서식/글꼴
  *   그대로 유지됨).
  *
  * 배포 방법
@@ -146,7 +150,10 @@ function doPost(e) {
     }
 
     if (action === "exportResult") {
-      return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([CLEAN_RESULT_SHEET_NAME], "월마감내작건정리"));
+      // "정리"는 자료정리 때마다 "정리(N)"으로 이름이 바뀌므로, 정확한
+      // 이름 대신 패턴으로 찾습니다.
+      const resultSheet = findOrCreateSuffixedSheet_(SpreadsheetApp.getActiveSpreadsheet(), CLEAN_RESULT_SHEET_NAME);
+      return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([resultSheet.getName()], "월마감내작건정리"));
     }
 
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
@@ -393,7 +400,7 @@ function cleanMonthlyInhouseListAction_() {
     grandTotalRowNumber = outputRows.length + 1; // +1은 헤더 행만큼의 오프셋
   }
 
-  const resultSheet = getOrCreateSheet_(ss, CLEAN_RESULT_SHEET_NAME);
+  const resultSheet = findOrCreateSuffixedSheet_(ss, CLEAN_RESULT_SHEET_NAME);
 
   // clear()는 셀 서식은 지워도 열 너비는 그대로 두지만, 혹시 모를 경우에
   // 대비해 직접 맞춰둔 열 너비를 미리 기억해뒀다가 다시 쓴 뒤 그대로
@@ -473,7 +480,91 @@ function cleanMonthlyInhouseListAction_() {
     resultSheet.getRange(rowNumber, claimTotalColIndex + 1).setFontColor(CLAIM_TOTAL_FONT_COLOR);
   });
 
-  return { ok: true, resultSheet: CLEAN_RESULT_SHEET_NAME, rowCount: pulledRows.length };
+  // "정리"는 매번 실제 건수를 담아 "정리(N)"으로 이름을 바꿉니다
+  // (종합(N)/마감(N) 등 이 프로젝트의 다른 시트들과 같은 규칙).
+  const resultSheetNewName = CLEAN_RESULT_SHEET_NAME + "(" + pulledRows.length + ")";
+  if (resultSheet.getName() !== resultSheetNewName) {
+    resultSheet.setName(resultSheetNewName);
+  }
+
+  // 업체별(아름산업/바른산업/다올산업) 단독 시트도 각각
+  // "업체명(건수)"로 따로 만듭니다 — 묶음 합계/병합/구분 행 없이,
+  // 그 업체 데이터만 1번부터 다시 번호를 매겨서 담습니다.
+  PACKAGE_GROUPS.forEach(function(group, idx) {
+    writeCompanySheet_(
+      ss, group.companyName, finalHeader, matchedGroups[idx], amountPulledPos,
+      columnCount, colorColIndex, amountColIndex, penaltyColIndex, claimTotalColIndex,
+      summaryBackgroundHex
+    );
+  });
+
+  return { ok: true, resultSheet: resultSheet.getName(), rowCount: pulledRows.length };
+}
+
+
+/**************************************************************
+ * 업체별(아름산업/바른산업/다올산업) 단독 시트 하나를 채웁니다.
+ * "정리" 시트와 같은 열 구성/서식(가운데 정렬, 맑은 고딕 11, 색상
+ * 텍스트 서식, 금액/패널티/클레임 계 회계 서식, 테두리, 헤더
+ * 배경+굵게)을 적용하되, 업체가 하나뿐이라 묶음 합계/병합/구분 행은
+ * 두지 않고 그 업체 데이터만 1번부터 번호를 다시 매겨 담습니다.
+ * 끝나면 "업체명(실제 건수)"로 탭 이름을 바꿉니다.
+ **************************************************************/
+function writeCompanySheet_(
+  ss, companyName, finalHeader, groupRows, amountPulledPos,
+  columnCount, colorColIndex, amountColIndex, penaltyColIndex, claimTotalColIndex,
+  summaryBackgroundHex
+) {
+  const dataRows = groupRows.map(function(pulledValues, idx) {
+    return [idx + 1]
+      .concat(pulledValues.slice(0, amountPulledPos + 1))
+      .concat([PENALTY_AMOUNT, ""])
+      .concat(pulledValues.slice(amountPulledPos + 1));
+  });
+
+  const sheet = findOrCreateSuffixedSheet_(ss, companyName);
+
+  const preservedWidths = [];
+  const widthColumnCount = Math.max(sheet.getLastColumn(), columnCount);
+  for (let col = 1; col <= widthColumnCount; col++) {
+    preservedWidths.push(sheet.getColumnWidth(col));
+  }
+
+  sheet.clear();
+
+  if (colorColIndex !== -1 && dataRows.length) {
+    sheet.getRange(2, colorColIndex + 1, dataRows.length, 1).setNumberFormat("@");
+  }
+
+  sheet.getRange(1, 1, 1, columnCount).setValues([finalHeader]);
+  if (dataRows.length) {
+    sheet.getRange(2, 1, dataRows.length, columnCount).setValues(dataRows);
+  }
+
+  preservedWidths.forEach(function(width, idx) {
+    sheet.setColumnWidth(idx + 1, width);
+  });
+
+  const totalRowCount = dataRows.length + 1;
+  sheet.getRange(1, 1, totalRowCount, columnCount)
+    .setHorizontalAlignment("center")
+    .setFontFamily(RESULT_FONT_FAMILY)
+    .setFontSize(RESULT_FONT_SIZE);
+
+  [amountColIndex, penaltyColIndex, claimTotalColIndex].forEach(function(colIndex) {
+    sheet.getRange(1, colIndex + 1, totalRowCount, 1).setHorizontalAlignment("right");
+    if (dataRows.length) {
+      sheet.getRange(2, colIndex + 1, dataRows.length, 1).setNumberFormat(AMOUNT_NUMBER_FORMAT);
+    }
+  });
+
+  sheet.getRange(1, 1, 1, columnCount).setBackground(summaryBackgroundHex).setFontWeight("bold");
+  sheet.getRange(1, 1, totalRowCount, columnCount).setBorder(true, true, true, true, true, true);
+
+  const newName = companyName + "(" + dataRows.length + ")";
+  if (sheet.getName() !== newName) {
+    sheet.setName(newName);
+  }
 }
 
 
@@ -565,6 +656,18 @@ function getOrCreateSheet_(ss, name) {
 }
 
 
+/**************************************************************
+ * "정리"/"아름산업"/"바른산업"/"다올산업"처럼, 자료정리를 다시 실행할
+ * 때마다 이름 뒤에 "(건수)"가 붙는 탭을 찾습니다(처음 실행이라 아직
+ * 숫자가 안 붙은 경우도 포함). 아예 없으면 라벨 그대로 새로 만듭니다.
+ **************************************************************/
+function findOrCreateSuffixedSheet_(ss, label) {
+  const pattern = new RegExp("^" + label + "(\\(\\d*\\))?$");
+  const existing = ss.getSheets().find(function(sheet) { return pattern.test(sheet.getName()); });
+  return existing || ss.insertSheet(label);
+}
+
+
 function normalizeText_(value) {
   return String(value === null || value === undefined ? "" : value).trim();
 }
@@ -594,8 +697,22 @@ function resolveSheet_(sheetName, gidParam) {
 
   if (sheetName) {
     const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) throw new Error("'" + sheetName + "' 시트를 찾을 수 없습니다.");
-    return sheet;
+    if (sheet) return sheet;
+
+    // "정리"/"아름산업"/"바른산업"/"다올산업"은 자료정리 때마다
+    // "이름(건수)"로 이름이 바뀌므로, 정확한 이름을 못 찾으면 그
+    // 패턴으로 한 번 더 찾아봅니다(화면의 "정리자료"/"정리파일
+    // 다운로드"가 매번 바뀌는 정확한 이름을 몰라도 되도록).
+    const suffixableLabels = [CLEAN_RESULT_SHEET_NAME].concat(
+      PACKAGE_GROUPS.map(function(group) { return group.companyName; })
+    );
+    if (suffixableLabels.indexOf(sheetName) !== -1) {
+      const pattern = new RegExp("^" + sheetName + "(\\(\\d*\\))?$");
+      const matched = ss.getSheets().find(function(s) { return pattern.test(s.getName()); });
+      if (matched) return matched;
+    }
+
+    throw new Error("'" + sheetName + "' 시트를 찾을 수 없습니다.");
   }
 
   const sheets = ss.getSheets();
