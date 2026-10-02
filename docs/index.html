@@ -261,6 +261,110 @@
       #dailyRecoveryStatusResultTable tbody td {
         padding: 5px 8px;
       }
+
+      /* "회수현황" 이미지 보기/삭제용 라이트박스 — 메인 대시보드
+         (daily-stable-v23.js의 dailyAttachLightbox)와 같은 느낌으로
+         맞췄습니다. 이 페이지는 그 파일을 쓰지 않아서(별도 대시보드)
+         직접 들고 왔고, 행마다 이미지가 하나뿐이라 여러 장 넘기는
+         이전/다음 버튼은 뺐습니다. */
+      .daily-lightbox-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(10, 12, 16, 0.92);
+        z-index: 999;
+        flex-direction: column;
+      }
+      .daily-lightbox-overlay.open { display: flex; }
+      .daily-lightbox-header {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        color: #e5e7eb;
+        background: linear-gradient(rgba(0, 0, 0, 0.55), transparent);
+        z-index: 3;
+      }
+      .daily-lightbox-name { font-size: 14px; font-weight: 700; }
+      .daily-lightbox-header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .daily-lightbox-icon-btn {
+        min-width: 38px;
+        height: 38px;
+        padding: 0 12px;
+        border-radius: 10px;
+        border: 0;
+        background: rgba(255, 255, 255, 0.08);
+        color: #e5e7eb;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .daily-lightbox-icon-btn:hover { background: rgba(255, 255, 255, 0.16); }
+      .daily-lightbox-icon-btn.daily-lightbox-delete:hover {
+        background: rgba(229, 72, 72, 0.18);
+        color: #ff8a8a;
+      }
+      .daily-lightbox-stage {
+        flex: 1;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        position: relative;
+      }
+      .daily-lightbox-media-wrap {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+      }
+      .daily-lightbox-media {
+        display: block;
+        max-width: 88vw;
+        max-height: 78vh;
+        border-radius: 10px;
+        transition: transform 0.12s;
+        transform-origin: left center;
+        flex: 0 0 auto;
+        margin: auto;
+      }
+      .daily-lightbox-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 14px;
+        color: #e5e7eb;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+      }
+      .daily-lightbox-footer button {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        border: 0;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        font-size: 16px;
+        cursor: pointer;
+      }
+      .daily-lightbox-footer button:hover { background: rgba(255, 255, 255, 0.22); }
+      .daily-lightbox-zoom-pct {
+        font-size: 13px;
+        font-weight: 700;
+        min-width: 44px;
+        text-align: center;
+      }
       #dailyTable thead th.seq-header-cell,
       #dailyTable tbody td.seq-cell {
         width: 44px;
@@ -3008,7 +3112,11 @@
 
         const textColumnCount = dailyRecoveryStatusHeader.length - 1; // 마지막 열은 이미지
 
-        dailyRecoveryStatusRows.forEach(function(row, rowPos) {
+        // 최근 등록한 행이 위에 오도록 시트 순서를 뒤집어서 보여줍니다
+        // (rowIndex는 그대로라 업로드/삭제 시 행을 찾는 데는 영향 없음).
+        const displayRows = dailyRecoveryStatusRows.slice().reverse();
+
+        displayRows.forEach(function(row, rowPos) {
           const tr = document.createElement("tr");
 
           const seqTd = document.createElement("td");
@@ -3040,10 +3148,9 @@
         const imageUrl = String(row.values[row.values.length - 1] || "").trim();
 
         if (imageUrl) {
-          const link = document.createElement("a");
-          link.href = imageUrl;
-          link.target = "_blank";
-          link.rel = "noopener";
+          const thumbBtn = document.createElement("button");
+          thumbBtn.type = "button";
+          thumbBtn.style.cssText = "padding:0;border:0;background:transparent;cursor:pointer;line-height:0;";
           const thumb = document.createElement("img");
           thumb.src = imageUrl;
           thumb.alt = "이미지";
@@ -3051,8 +3158,11 @@
           thumb.style.maxWidth = "64px";
           thumb.style.objectFit = "cover";
           thumb.style.borderRadius = "4px";
-          link.appendChild(thumb);
-          wrap.appendChild(link);
+          thumbBtn.appendChild(thumb);
+          thumbBtn.addEventListener("click", function() {
+            openDailyRecoveryLightbox_(row);
+          });
+          wrap.appendChild(thumbBtn);
         }
 
         const addBtn = document.createElement("button");
@@ -3082,6 +3192,53 @@
         });
       }
 
+      // 메인 대시보드(app.js의 ensureMediaProgressOverlay/updateMediaProgress/
+      // hideMediaProgress)와 같은 느낌의 업로드 진행률 표시 — 이 페이지는
+      // 그 파일을 쓰지 않아서 같은 모양으로 따로 만들었습니다. fetch 업로드는
+      // 실제 전송 비율을 알 수 없어서(ratio는 항상 null), 막대가 계속
+      // 움직이는 "진행 중" 표시 + 경과 시간만 보여줍니다(메인 대시보드의
+      // 사진 업로드와 동일한 방식).
+      function dailyEnsureMediaProgressOverlay_() {
+        let overlay = document.getElementById("dailyMediaProgressOverlay");
+        if (!overlay) {
+          overlay = document.createElement("div");
+          overlay.id = "dailyMediaProgressOverlay";
+          overlay.style.cssText = "position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(15,23,42,.94);color:#fff;padding:18px 26px;border-radius:12px;font-size:14px;font-weight:700;z-index:10000;box-shadow:0 10px 30px rgba(0,0,0,.35);text-align:center;min-width:280px;max-width:420px;line-height:1.6";
+          overlay.innerHTML =
+            '<div class="daily-media-progress-text"></div>' +
+            '<div style="margin-top:10px;height:8px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden">' +
+              '<div class="daily-media-progress-bar" style="height:100%;width:0%;background:#1f73e8;border-radius:4px;transition:width .2s linear"></div>' +
+            '</div>';
+          document.body.appendChild(overlay);
+        }
+        return overlay;
+      }
+
+      function dailyUpdateMediaProgress_(label, fileName, ratio, elapsedSeconds) {
+        const overlay = dailyEnsureMediaProgressOverlay_();
+        const pctText = ratio != null ? " " + Math.max(0, Math.min(100, Math.round(ratio * 100))) + "%" : "";
+        const elapsedText = elapsedSeconds != null ? " · 경과 " + Math.round(elapsedSeconds) + "초" : "";
+        overlay.querySelector(".daily-media-progress-text").textContent =
+          "\"" + fileName + "\" " + label + "..." + pctText + elapsedText;
+
+        const bar = overlay.querySelector(".daily-media-progress-bar");
+        if (ratio != null) {
+          bar.style.width = Math.max(0, Math.min(100, ratio * 100)) + "%";
+        } else if (!bar.dataset.indeterminate) {
+          bar.dataset.indeterminate = "1";
+          bar.style.width = "40%";
+          bar.animate(
+            [{ transform: "translateX(-100%)" }, { transform: "translateX(250%)" }],
+            { duration: 1100, iterations: Infinity }
+          );
+        }
+      }
+
+      function dailyHideMediaProgress_() {
+        const overlay = document.getElementById("dailyMediaProgressOverlay");
+        if (overlay) overlay.remove();
+      }
+
       // "추가" 버튼으로 고른 사진 파일을 업로드합니다 — 연결된 "회수데이터"
       // 스프레드시트의 "회수누적" 탭 Q열에 드라이브 공유 링크가 바로
       // 저장되어 다른 사람도 그 링크로 사진을 볼 수 있습니다.
@@ -3098,6 +3255,12 @@
         }
 
         setDailyStatus_("사진 업로드 중...", "");
+
+        const startedAt = Date.now();
+        dailyUpdateMediaProgress_("업로드 중", file.name, null, 0);
+        const progressTimer = setInterval(function() {
+          dailyUpdateMediaProgress_("업로드 중", file.name, null, (Date.now() - startedAt) / 1000);
+        }, 1000);
 
         try {
           const base64 = await dailyFileToBase64_(file);
@@ -3123,6 +3286,161 @@
           setDailyStatus_("사진 업로드 완료.", "ok");
         } catch (error) {
           setDailyStatus_("사진 업로드 실패: " + error.message, "error");
+        } finally {
+          clearInterval(progressTimer);
+          dailyHideMediaProgress_();
+        }
+      }
+
+      // "회수현황" 이미지 보기/삭제 — 메인 대시보드의 사진 라이트박스와
+      // 같은 모양/조작(확대·축소, 새 창에서 보기, 다운로드, 삭제)으로
+      // 만들었습니다. 행마다 이미지가 하나뿐이라 이전/다음 넘기기는
+      // 없습니다.
+      let dailyRecoveryLightboxRow = null;
+      let dailyRecoveryLightboxZoom = 1;
+
+      function dailyRecoveryLightboxImageUrl_() {
+        if (!dailyRecoveryLightboxRow) return "";
+        return String(dailyRecoveryLightboxRow.values[dailyRecoveryLightboxRow.values.length - 1] || "");
+      }
+
+      function ensureDailyRecoveryLightbox_() {
+        let overlay = document.getElementById("dailyRecoveryLightbox");
+        if (overlay) return overlay;
+
+        overlay = document.createElement("div");
+        overlay.id = "dailyRecoveryLightbox";
+        overlay.className = "daily-lightbox-overlay";
+        overlay.innerHTML =
+          '<div class="daily-lightbox-header">' +
+            '<div class="daily-lightbox-name">이미지</div>' +
+            '<div class="daily-lightbox-header-actions">' +
+              '<button type="button" class="daily-lightbox-icon-btn daily-lightbox-open-drive">새 창에서 보기</button>' +
+              '<button type="button" class="daily-lightbox-icon-btn daily-lightbox-download">다운로드</button>' +
+              '<button type="button" class="daily-lightbox-icon-btn daily-lightbox-delete">삭제</button>' +
+              '<button type="button" class="daily-lightbox-icon-btn daily-lightbox-close">닫기</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="daily-lightbox-stage">' +
+            '<div class="daily-lightbox-media-wrap"></div>' +
+          '</div>' +
+          '<div class="daily-lightbox-footer">' +
+            '<button type="button" class="daily-lightbox-zoom-out">−</button>' +
+            '<span class="daily-lightbox-zoom-pct">100%</span>' +
+            '<button type="button" class="daily-lightbox-zoom-in">+</button>' +
+          '</div>';
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener("click", function(event) {
+          if (event.target === overlay) closeDailyRecoveryLightbox_();
+        });
+        overlay.querySelector(".daily-lightbox-close").addEventListener("click", closeDailyRecoveryLightbox_);
+        overlay.querySelector(".daily-lightbox-zoom-out").addEventListener("click", function() { zoomDailyRecoveryLightbox_(-1); });
+        overlay.querySelector(".daily-lightbox-zoom-in").addEventListener("click", function() { zoomDailyRecoveryLightbox_(1); });
+        overlay.querySelector(".daily-lightbox-open-drive").addEventListener("click", function() {
+          const url = dailyRecoveryLightboxImageUrl_();
+          if (url) window.open(url, "_blank");
+        });
+        overlay.querySelector(".daily-lightbox-download").addEventListener("click", function() {
+          const url = dailyRecoveryLightboxImageUrl_();
+          if (url) downloadDailyRecoveryLightboxImage_(url);
+        });
+        overlay.querySelector(".daily-lightbox-delete").addEventListener("click", deleteDailyRecoveryStatusImage_);
+        document.addEventListener("keydown", function(event) {
+          if (!overlay.classList.contains("open")) return;
+          if (event.key === "Escape") closeDailyRecoveryLightbox_();
+        });
+
+        return overlay;
+      }
+
+      function openDailyRecoveryLightbox_(row) {
+        dailyRecoveryLightboxRow = row;
+        dailyRecoveryLightboxZoom = 1;
+
+        const overlay = ensureDailyRecoveryLightbox_();
+        const mediaWrap = overlay.querySelector(".daily-lightbox-media-wrap");
+        mediaWrap.innerHTML = "";
+
+        const img = document.createElement("img");
+        img.className = "daily-lightbox-media";
+        img.src = dailyRecoveryLightboxImageUrl_();
+        img.alt = "이미지";
+        mediaWrap.appendChild(img);
+
+        applyDailyRecoveryLightboxZoom_();
+        overlay.classList.add("open");
+      }
+
+      function closeDailyRecoveryLightbox_() {
+        const overlay = document.getElementById("dailyRecoveryLightbox");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        const mediaWrap = overlay.querySelector(".daily-lightbox-media-wrap");
+        if (mediaWrap) mediaWrap.innerHTML = "";
+        dailyRecoveryLightboxRow = null;
+      }
+
+      function zoomDailyRecoveryLightbox_(dir) {
+        dailyRecoveryLightboxZoom = Math.min(3, Math.max(1, dailyRecoveryLightboxZoom + dir * 0.25));
+        applyDailyRecoveryLightboxZoom_();
+      }
+
+      function applyDailyRecoveryLightboxZoom_() {
+        const overlay = document.getElementById("dailyRecoveryLightbox");
+        if (!overlay) return;
+        const media = overlay.querySelector(".daily-lightbox-media");
+        if (media) media.style.transform = "scale(" + dailyRecoveryLightboxZoom + ")";
+        const pct = overlay.querySelector(".daily-lightbox-zoom-pct");
+        if (pct) pct.textContent = Math.round(dailyRecoveryLightboxZoom * 100) + "%";
+      }
+
+      function downloadDailyRecoveryLightboxImage_(url) {
+        fetch(url).then(function(res) {
+          if (!res.ok) throw new Error("fetch failed");
+          return res.blob();
+        }).then(function(blob) {
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = "회수현황_이미지.jpg";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 1000);
+        }).catch(function() {
+          window.open(url, "_blank");
+        });
+      }
+
+      async function deleteDailyRecoveryStatusImage_() {
+        const row = dailyRecoveryLightboxRow;
+        if (!row) return;
+        if (!confirm("등록한 이미지를 삭제할까요?")) return;
+
+        const url = el.dailyRecoveryAccumulateWebappUrl.value.trim();
+        if (!url) {
+          setDailyStatus_("회수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        setDailyStatus_("이미지 삭제 중...", "");
+
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "deleteRecoveryImage", rowIndex: row.rowIndex })
+          });
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          row.values[row.values.length - 1] = "";
+          closeDailyRecoveryLightbox_();
+          renderDailyRecoveryStatusTable_();
+          setDailyStatus_("이미지를 삭제했습니다.", "ok");
+        } catch (error) {
+          setDailyStatus_("이미지 삭제 실패: " + error.message, "error");
         }
       }
 

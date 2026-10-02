@@ -50,6 +50,9 @@
  *   ("회수현황_사진첨부", 없으면 자동 생성)에 저장하고 "링크 있는
  *   사람 모두 보기" 권한을 준 뒤, 그 링크를 "회수누적" 탭의 Q열에
  *   바로 씁니다(다른 사람도 그 링크로 사진을 볼 수 있음).
+ * - doPost action="deleteRecoveryImage": [신규] "회수현황" 표의 라이트박스
+ *   "삭제" 버튼 전용. body의 rowIndex로 Q열 값을 비우고, 그 값이 이
+ *   파일이 올린 드라이브 링크면 휴지통으로 보냅니다.
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -159,6 +162,10 @@ function doPost(e) {
 
     if (action === "uploadRecoveryImage") {
       return jsonOutput_(uploadRecoveryImageAction_(body));
+    }
+
+    if (action === "deleteRecoveryImage") {
+      return jsonOutput_(deleteRecoveryImageAction_(body));
     }
 
     if (action === "exportFull") {
@@ -297,6 +304,54 @@ function uploadRecoveryImageAction_(body) {
   sheet.getRange(rowIndex, RECOVERY_STATUS_IMAGE_COLUMN).setValue(url);
 
   return { ok: true, url: url, rowIndex: rowIndex };
+}
+
+
+/**************************************************************
+ * "회수현황" 표의 라이트박스 "삭제" 버튼 — Q열 값을 비우고, 그 값이
+ * 이 파일이 올린 드라이브 링크면(파일 ID를 추출할 수 있으면) 휴지통으로
+ * 보냅니다. 이미 지워졌거나 권한이 없는 파일이면(이미 삭제됨 등)
+ * 셀만 비우고 조용히 넘어갑니다.
+ **************************************************************/
+function driveFileIdFromRecoveryUrl_(url) {
+  const text = String(url || "");
+  const match = text.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+    text.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+    text.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : "";
+}
+
+function deleteRecoveryImageAction_(body) {
+  const rowIndex = Number(body.rowIndex);
+
+  if (!rowIndex || rowIndex < 2) {
+    throw new Error("rowIndex가 올바르지 않습니다.");
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RECOVERY_STATUS_SHEET_NAME);
+
+  if (!sheet) {
+    throw new Error("'" + RECOVERY_STATUS_SHEET_NAME + "' 탭을 찾을 수 없습니다.");
+  }
+
+  if (rowIndex > sheet.getLastRow()) {
+    throw new Error("시트 범위를 벗어난 행입니다: " + rowIndex);
+  }
+
+  const cell = sheet.getRange(rowIndex, RECOVERY_STATUS_IMAGE_COLUMN);
+  const existingUrl = String(cell.getValue() || "");
+  cell.setValue("");
+
+  const fileId = driveFileIdFromRecoveryUrl_(existingUrl);
+  if (fileId) {
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (ignore) {
+      // 이미 지워졌거나 접근 권한이 없으면 셀만 비운 채로 넘어갑니다.
+    }
+  }
+
+  return { ok: true, rowIndex: rowIndex };
 }
 
 
