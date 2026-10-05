@@ -3139,6 +3139,25 @@
         });
       }
 
+      // 드라이브 "보기" 링크(file.getUrl()가 주는 https://drive.google.com/file/d/ID/view
+      // 형태)는 <img src>로 그대로 쓸 수 없어서(브라우저가 그 페이지 자체를
+      // 이미지로 못 그림) 썸네일/라이트박스 표시용으로는 이 링크에서 파일
+      // ID만 뽑아 lh3.googleusercontent.com 썸네일 주소로 바꿔서 씁니다
+      // (메인 대시보드의 resolveImageLinkUrl과 같은 방식). "새 창에서 보기"는
+      // 원래 링크를 그대로 쓰면 되니 바꾸지 않습니다.
+      function dailyRecoveryDriveFileId_(url) {
+        const text = String(url || "");
+        const match = text.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+          text.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+          text.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        return match ? match[1] : "";
+      }
+
+      function dailyRecoveryImageDisplayUrl_(url) {
+        const id = dailyRecoveryDriveFileId_(url);
+        return id ? ("https://lh3.googleusercontent.com/d/" + id + "=s1600") : url;
+      }
+
       function buildDailyRecoveryStatusImageCell_(row) {
         const wrap = document.createElement("div");
         wrap.style.display = "flex";
@@ -3152,7 +3171,7 @@
           thumbBtn.type = "button";
           thumbBtn.style.cssText = "padding:0;border:0;background:transparent;cursor:pointer;line-height:0;";
           const thumb = document.createElement("img");
-          thumb.src = imageUrl;
+          thumb.src = dailyRecoveryImageDisplayUrl_(imageUrl);
           thumb.alt = "이미지";
           thumb.style.maxHeight = "48px";
           thumb.style.maxWidth = "64px";
@@ -3364,7 +3383,7 @@
 
         const img = document.createElement("img");
         img.className = "daily-lightbox-media";
-        img.src = dailyRecoveryLightboxImageUrl_();
+        img.src = dailyRecoveryImageDisplayUrl_(dailyRecoveryLightboxImageUrl_());
         img.alt = "이미지";
         mediaWrap.appendChild(img);
 
@@ -3396,7 +3415,10 @@
       }
 
       function downloadDailyRecoveryLightboxImage_(url) {
-        fetch(url).then(function(res) {
+        const id = dailyRecoveryDriveFileId_(url);
+        const downloadUrl = id ? ("https://drive.google.com/uc?export=download&id=" + id) : url;
+
+        fetch(downloadUrl).then(function(res) {
           if (!res.ok) throw new Error("fetch failed");
           return res.blob();
         }).then(function(blob) {
@@ -3409,7 +3431,7 @@
           document.body.removeChild(a);
           setTimeout(function() { URL.revokeObjectURL(objectUrl); }, 1000);
         }).catch(function() {
-          window.open(url, "_blank");
+          window.open(downloadUrl, "_blank");
         });
       }
 
