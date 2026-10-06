@@ -3134,7 +3134,13 @@
           for (let i = 0; i < textColumnCount; i++) {
             const td = document.createElement("td");
             const cellValue = row.values[i];
-            td.textContent = cellValue === null || cellValue === undefined ? "" : cellValue;
+            // 서버가 날짜를 "yyyy-MM-dd" 문자열로 이미 맞춰서 보내지만,
+            // 혹시라도 다른 열에서 Date가 그대로 넘어와 ISO 문자열
+            // ("2026-10-05T15:00:00.000Z")이 되는 경우까지 대비해 일반
+            // dailyTable과 똑같이 한 번 더 걸러서 한국 날짜로 표시합니다.
+            td.textContent = looksLikeIsoDateTime_(cellValue)
+              ? formatDateKST(cellValue)
+              : (cellValue === null || cellValue === undefined ? "" : cellValue);
             tr.appendChild(td);
           }
 
