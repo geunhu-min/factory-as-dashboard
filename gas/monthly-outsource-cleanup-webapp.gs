@@ -25,9 +25,11 @@
  *   화면이 일일업무 페이지에 저장해둔 값을 그대로 같이 보냄)이 있으면,
  *   "회수누적" 탭에서 문서번호+품명이 이 시트의 접수번호+제품코드와
  *   똑같은 건의 사진(Q열 링크)을 찾아 원인별 상세 시트 데이터 끝에서
- *   두 줄 아래부터 가로 6장씩 붙이고, 그 아래 칸에 순번을 적습니다
- *   (insertCauseSheetImages_). URL이 없거나 불러오기에 실패해도
- *   자료정리 자체는 그대로 진행합니다(사진만 생략, 응답의
+ *   두 줄 아래부터 가로 6장씩 붙입니다(insertCauseSheetImages_). 칸
+ *   위치는 그 건의 실제 순번 기준(압축하지 않음 — 9번만 있으면 9번
+ *   자리에 옴)이고, 번호는 사진 바로 위 칸에 적습니다. 사진은 세로
+ *   약 5.5cm(원본 비율 고정)로 표시합니다. URL이 없거나 불러오기에
+ *   실패해도 자료정리 자체는 그대로 진행합니다(사진만 생략, 응답의
  *   recoveryImageNote에 사유가 담김).
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
  *   "시트1"과 "시트2"(양식 시트)을 뺀 나머지 모든 시트(종합 + 원인별
@@ -113,7 +115,10 @@ const RECOVERY_DOC_NO_COLUMN_LABEL = "문서번호"; // 회수누적 탭 기준
 const RECOVERY_PRODUCT_COLUMN_LABEL = "품명"; // 회수누적 탭 기준
 const CAUSE_SHEET_ACCESSION_SOURCE_LABEL = "접수번호"; // 시트1 기준
 const CAUSE_SHEET_PRODUCT_CODE_SOURCE_LABEL = "제품코드"; // 시트1 기준
-const CAUSE_SHEET_IMAGE_TARGET_WIDTH = 150; // 사진 표시 가로폭(px), 세로는 원본 비율대로 자동 계산
+// 사진 표시 세로 높이(px) — "5.5cm(원본크기)" 요청을 화면 96dpi 기준으로
+// 환산(5.5 / 2.54 * 96 ≈ 208px). 가로폭은 원본 가로세로 비율 그대로
+// 유지해서 세로 높이에 맞춰 자동 계산합니다(비율 고정).
+const CAUSE_SHEET_IMAGE_TARGET_HEIGHT = 208;
 const CAUSE_SHEET_IMAGES_PER_ROW = 6;
 const CAUSE_SHEET_IMAGE_START_GAP_ROWS = 2; // "마지막 행에서 두 줄 아래"
 const CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS = 1; // 사진 줄 사이 빈 줄
@@ -887,59 +892,76 @@ function rowsNeededForPixelHeight_(sheet, startRow, pixelHeight) {
 
 /**************************************************************
  * 원인별 상세 시트의 lastDataRow(마지막 데이터 행)에서 두 줄 아래부터
- * 사진을 가로 6장씩 붙입니다. 각 사진은 CAUSE_SHEET_IMAGE_TARGET_WIDTH
- * 폭에 맞춰 원본 비율대로 자동으로 줄이고, 한 줄(최대 6장) 중 가장
- * 키가 큰 사진 바로 아래 행에 그 줄 사진들의 순번을 각각 적습니다.
- * 사진은 항상 A열부터 순서대로(1열, 2열, ... 6열) 왼쪽 위를 맞춰
- * 넣습니다 — 시트의 실제 열 너비와 무관하게 자리만 겹치지 않게
- * 하기 위함이며, 번호 칸도 같은 열에 적어서 "사진-번호"가 세로로
- * 맞게 보입니다.
+ * 사진을 가로 6장씩 붙입니다.
+ *
+ * - 칸 위치는 사진이 있는 것끼리 압축해서 채우지 않고, 각 건의 실제
+ *   순번(seq) 기준으로 "(seq-1)/6이 몇 번째 줄, (seq-1)%6이 몇 번째
+ *   칸"을 그대로 씁니다 — 예를 들어 9번 행에만 사진이 있으면 1번
+ *   칸이 아니라 두 번째 줄의 세 번째 칸에 옵니다. 사진이 전혀 없는
+ *   줄은 아예 건너뛰어 공간을 낭비하지 않습니다.
+ * - 각 사진은 세로 CAUSE_SHEET_IMAGE_TARGET_HEIGHT(약 5.5cm)에 맞춰
+ *   원본 가로세로 비율 그대로 자동으로 줄입니다(비율 고정).
+ * - 번호는 사진 "위" 칸(같은 열, 그 줄 시작 행)에 적습니다.
+ * - 사진은 항상 그 칸의 열(A열부터 1,2,3...6열)에 왼쪽 위를 맞춰
+ *   넣습니다 — 시트의 실제 열 너비와 무관하게 자리만 겹치지 않게
+ *   하기 위함이며, 번호도 같은 열에 적어서 "번호-사진"이 세로로
+ *   맞게 보입니다.
  **************************************************************/
 function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
+  // seq 기준으로 블록(줄)별로 묶습니다. 사진이 있는 블록만 처리하고,
+  // 빈 블록은 건너뛰어 위에서부터 압축해서 보여줍니다.
+  const blocksByIndex = {};
+  const blockIndexes = [];
+
+  matchedImages.forEach(function(item) {
+    const blockIndex = Math.floor((item.seq - 1) / CAUSE_SHEET_IMAGES_PER_ROW);
+    const col = ((item.seq - 1) % CAUSE_SHEET_IMAGES_PER_ROW) + 1;
+
+    if (!blocksByIndex[blockIndex]) {
+      blocksByIndex[blockIndex] = [];
+      blockIndexes.push(blockIndex);
+    }
+
+    blocksByIndex[blockIndex].push({ seq: item.seq, url: item.url, col: col });
+  });
+
+  blockIndexes.sort(function(a, b) { return a - b; });
+
   let blockStartRow = lastDataRow + CAUSE_SHEET_IMAGE_START_GAP_ROWS;
   let insertedCount = 0;
   let failedCount = 0;
 
-  for (let blockStart = 0; blockStart < matchedImages.length; blockStart += CAUSE_SHEET_IMAGES_PER_ROW) {
-    const block = matchedImages.slice(blockStart, blockStart + CAUSE_SHEET_IMAGES_PER_ROW);
-    let maxHeight = 0;
+  blockIndexes.forEach(function(blockIndex) {
+    const block = blocksByIndex[blockIndex];
 
-    block.forEach(function(item, colOffset) {
-      item.__col = colOffset + 1; // 항상 1열(A)부터 순서대로
+    // 번호는 사진 "위"에 오므로, 사진은 번호 칸 바로 아래 행부터 시작합니다.
+    const labelRow = blockStartRow;
+    const imageRow = labelRow + 1;
+
+    block.forEach(function(item) {
+      targetSheet.getRange(labelRow, item.col).setValue(item.seq);
 
       try {
         const fileId = driveFileIdFromRecoveryLinkUrl_(item.url);
         if (!fileId) throw new Error("드라이브 링크에서 파일 ID를 찾을 수 없습니다.");
 
         const blob = DriveApp.getFileById(fileId).getBlob();
-        const image = targetSheet.insertImage(blob, item.__col, blockStartRow, 4, 4);
+        const image = targetSheet.insertImage(blob, item.col, imageRow, 4, 4);
 
-        const nativeWidth = image.getWidth() || CAUSE_SHEET_IMAGE_TARGET_WIDTH;
-        const nativeHeight = image.getHeight() || CAUSE_SHEET_IMAGE_TARGET_WIDTH;
-        const targetHeight = Math.round(nativeHeight * (CAUSE_SHEET_IMAGE_TARGET_WIDTH / nativeWidth));
-        image.setWidth(CAUSE_SHEET_IMAGE_TARGET_WIDTH).setHeight(targetHeight);
+        const nativeWidth = image.getWidth() || CAUSE_SHEET_IMAGE_TARGET_HEIGHT;
+        const nativeHeight = image.getHeight() || CAUSE_SHEET_IMAGE_TARGET_HEIGHT;
+        const targetWidth = Math.round(nativeWidth * (CAUSE_SHEET_IMAGE_TARGET_HEIGHT / nativeHeight));
+        image.setHeight(CAUSE_SHEET_IMAGE_TARGET_HEIGHT).setWidth(targetWidth);
 
-        if (targetHeight > maxHeight) maxHeight = targetHeight;
-        item.__inserted = true;
         insertedCount++;
       } catch (error) {
-        item.__inserted = false;
         failedCount++;
       }
     });
 
-    if (maxHeight === 0) maxHeight = CAUSE_SHEET_IMAGE_TARGET_WIDTH; // 전부 실패했을 때 대비
-
-    const labelRow = blockStartRow + rowsNeededForPixelHeight_(targetSheet, blockStartRow, maxHeight);
-
-    block.forEach(function(item) {
-      if (item.__inserted) {
-        targetSheet.getRange(labelRow, item.__col).setValue(item.seq);
-      }
-    });
-
-    blockStartRow = labelRow + 1 + CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS;
-  }
+    const imageRowSpan = rowsNeededForPixelHeight_(targetSheet, imageRow, CAUSE_SHEET_IMAGE_TARGET_HEIGHT);
+    blockStartRow = imageRow + imageRowSpan + CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS;
+  });
 
   return { insertedCount: insertedCount, failedCount: failedCount };
 }
