@@ -27,10 +27,11 @@
  *   똑같은 건의 사진(Q열 링크)을 찾아 원인별 상세 시트 데이터 끝에서
  *   두 줄 아래부터 가로 6장씩 붙입니다(insertCauseSheetImages_). 칸
  *   위치는 그 건의 실제 순번 기준(압축하지 않음 — 9번만 있으면 9번
- *   자리에 옴)이고, 번호는 사진 바로 위 칸에 적습니다. 사진은 세로
- *   약 5.5cm(원본 비율 고정)로 표시합니다. URL이 없거나 불러오기에
- *   실패해도 자료정리 자체는 그대로 진행합니다(사진만 생략, 응답의
- *   recoveryImageNote에 사유가 담김).
+ *   자리에 옴)이고, 사진 폭은 1~X(24)열 너비 합을 6등분해서 X열을
+ *   넘지 않고 고르게 간격을 두도록 맞춥니다(원본 비율 고정). 번호는
+ *   사진의 오른쪽 아래 모서리에 숫자 뱃지 이미지로 겹쳐 올립니다. URL이
+ *   없거나 불러오기에 실패해도 자료정리 자체는 그대로 진행합니다
+ *   (사진만 생략, 응답의 recoveryImageNote에 사유가 담김).
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
  *   "시트1"과 "시트2"(양식 시트)을 뺀 나머지 모든 시트(종합 + 원인별
  *   상세 시트)를 담은 xlsx를 base64로 반환합니다.
@@ -107,21 +108,30 @@ const CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH = 80;
 const GRAND_TOTAL_LABEL = "합계";
 
 // "회수현황"(회수데이터 연결) 사진 첨부 — 원인별 상세 시트 데이터 끝에서
-// 두 줄 아래부터 가로 6장씩 사진을 붙이고, 그 사진 바로 아래 칸에
-// 순번을 적습니다. 회수누적 탭의 "문서번호"+"품명" 값이 이 시트
-// (시트1 기준)의 "접수번호"+"제품코드"와 글자 그대로 같은 건만
-// 매칭합니다("품명" 칸에 실제로는 제품코드 값이 들어있다고 확인받음).
+// 두 줄 아래부터 가로 6장씩 사진을 붙입니다. 회수누적 탭의 "문서번호"+
+// "품명" 값이 이 시트(시트1 기준)의 "접수번호"+"제품코드"와 글자 그대로
+// 같은 건만 매칭합니다("품명" 칸에 실제로는 제품코드 값이 들어있다고
+// 확인받음).
 const RECOVERY_DOC_NO_COLUMN_LABEL = "문서번호"; // 회수누적 탭 기준
 const RECOVERY_PRODUCT_COLUMN_LABEL = "품명"; // 회수누적 탭 기준
 const CAUSE_SHEET_ACCESSION_SOURCE_LABEL = "접수번호"; // 시트1 기준
 const CAUSE_SHEET_PRODUCT_CODE_SOURCE_LABEL = "제품코드"; // 시트1 기준
-// 사진 표시 세로 높이(px) — "5.5cm(원본크기)" 요청을 화면 96dpi 기준으로
-// 환산(5.5 / 2.54 * 96 ≈ 208px). 가로폭은 원본 가로세로 비율 그대로
-// 유지해서 세로 높이에 맞춰 자동 계산합니다(비율 고정).
-const CAUSE_SHEET_IMAGE_TARGET_HEIGHT = 208;
 const CAUSE_SHEET_IMAGES_PER_ROW = 6;
+// 사진 영역이 이 열(X열, 24번째)을 넘지 않도록, 1~24열의 실제 너비
+// 합을 6등분해서 사진 폭을 정합니다 — 시트마다 열 너비가 달라도
+// 6장이 항상 고르게 간격을 두고 X열 끝까지만 차지합니다.
+const CAUSE_SHEET_IMAGE_AREA_LAST_COLUMN = 24;
+const CAUSE_SHEET_IMAGE_GAP_PX = 10; // 사진 사이 가로 간격
 const CAUSE_SHEET_IMAGE_START_GAP_ROWS = 2; // "마지막 행에서 두 줄 아래"
 const CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS = 1; // 사진 줄 사이 빈 줄
+// 번호를 셀 텍스트가 아니라 사진 위에 겹친 "뱃지" 이미지로 표시합니다
+// (흰 바탕 둥근 네모 + 굵은 검정 숫자, 0~9 10장을 PNG로 미리 만들어
+// base64로 이 파일에 내장해뒀습니다 — Apps Script에는 사진 픽셀 위에
+// 직접 글자를 그리는 기능이 없어서, 숫자 자체를 작은 이미지로 준비해
+// 사진 위에 또 하나의 이미지로 겹쳐 올리는 방식입니다). 두 자리 이상인
+// 번호는 숫자 이미지를 옆으로 이어 붙입니다.
+const RECOVERY_BADGE_SIZE_PX = 20; // 뱃지(숫자 이미지) 한 변 크기
+const RECOVERY_BADGE_MARGIN_PX = 2; // 사진 오른쪽 아래 모서리에서 뱃지까지 여백
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
 const EXPORT_EXCLUDED_SHEET_NAMES = [SOURCE_SHEET_NAME, CAUSE_SHEET_TEMPLATE_NAME];
@@ -891,21 +901,106 @@ function rowsNeededForPixelHeight_(sheet, startRow, pixelHeight) {
 
 
 /**************************************************************
+ * sheet의 fromCol~toCol(둘 다 포함) 열 너비(px) 합.
+ **************************************************************/
+function totalColumnWidth_(sheet, fromCol, toCol) {
+  let total = 0;
+  for (let col = fromCol; col <= toCol; col++) {
+    total += sheet.getColumnWidth(col);
+  }
+  return total;
+}
+
+
+/**************************************************************
+ * 1열(A) 왼쪽 끝에서 pixelX만큼 떨어진 위치가 몇 번째 열의, 그 열
+ * 기준으로 얼마만큼(offsetX) 떨어진 자리인지 계산합니다. insertImage는
+ * (열, 행, 열 안에서의 픽셀 오프셋)으로 위치를 지정해야 해서, "A열
+ * 왼쪽 끝에서부터 누적 픽셀 위치" 기준으로 계산한 자리를 다시 열+
+ * 오프셋 쌍으로 바꿔주는 역할입니다.
+ **************************************************************/
+function pixelXToColumnOffset_(sheet, pixelX) {
+  let remaining = pixelX;
+  let col = 1;
+
+  while (true) {
+    const width = sheet.getColumnWidth(col);
+    if (remaining < width || col >= sheet.getMaxColumns()) {
+      return { column: col, offsetX: remaining };
+    }
+    remaining -= width;
+    col++;
+  }
+}
+
+
+// 0~9 숫자 뱃지 PNG(흰 바탕 둥근 네모 + 굵은 검정 숫자, 40x40) 10장을
+// base64로 미리 인코딩해서 내장해뒀습니다. Apps Script에는 이미지를
+// 직접 그리는 기능이 없어서, 이 프로젝트 밖에서 미리 만든 PNG를 그대로
+// 가져왔습니다(RECOVERY_BADGE_SIZE_PX 크기로 줄여서 사진 위에 올림).
+const RECOVERY_BADGE_BASE64_BY_DIGIT = [
+  "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"
+];
+
+
+/**************************************************************
+ * 숫자 하나(0~9)의 뱃지 이미지 Blob을 내장된 base64 PNG에서 만듭니다.
+ **************************************************************/
+function recoveryBadgeBlobForDigit_(digit) {
+  const base64 = RECOVERY_BADGE_BASE64_BY_DIGIT[digit];
+  return Utilities.newBlob(Utilities.base64Decode(base64), "image/png", "badge_" + digit + ".png");
+}
+
+
+/**************************************************************
+ * 사진 하나의 오른쪽 아래 모서리에 seq(순번) 숫자 뱃지 이미지를
+ * 겹쳐 올립니다. 두 자리 이상이면 숫자 이미지를 옆으로 이어
+ * 붙입니다. anchorCol/anchorRow/photoOffsetX/photoOffsetY는 방금
+ * 넣은 사진과 똑같은 칸 기준이라, 그 사진의 실제 가로/세로(px)만
+ * 더하면 사진 안에서의 좌표를 그대로 계산할 수 있습니다.
+ **************************************************************/
+function overlaySeqBadge_(targetSheet, seq, anchorCol, anchorRow, photoOffsetX, photoOffsetY, photoWidth, photoHeight) {
+  const digits = String(seq).split("").map(Number);
+  const groupWidth = digits.length * RECOVERY_BADGE_SIZE_PX;
+
+  const groupRight = photoOffsetX + photoWidth - RECOVERY_BADGE_MARGIN_PX;
+  const groupLeft = Math.max(photoOffsetX, groupRight - groupWidth);
+  const badgeTop = Math.max(photoOffsetY, photoOffsetY + photoHeight - RECOVERY_BADGE_MARGIN_PX - RECOVERY_BADGE_SIZE_PX);
+
+  digits.forEach(function(digit, i) {
+    const badge = targetSheet.insertImage(
+      recoveryBadgeBlobForDigit_(digit), anchorCol, anchorRow, groupLeft + i * RECOVERY_BADGE_SIZE_PX, badgeTop
+    );
+    badge.setWidth(RECOVERY_BADGE_SIZE_PX).setHeight(RECOVERY_BADGE_SIZE_PX);
+  });
+}
+
+
+/**************************************************************
  * 원인별 상세 시트의 lastDataRow(마지막 데이터 행)에서 두 줄 아래부터
  * 사진을 가로 6장씩 붙입니다.
  *
+ * - 가로 폭: 1~CAUSE_SHEET_IMAGE_AREA_LAST_COLUMN(X)열의 실제 너비
+ *   합을 6등분(간격 CAUSE_SHEET_IMAGE_GAP_PX 포함)해서 칸 폭을 정하고,
+ *   사진은 그 칸 폭에 맞춰 원본 가로세로 비율 그대로 줄입니다(비율
+ *   고정) — 그래서 6번째 사진도 X열 끝을 넘지 않고, 시트의 실제 열
+ *   너비와 무관하게 6장이 항상 고르게 간격을 둡니다.
  * - 칸 위치는 사진이 있는 것끼리 압축해서 채우지 않고, 각 건의 실제
  *   순번(seq) 기준으로 "(seq-1)/6이 몇 번째 줄, (seq-1)%6이 몇 번째
  *   칸"을 그대로 씁니다 — 예를 들어 9번 행에만 사진이 있으면 1번
  *   칸이 아니라 두 번째 줄의 세 번째 칸에 옵니다. 사진이 전혀 없는
  *   줄은 아예 건너뛰어 공간을 낭비하지 않습니다.
- * - 각 사진은 세로 CAUSE_SHEET_IMAGE_TARGET_HEIGHT(약 5.5cm)에 맞춰
- *   원본 가로세로 비율 그대로 자동으로 줄입니다(비율 고정).
- * - 번호는 사진 "위" 칸(같은 열, 그 줄 시작 행)에 적습니다.
- * - 사진은 항상 그 칸의 열(A열부터 1,2,3...6열)에 왼쪽 위를 맞춰
- *   넣습니다 — 시트의 실제 열 너비와 무관하게 자리만 겹치지 않게
- *   하기 위함이며, 번호도 같은 열에 적어서 "번호-사진"이 세로로
- *   맞게 보입니다.
+ * - 번호는 셀 텍스트가 아니라, 사진의 오른쪽 아래 모서리에 숫자
+ *   뱃지 이미지를 겹쳐 올리는 방식으로 표시합니다(overlaySeqBadge_).
  **************************************************************/
 function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
   // seq 기준으로 블록(줄)별로 묶습니다. 사진이 있는 블록만 처리하고,
@@ -915,17 +1010,23 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
 
   matchedImages.forEach(function(item) {
     const blockIndex = Math.floor((item.seq - 1) / CAUSE_SHEET_IMAGES_PER_ROW);
-    const col = ((item.seq - 1) % CAUSE_SHEET_IMAGES_PER_ROW) + 1;
+    const slotIndex = (item.seq - 1) % CAUSE_SHEET_IMAGES_PER_ROW;
 
     if (!blocksByIndex[blockIndex]) {
       blocksByIndex[blockIndex] = [];
       blockIndexes.push(blockIndex);
     }
 
-    blocksByIndex[blockIndex].push({ seq: item.seq, url: item.url, col: col });
+    blocksByIndex[blockIndex].push({ seq: item.seq, url: item.url, slotIndex: slotIndex });
   });
 
   blockIndexes.sort(function(a, b) { return a - b; });
+
+  // 1~X열 너비 합을 6등분해서 칸(슬롯) 폭을 구합니다. 전부 A열(1)
+  // 기준 누적 픽셀 위치로 계산하므로, 실제 열 경계와 무관하게 6장이
+  // 항상 똑같은 간격으로 놓입니다.
+  const availableWidth = totalColumnWidth_(targetSheet, 1, CAUSE_SHEET_IMAGE_AREA_LAST_COLUMN);
+  const slotWidth = (availableWidth - CAUSE_SHEET_IMAGE_GAP_PX * (CAUSE_SHEET_IMAGES_PER_ROW - 1)) / CAUSE_SHEET_IMAGES_PER_ROW;
 
   let blockStartRow = lastDataRow + CAUSE_SHEET_IMAGE_START_GAP_ROWS;
   let insertedCount = 0;
@@ -933,34 +1034,35 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
 
   blockIndexes.forEach(function(blockIndex) {
     const block = blocksByIndex[blockIndex];
-
-    // 번호는 사진 "위"에 오므로, 사진은 번호 칸 바로 아래 행부터 시작합니다.
-    const labelRow = blockStartRow;
-    const imageRow = labelRow + 1;
+    let maxHeight = 0;
 
     block.forEach(function(item) {
-      targetSheet.getRange(labelRow, item.col).setValue(item.seq);
-
       try {
         const fileId = driveFileIdFromRecoveryLinkUrl_(item.url);
         if (!fileId) throw new Error("드라이브 링크에서 파일 ID를 찾을 수 없습니다.");
 
+        const pixelX = item.slotIndex * (slotWidth + CAUSE_SHEET_IMAGE_GAP_PX);
+        const anchor = pixelXToColumnOffset_(targetSheet, pixelX);
+
         const blob = DriveApp.getFileById(fileId).getBlob();
-        const image = targetSheet.insertImage(blob, item.col, imageRow, 4, 4);
+        const image = targetSheet.insertImage(blob, anchor.column, blockStartRow, anchor.offsetX, 4);
 
-        const nativeWidth = image.getWidth() || CAUSE_SHEET_IMAGE_TARGET_HEIGHT;
-        const nativeHeight = image.getHeight() || CAUSE_SHEET_IMAGE_TARGET_HEIGHT;
-        const targetWidth = Math.round(nativeWidth * (CAUSE_SHEET_IMAGE_TARGET_HEIGHT / nativeHeight));
-        image.setHeight(CAUSE_SHEET_IMAGE_TARGET_HEIGHT).setWidth(targetWidth);
+        const nativeWidth = image.getWidth() || slotWidth;
+        const nativeHeight = image.getHeight() || slotWidth;
+        const targetHeight = Math.round(nativeHeight * (slotWidth / nativeWidth));
+        image.setWidth(slotWidth).setHeight(targetHeight);
 
+        overlaySeqBadge_(targetSheet, item.seq, anchor.column, blockStartRow, anchor.offsetX, 4, slotWidth, targetHeight);
+
+        if (targetHeight > maxHeight) maxHeight = targetHeight;
         insertedCount++;
       } catch (error) {
         failedCount++;
       }
     });
 
-    const imageRowSpan = rowsNeededForPixelHeight_(targetSheet, imageRow, CAUSE_SHEET_IMAGE_TARGET_HEIGHT);
-    blockStartRow = imageRow + imageRowSpan + CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS;
+    if (maxHeight === 0) maxHeight = slotWidth; // 전부 실패했을 때 대비
+    blockStartRow = blockStartRow + rowsNeededForPixelHeight_(targetSheet, blockStartRow, maxHeight) + CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS;
   });
 
   return { insertedCount: insertedCount, failedCount: failedCount };
