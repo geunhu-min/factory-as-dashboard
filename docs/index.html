@@ -4648,16 +4648,27 @@
           const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: "clean" })
+            body: JSON.stringify({
+              action: "clean",
+              // 원인별 상세 시트에 "회수현황" 사진을 붙이려면 그쪽 웹앱
+              // URL이 필요합니다 — 일일업무 페이지에 저장해둔 값을
+              // 그대로 같이 보냅니다(비어 있으면 서버가 사진 없이 진행).
+              recoveryAccumulateUrl: el.dailyRecoveryAccumulateWebappUrl.value.trim()
+            })
           });
 
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          setMonthlyClosingStatus_(
-            "자료정리 완료: " + data.rowCount + "건 (" + data.groupCount + "개 원인 그룹)",
-            "ok"
-          );
+          let message = "자료정리 완료: " + data.rowCount + "건 (" + data.groupCount + "개 원인 그룹)";
+          if (data.imageInsertedCount || data.imageFailedCount) {
+            message += ", 사진 " + data.imageInsertedCount + "장 첨부";
+            if (data.imageFailedCount) message += "(실패 " + data.imageFailedCount + "장)";
+          } else if (data.recoveryImageNote) {
+            message += " — " + data.recoveryImageNote;
+          }
+
+          setMonthlyClosingStatus_(message, "ok");
         } catch (error) {
           setMonthlyClosingStatus_("자료정리 실패: " + error.message, "error");
         } finally {

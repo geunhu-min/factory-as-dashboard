@@ -21,6 +21,14 @@
  *   시트로 자료를 정리해 옮기고, 원인별 상세 시트("시트2" 양식을
  *   복사해 원인 이름으로 만듦)도 함께 채웁니다. 자세한 내용은
  *   cleanMonthlyOutsourceListAction_, updateOutsourceCauseSheets_ 참고.
+ *   [신규] body에 recoveryAccumulateUrl("회수데이터" 연결 웹앱 URL,
+ *   화면이 일일업무 페이지에 저장해둔 값을 그대로 같이 보냄)이 있으면,
+ *   "회수누적" 탭에서 문서번호+품명이 이 시트의 접수번호+제품코드와
+ *   똑같은 건의 사진(Q열 링크)을 찾아 원인별 상세 시트 데이터 끝에서
+ *   두 줄 아래부터 가로 6장씩 붙이고, 그 아래 칸에 순번을 적습니다
+ *   (insertCauseSheetImages_). URL이 없거나 불러오기에 실패해도
+ *   자료정리 자체는 그대로 진행합니다(사진만 생략, 응답의
+ *   recoveryImageNote에 사유가 담김).
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
  *   "시트1"과 "시트2"(양식 시트)을 뺀 나머지 모든 시트(종합 + 원인별
  *   상세 시트)를 담은 xlsx를 base64로 반환합니다.
@@ -96,6 +104,20 @@ const CAUSE_SHEET_DATE_NUMBER_FORMAT = "yyyy-mm-dd";
 const CAUSE_SHEET_DATE_MIN_COLUMN_WIDTH = 80;
 const GRAND_TOTAL_LABEL = "합계";
 
+// "회수현황"(회수데이터 연결) 사진 첨부 — 원인별 상세 시트 데이터 끝에서
+// 두 줄 아래부터 가로 6장씩 사진을 붙이고, 그 사진 바로 아래 칸에
+// 순번을 적습니다. 회수누적 탭의 "문서번호"+"품명" 값이 이 시트
+// (시트1 기준)의 "접수번호"+"제품코드"와 글자 그대로 같은 건만
+// 매칭합니다("품명" 칸에 실제로는 제품코드 값이 들어있다고 확인받음).
+const RECOVERY_DOC_NO_COLUMN_LABEL = "문서번호"; // 회수누적 탭 기준
+const RECOVERY_PRODUCT_COLUMN_LABEL = "품명"; // 회수누적 탭 기준
+const CAUSE_SHEET_ACCESSION_SOURCE_LABEL = "접수번호"; // 시트1 기준
+const CAUSE_SHEET_PRODUCT_CODE_SOURCE_LABEL = "제품코드"; // 시트1 기준
+const CAUSE_SHEET_IMAGE_TARGET_WIDTH = 150; // 사진 표시 가로폭(px), 세로는 원본 비율대로 자동 계산
+const CAUSE_SHEET_IMAGES_PER_ROW = 6;
+const CAUSE_SHEET_IMAGE_START_GAP_ROWS = 2; // "마지막 행에서 두 줄 아래"
+const CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS = 1; // 사진 줄 사이 빈 줄
+
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
 const EXPORT_EXCLUDED_SHEET_NAMES = [SOURCE_SHEET_NAME, CAUSE_SHEET_TEMPLATE_NAME];
 
@@ -148,7 +170,7 @@ function doPost(e) {
     const action = body.action || "";
 
     if (action === "clean") {
-      return jsonOutput_(cleanMonthlyOutsourceListAction_());
+      return jsonOutput_(cleanMonthlyOutsourceListAction_(body.recoveryAccumulateUrl || ""));
     }
 
     if (action === "replaceSourceData") {
@@ -184,7 +206,7 @@ function doPost(e) {
  * 있는 헤더 행 바로 아래 데이터 영역만 지우고 새로 씁니다(서식은
  * clearContent만 사용해 그대로 유지 — 열 너비/글자 크기/정렬 불변).
  **************************************************************/
-function cleanMonthlyOutsourceListAction_() {
+function cleanMonthlyOutsourceListAction_(recoveryAccumulateUrl) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sourceSheet = ss.getSheetByName(SOURCE_SHEET_NAME);
 
@@ -488,8 +510,27 @@ function cleanMonthlyOutsourceListAction_() {
   // "종합"은 이미 위에서 다 갱신된 뒤라, 여기서 실패해도 종합만 갱신되고
   // 원인별 시트는 예전 상태로 남을 수 있습니다 — 그 사실을 에러 메시지에
   // 명확히 남겨서 사용자가 상태가 서로 안 맞는 걸 바로 알 수 있게 합니다.
+  // "회수데이터" 연결 웹앱 URL이 전달되면 "회수누적" 탭에서 문서번호+품명
+  // 기준 이미지 링크 맵을 미리 한 번만 가져와 모든 원인별 시트가 같이
+  // 씁니다. URL이 없거나 불러오기에 실패해도 자료정리 자체는 그대로
+  // 진행하고(사진만 못 붙임), 그 사실을 응답 메시지에 남깁니다.
+  let recoveryImageMap = {};
+  let recoveryImageNote = "";
+
+  if (recoveryAccumulateUrl) {
+    try {
+      recoveryImageMap = fetchRecoveryImageMap_(recoveryAccumulateUrl);
+    } catch (recoveryError) {
+      recoveryImageNote = "회수현황 사진 불러오기 실패: " + recoveryError.message;
+    }
+  } else {
+    recoveryImageNote = "회수데이터 연결 URL이 없어 사진을 붙이지 않았습니다.";
+  }
+
+  let imageStats = { insertedCount: 0, failedCount: 0 };
+
   try {
-    updateOutsourceCauseSheets_(ss, header, groups, groupOrder);
+    imageStats = updateOutsourceCauseSheets_(ss, header, groups, groupOrder, recoveryImageMap);
   } catch (causeSheetError) {
     throw new Error(
       "'" + SUMMARY_SHEET_NAME + "'은(는) 갱신됐지만, 원인별 상세 시트 갱신에 실패했습니다: " +
@@ -501,7 +542,10 @@ function cleanMonthlyOutsourceListAction_() {
     ok: true,
     resultSheet: SUMMARY_SHEET_NAME,
     rowCount: parsedRows.length,
-    groupCount: groupOrder.length
+    groupCount: groupOrder.length,
+    imageInsertedCount: imageStats.insertedCount,
+    imageFailedCount: imageStats.failedCount,
+    recoveryImageNote: recoveryImageNote
   };
 }
 
@@ -595,7 +639,7 @@ function readSheetObject_(sheet) {
  * 1건)보다 많으면 부족한 만큼 2행 서식을 복사해서 행을 늘립니다.
  * 열 너비 등은 건드리지 않고 값만 채웁니다.
  **************************************************************/
-function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
+function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder, recoveryImageMap) {
   const templateSheet = ss.getSheetByName(CAUSE_SHEET_TEMPLATE_NAME);
 
   if (!templateSheet) {
@@ -614,6 +658,11 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
   });
 
   const dataStartRow = 2;
+  const imageMap = recoveryImageMap || {};
+  const accessionSourceIdx = sourceHeader.indexOf(CAUSE_SHEET_ACCESSION_SOURCE_LABEL);
+  const productCodeSourceIdx = sourceHeader.indexOf(CAUSE_SHEET_PRODUCT_CODE_SOURCE_LABEL);
+  let totalImageInsertedCount = 0;
+  let totalImageFailedCount = 0;
 
   groupOrder.forEach(function(key) {
     const group = groups[key];
@@ -697,7 +746,33 @@ function updateOutsourceCauseSheets_(ss, sourceHeader, groups, groupOrder) {
     }
 
     clearStrayBordersBelow_(targetSheet, dataStartRow + neededRowCount, lastColumn);
+
+    // 이 원인 그룹의 행 중 "회수현황"에 사진이 있는 건만 골라, 순번
+    // (출력 행 기준 1부터)과 함께 모아서 사진 삽입 함수에 넘깁니다.
+    if (accessionSourceIdx !== -1 && productCodeSourceIdx !== -1 && neededRowCount > 0) {
+      const matchedImages = [];
+
+      rowsForCause.forEach(function(item, i) {
+        const accession = normalizeText_(item.raw[accessionSourceIdx]);
+        const productCode = normalizeText_(item.raw[productCodeSourceIdx]);
+        if (!accession || !productCode) return;
+
+        const imageUrl = imageMap[accession + "||" + productCode];
+        if (imageUrl) {
+          matchedImages.push({ seq: i + 1, url: imageUrl });
+        }
+      });
+
+      if (matchedImages.length) {
+        const lastDataRow = dataStartRow + neededRowCount - 1;
+        const imageResult = insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages);
+        totalImageInsertedCount += imageResult.insertedCount;
+        totalImageFailedCount += imageResult.failedCount;
+      }
+    }
   });
+
+  return { insertedCount: totalImageInsertedCount, failedCount: totalImageFailedCount };
 }
 
 
@@ -726,6 +801,147 @@ function clearStrayBordersBelow_(sheet, fromRow, columnCount) {
     sheet.getRange(fromRow + 1, 1, rowCount - 1, columnCount)
       .setBorder(false, false, false, false, false, false);
   }
+}
+
+
+/**************************************************************
+ * "회수데이터" 연결 웹앱의 action="recoveryStatus"를 호출해, "회수누적"
+ * 탭의 문서번호+품명 → 이미지 링크 맵을 만듭니다. 문서번호/품명/
+ * 이미지 중 하나라도 비어 있는 행은 맵에 넣지 않습니다. 같은 키가
+ * 여러 번 나오면 먼저 찾은 값을 그대로 씁니다.
+ **************************************************************/
+function fetchRecoveryImageMap_(recoveryAccumulateUrl) {
+  const requestUrl = recoveryAccumulateUrl +
+    (recoveryAccumulateUrl.indexOf("?") === -1 ? "?" : "&") + "action=recoveryStatus";
+
+  const response = UrlFetchApp.fetch(requestUrl, { muteHttpExceptions: true });
+  const data = JSON.parse(response.getContentText());
+
+  if (data.error) {
+    throw new Error(data.error);
+  }
+
+  const header = data.header || [];
+  const docNoIdx = header.indexOf(RECOVERY_DOC_NO_COLUMN_LABEL);
+  const productIdx = header.indexOf(RECOVERY_PRODUCT_COLUMN_LABEL);
+  const imageIdx = header.length - 1; // recoveryStatusAction_의 마지막 열이 항상 "이미지"
+
+  if (docNoIdx === -1 || productIdx === -1) {
+    throw new Error(
+      "'회수누적' 헤더에서 '" + RECOVERY_DOC_NO_COLUMN_LABEL + "' 또는 '" +
+      RECOVERY_PRODUCT_COLUMN_LABEL + "' 열을 찾을 수 없습니다."
+    );
+  }
+
+  const map = {};
+
+  (data.rows || []).forEach(function(row) {
+    const values = row.values || [];
+    const imageUrl = normalizeText_(values[imageIdx]);
+    if (!imageUrl) return;
+
+    const docNo = normalizeText_(values[docNoIdx]);
+    const product = normalizeText_(values[productIdx]);
+    if (!docNo || !product) return;
+
+    const key = docNo + "||" + product;
+    if (!map[key]) map[key] = imageUrl;
+  });
+
+  return map;
+}
+
+
+/**************************************************************
+ * 회수현황 사진 링크(드라이브 "보기" URL, 예: .../file/d/ID/view)에서
+ * 파일 ID만 뽑습니다 — daily-recovery-accumulate-webapp.gs의 같은
+ * 이름 함수와 패턴이 같습니다(서로 다른 스크립트 프로젝트라 공유는
+ * 안 되고, 이 파일에도 그대로 복사해뒀습니다).
+ **************************************************************/
+function driveFileIdFromRecoveryLinkUrl_(url) {
+  const text = String(url || "");
+  const match = text.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ||
+    text.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+    text.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : "";
+}
+
+
+/**************************************************************
+ * startRow부터 아래로 실제 행 높이(sheet.getRowHeight)를 누적해서,
+ * pixelHeight를 담는 데 몇 개 행이 필요한지 셉니다. 템플릿마다 행
+ * 높이가 다를 수 있어 고정값(기본 21px) 대신 실제 높이를 씁니다.
+ **************************************************************/
+function rowsNeededForPixelHeight_(sheet, startRow, pixelHeight) {
+  let consumed = 0;
+  let rows = 0;
+
+  while (consumed < pixelHeight) {
+    consumed += sheet.getRowHeight(startRow + rows);
+    rows++;
+  }
+
+  return rows;
+}
+
+
+/**************************************************************
+ * 원인별 상세 시트의 lastDataRow(마지막 데이터 행)에서 두 줄 아래부터
+ * 사진을 가로 6장씩 붙입니다. 각 사진은 CAUSE_SHEET_IMAGE_TARGET_WIDTH
+ * 폭에 맞춰 원본 비율대로 자동으로 줄이고, 한 줄(최대 6장) 중 가장
+ * 키가 큰 사진 바로 아래 행에 그 줄 사진들의 순번을 각각 적습니다.
+ * 사진은 항상 A열부터 순서대로(1열, 2열, ... 6열) 왼쪽 위를 맞춰
+ * 넣습니다 — 시트의 실제 열 너비와 무관하게 자리만 겹치지 않게
+ * 하기 위함이며, 번호 칸도 같은 열에 적어서 "사진-번호"가 세로로
+ * 맞게 보입니다.
+ **************************************************************/
+function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
+  let blockStartRow = lastDataRow + CAUSE_SHEET_IMAGE_START_GAP_ROWS;
+  let insertedCount = 0;
+  let failedCount = 0;
+
+  for (let blockStart = 0; blockStart < matchedImages.length; blockStart += CAUSE_SHEET_IMAGES_PER_ROW) {
+    const block = matchedImages.slice(blockStart, blockStart + CAUSE_SHEET_IMAGES_PER_ROW);
+    let maxHeight = 0;
+
+    block.forEach(function(item, colOffset) {
+      item.__col = colOffset + 1; // 항상 1열(A)부터 순서대로
+
+      try {
+        const fileId = driveFileIdFromRecoveryLinkUrl_(item.url);
+        if (!fileId) throw new Error("드라이브 링크에서 파일 ID를 찾을 수 없습니다.");
+
+        const blob = DriveApp.getFileById(fileId).getBlob();
+        const image = targetSheet.insertImage(blob, item.__col, blockStartRow, 4, 4);
+
+        const nativeWidth = image.getWidth() || CAUSE_SHEET_IMAGE_TARGET_WIDTH;
+        const nativeHeight = image.getHeight() || CAUSE_SHEET_IMAGE_TARGET_WIDTH;
+        const targetHeight = Math.round(nativeHeight * (CAUSE_SHEET_IMAGE_TARGET_WIDTH / nativeWidth));
+        image.setWidth(CAUSE_SHEET_IMAGE_TARGET_WIDTH).setHeight(targetHeight);
+
+        if (targetHeight > maxHeight) maxHeight = targetHeight;
+        item.__inserted = true;
+        insertedCount++;
+      } catch (error) {
+        item.__inserted = false;
+        failedCount++;
+      }
+    });
+
+    if (maxHeight === 0) maxHeight = CAUSE_SHEET_IMAGE_TARGET_WIDTH; // 전부 실패했을 때 대비
+
+    const labelRow = blockStartRow + rowsNeededForPixelHeight_(targetSheet, blockStartRow, maxHeight);
+
+    block.forEach(function(item) {
+      if (item.__inserted) {
+        targetSheet.getRange(labelRow, item.__col).setValue(item.seq);
+      }
+    });
+
+    blockStartRow = labelRow + 1 + CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS;
+  }
+
+  return { insertedCount: insertedCount, failedCount: failedCount };
 }
 
 
