@@ -205,6 +205,30 @@ const RECOVERY_STATUS_COLUMN_LABELS = [
 const RECOVERY_STATUS_IMAGE_COLUMN = 17; // Q열(1-based)
 
 
+// "회수 날짜" 열이 실제 Date 값이면 JSON으로 내보낼 때 UTC ISO 문자열
+// ("2026-10-05T15:00:00.000Z")로 바뀌어, 한국 날짜 10/6이 전날인 10/5로
+// 잘못 보이는 문제가 있었습니다(이 프로젝트의 다른 웹앱들과 같은
+// 종류의 버그 — 날짜는 항상 Asia/Seoul 기준 "yyyy-MM-dd" 문자열로
+// 맞춰서 돌려줘야 합니다). 실제 Date는 포맷해서, 시간이 포함된 ISO
+// 문자열은 다시 Date로 해석해 포맷해서, 시간 없는 "yyyy-mm-dd" 문자열은
+// 그대로 그 부분만 뽑아서 돌려줍니다.
+function formatRecoveryDateValue_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd");
+  }
+
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  if (!text) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(text)) {
+    return Utilities.formatDate(new Date(text), "Asia/Seoul", "yyyy-MM-dd");
+  }
+
+  const dateOnlyMatch = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return dateOnlyMatch ? dateOnlyMatch[0] : text;
+}
+
+
 /**************************************************************
  * "회수현황" 표 전용 — "회수누적" 탭에서 RECOVERY_STATUS_COLUMN_LABELS
  * 7개 열을 헤더 이름으로 찾아 뽑고, 이미지는 Q열(RECOVERY_STATUS_
@@ -233,13 +257,16 @@ function recoveryStatusAction_() {
     return header.indexOf(label);
   });
   const imageColIndex = RECOVERY_STATUS_IMAGE_COLUMN - 1;
+  const dateLabelIndex = RECOVERY_STATUS_COLUMN_LABELS.indexOf("회수 날짜");
 
   const rows = [];
 
   for (let i = 1; i < values.length; i++) {
     const sourceRow = values[i];
-    const pickedValues = columnIndexes.map(function(idx) {
-      return idx === -1 ? "" : sourceRow[idx];
+    const pickedValues = columnIndexes.map(function(idx, labelIdx) {
+      if (idx === -1) return "";
+      const raw = sourceRow[idx];
+      return labelIdx === dateLabelIndex ? formatRecoveryDateValue_(raw) : raw;
     });
     const imageValue = imageColIndex < sourceRow.length ? sourceRow[imageColIndex] : "";
 
