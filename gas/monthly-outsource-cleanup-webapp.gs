@@ -942,6 +942,30 @@ function pixelXToColumnOffset_(sheet, pixelX) {
 }
 
 
+/**************************************************************
+ * pixelXToColumnOffset_와 같은 역할을 세로(행) 방향으로 합니다.
+ * startRow 위쪽 끝에서 pixelY만큼 떨어진 위치가 몇 번째 행의, 그 행
+ * 기준으로 얼마만큼(offsetY) 떨어진 자리인지 계산합니다 — 번호 뱃지를
+ * 사진 "아래쪽"(한 행 높이보다 훨씬 큰 오프셋)에 놓을 때, offsetY를
+ * 그대로 큰 값으로 넘기면 한 행 안으로만 해석돼 엉뚱한 자리(사진
+ * 위쪽 근처)에 놓이므로, 실제 몇 번째 행인지 미리 계산해서 넘겨야
+ * 합니다.
+ **************************************************************/
+function pixelYToRowOffset_(sheet, startRow, pixelY) {
+  let remaining = pixelY;
+  let row = startRow;
+
+  while (true) {
+    const height = sheet.getRowHeight(row);
+    if (remaining < height || row >= sheet.getMaxRows()) {
+      return { row: row, offsetY: remaining };
+    }
+    remaining -= height;
+    row++;
+  }
+}
+
+
 // 0~9 숫자 뱃지(정사각) + 10~99 숫자 뱃지(가로로 넓음) PNG를 base64로
 // 미리 인코딩해서 내장해뒀습니다. Apps Script에는 이미지를 직접 그리는
 // 기능이 없어서, 이 프로젝트 밖에서 미리 만든 PNG를 그대로 가져왔습니다.
@@ -1082,18 +1106,28 @@ function recoveryBadgeInfoForSeq_(seq) {
 
 /**************************************************************
  * 사진 하나의 오른쪽 아래 모서리에 seq(순번) 숫자 뱃지 이미지를
- * 겹쳐 올립니다. anchorCol/anchorRow/photoOffsetX/photoOffsetY는
- * 방금 넣은 사진과 똑같은 칸 기준이라, 그 사진의 실제 가로/세로(px)만
- * 더하면 사진 안에서의 좌표를 그대로 계산할 수 있습니다.
+ * 겹쳐 올립니다.
+ *
+ * blockStartRow는 이 줄 사진들의 기준 행, pixelX는 그 사진의 왼쪽
+ * 끝이 1열(A) 기준으로 얼마나 떨어져 있는지(가로 전체 누적 픽셀),
+ * photoOffsetY는 사진이 blockStartRow 안에서 시작하는 세로 오프셋
+ * (항상 작은 값, 보통 4)입니다. 뱃지는 사진 폭/높이만큼 더한
+ * "절대 픽셀 좌표"를 구한 뒤, pixelXToColumnOffset_/pixelYToRowOffset_로
+ * 실제 열+오프셋/행+오프셋 쌍으로 바꿔서 넣습니다 — 사진 높이가 한
+ * 행보다 훨씬 커서(약 5.5cm) offsetY를 그대로 큰 값으로 넘기면 엉뚱한
+ * 자리(사진 위쪽)에 놓이기 때문입니다.
  **************************************************************/
-function overlaySeqBadge_(targetSheet, seq, anchorCol, anchorRow, photoOffsetX, photoOffsetY, photoWidth, photoHeight) {
+function overlaySeqBadge_(targetSheet, seq, blockStartRow, pixelX, photoOffsetY, photoWidth, photoHeight) {
   const badgeInfo = recoveryBadgeInfoForSeq_(seq);
   if (!badgeInfo) return;
 
-  const badgeX = Math.max(photoOffsetX, photoOffsetX + photoWidth - RECOVERY_BADGE_MARGIN_PX - badgeInfo.width);
-  const badgeY = Math.max(photoOffsetY, photoOffsetY + photoHeight - RECOVERY_BADGE_MARGIN_PX - badgeInfo.height);
+  const badgeAbsoluteX = Math.max(pixelX, pixelX + photoWidth - RECOVERY_BADGE_MARGIN_PX - badgeInfo.width);
+  const badgeAbsoluteY = Math.max(photoOffsetY, photoOffsetY + photoHeight - RECOVERY_BADGE_MARGIN_PX - badgeInfo.height);
 
-  const badge = targetSheet.insertImage(badgeInfo.blob, anchorCol, anchorRow, badgeX, badgeY);
+  const xAnchor = pixelXToColumnOffset_(targetSheet, badgeAbsoluteX);
+  const yAnchor = pixelYToRowOffset_(targetSheet, blockStartRow, badgeAbsoluteY);
+
+  const badge = targetSheet.insertImage(badgeInfo.blob, xAnchor.column, yAnchor.row, xAnchor.offsetX, yAnchor.offsetY);
   badge.setWidth(badgeInfo.width).setHeight(badgeInfo.height);
 }
 
@@ -1180,9 +1214,7 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
         image.setWidth(finalWidth).setHeight(finalHeight);
 
         if (finalHeight > maxHeight) maxHeight = finalHeight;
-        placedPhotos.push({
-          item: item, anchorCol: anchor.column, offsetX: anchor.offsetX, width: finalWidth, height: finalHeight
-        });
+        placedPhotos.push({ item: item, pixelX: pixelX, width: finalWidth, height: finalHeight });
         insertedCount++;
       } catch (error) {
         failedCount++;
@@ -1192,7 +1224,7 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
     // 2단계: 번호 뱃지는 이 줄의 사진을 전부 넣은 뒤에 올립니다 — 먼저
     // 넣은 사진 위에 뱃지가 가려질 일이 없게 순서를 분리했습니다.
     placedPhotos.forEach(function(p) {
-      overlaySeqBadge_(targetSheet, p.item.seq, p.anchorCol, blockStartRow, p.offsetX, 4, p.width, p.height);
+      overlaySeqBadge_(targetSheet, p.item.seq, blockStartRow, p.pixelX, 4, p.width, p.height);
     });
 
     if (maxHeight === 0) maxHeight = CAUSE_SHEET_IMAGE_TARGET_HEIGHT; // 전부 실패했을 때 대비
