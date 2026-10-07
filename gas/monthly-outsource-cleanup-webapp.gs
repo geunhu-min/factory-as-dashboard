@@ -139,8 +139,10 @@ const CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS = 1; // 사진 줄 사이 빈 줄
 // 가려지는 일이 없게 했습니다.
 const RECOVERY_BADGE_SIZE_PX = 40; // 뱃지 세로 크기(= 한 자리 뱃지의 가로 크기)
 const RECOVERY_BADGE_WIDE_WIDTH_PX = 52; // 두 자리 뱃지 가로 크기(세로는 동일)
-// 사진 아래쪽 모서리에서 뱃지까지 여백(약간 띄움). 오른쪽은 여백 없이
-// 사진 자신의 실제 오른쪽 끝에 딱 맞춥니다(overlaySeqBadge_ 참고).
+// 사진 오른쪽/아래쪽 모서리에서 뱃지까지 여백(둘 다 사진 안쪽으로
+// 살짝 띄움 — 오른쪽 여백이 없으면 뱃지가 사진 오른쪽 끝을 살짝
+// 넘어가 보임).
+const RECOVERY_BADGE_MARGIN_X_PX = 6;
 const RECOVERY_BADGE_MARGIN_Y_PX = 2;
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
@@ -1132,7 +1134,9 @@ function overlaySeqBadge_(targetSheet, seq, photo) {
   const photoWidth = photo.getWidth();
   const photoHeight = photo.getHeight();
 
-  const badgeOffsetXWithinAnchorCol = photoOffsetX + photoWidth - badgeInfo.width;
+  const badgeOffsetXWithinAnchorCol = Math.max(
+    photoOffsetX, photoOffsetX + photoWidth - RECOVERY_BADGE_MARGIN_X_PX - badgeInfo.width
+  );
   const badgeOffsetYWithinAnchorRow = Math.max(
     photoOffsetY, photoOffsetY + photoHeight - RECOVERY_BADGE_MARGIN_Y_PX - badgeInfo.height
   );
