@@ -1342,21 +1342,26 @@ function exportAllExceptAsXlsxBase64_(excludeNames, fileNamePrefix) {
 
 
 /**************************************************************
- * 이 스프레드시트에서 sheetNames에 해당하는 시트만 임시 스프레드시트에
- * 복사해서 xlsx로 내보낸 뒤, 임시 스프레드시트는 지웁니다.
+ * sheetNames에 해당하는 시트만 남긴 임시 스프레드시트를 만들어 xlsx로
+ * 내보낸 뒤, 임시 스프레드시트는 지웁니다.
+ *
+ * 예전에는 시트를 하나씩 sourceSheet.copyTo(tempSpreadsheet)로 복사해서
+ * 임시 스프레드시트를 만들었는데, 이 방식이 사진/번호 뱃지 같은 떠
+ * 있는 이미지의 위치를 미묘하게 틀어지게 만드는 문제가 있었습니다
+ * (구글시트에서 직접 "파일 > 다운로드"한 결과와 비교해서 확인됨 —
+ * 원본은 정확한데 시트 단위 복사를 거치면 어긋남). 그래서 시트
+ * 단위가 아니라 파일 전체를 드라이브에서 그대로 통째로 복제한 뒤,
+ * 그 복제본에서 필요 없는 시트만 지우는 방식으로 바꿨습니다 — 파일
+ * 전체 복제는 원본을 그대로 베끼는 것이라 이미지 위치가 바뀌지
+ * 않습니다.
  **************************************************************/
 function exportSheetsSubsetAsXlsxBase64_(sheetNames, fileNamePrefix) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const tempSpreadsheet = SpreadsheetApp.create(fileNamePrefix + "_임시");
-  const tempId = tempSpreadsheet.getId();
+  const copiedFile = DriveApp.getFileById(ss.getId()).makeCopy(fileNamePrefix + "_임시");
+  const tempId = copiedFile.getId();
 
   try {
-    sheetNames.forEach(function(name) {
-      const sourceSheet = ss.getSheetByName(name);
-      if (!sourceSheet) throw new Error("'" + name + "' 시트를 찾을 수 없습니다.");
-      const copied = sourceSheet.copyTo(tempSpreadsheet);
-      copied.setName(name);
-    });
+    const tempSpreadsheet = SpreadsheetApp.openById(tempId);
 
     tempSpreadsheet.getSheets().forEach(function(sheet) {
       if (sheetNames.indexOf(sheet.getName()) === -1) {
