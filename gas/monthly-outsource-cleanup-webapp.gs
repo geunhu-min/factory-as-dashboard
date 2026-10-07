@@ -142,7 +142,7 @@ const RECOVERY_BADGE_WIDE_WIDTH_PX = 52; // 두 자리 뱃지 가로 크기(세�
 // 사진 오른쪽/아래쪽 모서리에서 뱃지까지 여백 — 오른쪽은 거의 끝까지
 // 붙이고(음수라 모서리를 살짝 넘어가 바짝 붙어 보임), 아래쪽은 약간
 // 띄웁니다.
-const RECOVERY_BADGE_MARGIN_X_PX = -10;
+const RECOVERY_BADGE_MARGIN_X_PX = -24;
 const RECOVERY_BADGE_MARGIN_Y_PX = 2;
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
