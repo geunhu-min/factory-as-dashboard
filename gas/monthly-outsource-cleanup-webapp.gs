@@ -1226,6 +1226,12 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
       }
     });
 
+    // setWidth/setHeight 직후에는 이미지의 실제 위치/크기가 아직
+    // 확정 반영되지 않은 상태로 읽힐 수 있어(한 사진은 맞고 다른
+    // 사진은 안 맞는 식으로 들쑥날쑥해짐), 뱃지를 올리기 전에 먼저
+    // 전부 반영시켜 둡니다.
+    SpreadsheetApp.flush();
+
     // 2단계: 번호 뱃지는 이 줄의 사진을 전부 넣은 뒤에 올립니다 — 먼저
     // 넣은 사진 위에 뱃지가 가려질 일이 없게 순서를 분리했습니다.
     placedPhotos.forEach(function(p) {
