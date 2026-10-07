@@ -36,13 +36,26 @@
  *     기존 배포를 "편집"(연필 아이콘) > 버전 "새 버전"으로 다시 배포해야
  *     URL을 바꾸지 않고 최신 코드가 반영됩니다.
  *
+ * doPost action="updateClosingStatus": "주간업무 > 마감 > 마감현황 저장"
+ * 버튼 전용. body에 header(월현황(주간) "마감(N)" 시트의 실제 헤더
+ * 배열)와 rows(그 시트의 데이터 행 배열, 헤더 제외)를 담아 보내면:
+ * 1) 이번달(Asia/Seoul 기준) "{N}월마감(N)" 형식의 탭을 찾고
+ * 2) 그 탭의 2행(실제 헤더 — 1행은 상위 제목행)과 이름이 같은 열끼리
+ *    맞춰서(열 순서가 달라도 안전하도록) 3행부터 기존 내용을 지우고
+ *    새 데이터를 씁니다(색상 열은 "061"처럼 0으로 시작해도 숫자로
+ *    안 바뀌도록 쓰기 전에 텍스트 서식부터 지정합니다)
+ * 3) 이 프로젝트의 다른 "(N)" 탭들과 같은 방식으로, 실제로 쓴 행 수에
+ *    맞춰 탭 이름의 "(N)"을 갱신합니다.
+ *
  * 주의
  * ------------------------------------------------------------
- * - 토큰 검증이 없으므로 URL을 아는 사람은 누구나 이 시트 내용을 읽을
- *   수 있습니다(쓰기 기능은 없음 - 읽기 전용).
+ * - 토큰 검증이 없으므로 URL을 아는 사람은 누구나 이 시트 내용을 읽고
+ *   "마감현황 저장" 기능으로 쓸 수도 있습니다.
  * - 탭 이름이 "숫자+월"로 시작하기만 하면 인식합니다("1월마감(320)",
  *   "1월", "1월 마감" 등 모두 인식). 다만 같은 스프레드시트에 "1월"로
- *   시작하는 탭이 두 개 이상 있으면 나중 탭이 앞 탭을 덮어씁니다.
+ *   시작하는 탭이 두 개 이상 있으면 나중 탭이 앞 탭을 덮어씁니다(doGet
+ *   읽기 기준). "updateClosingStatus"는 이름이 정확히
+ *   "{이번달}월마감" 또는 "{이번달}월마감(숫자)"인 탭만 찾습니다.
  **************************************************************/
 
 function doGet(e) {
@@ -68,8 +81,140 @@ function doGet(e) {
   }
 }
 
+function doPost(e) {
+  try {
+    const body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+    const action = body.action || "";
+
+    if (action === "updateClosingStatus") {
+      return jsonOutput_(updateClosingStatusAction_(body.header || [], body.rows || []));
+    }
+
+    return jsonOutput_({ ok: false, error: "알 수 없는 action입니다: " + action });
+  } catch (error) {
+    return jsonOutput_({ ok: false, error: String(error) });
+  }
+}
+
 function jsonOutput_(payload) {
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function normalizeText_(value) {
+  return String(value === null || value === undefined ? "" : value).trim();
+}
+
+// 2행(실제 헤더 — 1행은 상위 제목행)과 3행부터 시작하는 데이터 구성은
+// 이 스프레드시트의 "{N}월마감(N)" 탭들이 공통으로 쓰는 고정 레이아웃.
+const CLOSING_ARCHIVE_HEADER_ROW_ = 2;
+const CLOSING_ARCHIVE_DATA_START_ROW_ = 3;
+
+/**************************************************************
+ * Asia/Seoul 기준 이번달 숫자로 "{N}월마감" 또는 "{N}월마감(숫자)"와
+ * 이름이 정확히 일치하는 탭을 찾습니다.
+ **************************************************************/
+function findCurrentMonthClosingArchiveSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const monthNum = Number(Utilities.formatDate(new Date(), "Asia/Seoul", "M"));
+  const pattern = new RegExp("^" + monthNum + "월마감(\\(\\d+\\))?$");
+  const sheets = ss.getSheets();
+
+  for (let i = 0; i < sheets.length; i++) {
+    if (pattern.test(sheets[i].getName().trim())) {
+      return { sheet: sheets[i], monthNum: monthNum };
+    }
+  }
+
+  return { sheet: null, monthNum: monthNum };
+}
+
+/**************************************************************
+ * "월현황(주간)" 웹앱의 "마감(N)" 시트 자료(header/rows, 헤더 제외한
+ * 데이터 행만)를 이번달 "{N}월마감(N)" 탭의 3행부터 덮어씁니다.
+ **************************************************************/
+function updateClosingStatusAction_(sourceHeader, sourceRows) {
+  if (!Array.isArray(sourceRows) || !sourceRows.length) {
+    return { ok: false, error: "저장할 마감 데이터가 없습니다." };
+  }
+
+  const found = findCurrentMonthClosingArchiveSheet_();
+  if (!found.sheet) {
+    return {
+      ok: false,
+      error: "'" + found.monthNum + "월마감(N)' 형식의 탭을 찾을 수 없습니다. 26년 마감자료 스프레드시트의 탭 이름을 확인해주세요."
+    };
+  }
+
+  const sheet = found.sheet;
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastColumn < 1) {
+    return { ok: false, error: "'" + sheet.getName() + "' 탭에 헤더가 없습니다." };
+  }
+
+  const destHeader = sheet.getRange(CLOSING_ARCHIVE_HEADER_ROW_, 1, 1, lastColumn).getValues()[0]
+    .map(normalizeText_);
+
+  // 마감(N)과 이번달마감(N)의 열 순서가 다를 수 있으므로, 위치가 아니라
+  // 열 이름으로 맞춰서 옮겨 씁니다.
+  const sourceIndexByName = {};
+  (sourceHeader || []).forEach(function(name, idx) {
+    const key = normalizeText_(name);
+    if (key && !Object.prototype.hasOwnProperty.call(sourceIndexByName, key)) {
+      sourceIndexByName[key] = idx;
+    }
+  });
+
+  const unmatchedDestColumns = [];
+  const columnMap = destHeader.map(function(name) {
+    const key = normalizeText_(name);
+    if (key && Object.prototype.hasOwnProperty.call(sourceIndexByName, key)) {
+      return sourceIndexByName[key];
+    }
+    if (key) unmatchedDestColumns.push(key);
+    return -1;
+  });
+
+  const outputRows = sourceRows.map(function(row) {
+    return columnMap.map(function(srcIdx) {
+      if (srcIdx === -1) return "";
+      const value = row[srcIdx];
+      return value === undefined || value === null ? "" : value;
+    });
+  });
+
+  const existingLastRow = sheet.getLastRow();
+  const clearRowCount = Math.max(existingLastRow - CLOSING_ARCHIVE_DATA_START_ROW_ + 1, outputRows.length);
+
+  if (clearRowCount > 0) {
+    sheet.getRange(CLOSING_ARCHIVE_DATA_START_ROW_, 1, clearRowCount, lastColumn).clearContent();
+  }
+
+  // 색상 열은 값을 쓰기 전에 텍스트("@") 서식부터 지정합니다 — 이
+  // 프로젝트의 다른 "(N)" 탭들(마감(N), 정리(N) 등)과 같은 이유로,
+  // 쓴 뒤에 서식을 바꾸면 이미 "061" 같은 값이 61로 바뀐 뒤라 늦습니다.
+  const colorColIndex = destHeader.indexOf("색상");
+  if (colorColIndex !== -1 && outputRows.length) {
+    sheet.getRange(CLOSING_ARCHIVE_DATA_START_ROW_, colorColIndex + 1, outputRows.length, 1).setNumberFormat("@");
+  }
+
+  if (outputRows.length) {
+    sheet.getRange(CLOSING_ARCHIVE_DATA_START_ROW_, 1, outputRows.length, lastColumn).setValues(outputRows);
+  }
+
+  // "(N)"은 건수를 뜻하므로, 이 프로젝트의 다른 "(N)" 탭들과 같은
+  // 방식으로 실제 저장한 행 수에 맞춰 탭 이름을 갱신합니다.
+  const newName = found.monthNum + "월마감(" + outputRows.length + ")";
+  if (sheet.getName() !== newName) {
+    sheet.setName(newName);
+  }
+
+  return {
+    ok: true,
+    sheet: newName,
+    writtenRows: outputRows.length,
+    unmatchedDestColumns: unmatchedDestColumns
+  };
 }

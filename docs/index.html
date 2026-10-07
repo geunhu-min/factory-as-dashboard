@@ -834,6 +834,7 @@
       <button id="downloadMonthlyFinalClosingBtn">마감자료다운로드</button>
       <button id="downloadFullBtn">월현황엑셀다운로드</button>
       <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
+      <button id="saveClosingStatusBtn" class="warning" style="display:none;">마감현황 저장</button>
       <span id="dirtyCount" class="dirty-count"></span>
       <button id="saveRowsBtn" class="primary" disabled>변경사항 저장</button>
     </div>
@@ -996,6 +997,10 @@
 
       function isOpenAsSheetTab() {
         return state.currentSheet === OPEN_AS_SHEET_KEY;
+      }
+
+      function isMonthlyClosingTab() {
+        return state.currentSheet === MONTHLY_CLOSING_KEY;
       }
 
       function isDeleteSheetTab() {
@@ -1237,6 +1242,7 @@
         archiveWeekRunBadge: document.getElementById("archiveWeekRunBadge"),
         downloadFullBtn: document.getElementById("downloadFullBtn"),
         downloadClaimDashboardBtn: document.getElementById("downloadClaimDashboardBtn"),
+        saveClosingStatusBtn: document.getElementById("saveClosingStatusBtn"),
         monthlyFinalClosingWebappUrl: document.getElementById("monthlyFinalClosingWebappUrl"),
         saveMonthlyFinalClosingConfigBtn: document.getElementById("saveMonthlyFinalClosingConfigBtn"),
         cleanMonthlyFinalClosingBtn: document.getElementById("cleanMonthlyFinalClosingBtn"),
@@ -4972,6 +4978,7 @@
         el.removeDeletedToolbarBtn.style.display = isDeleteTab ? "" : "none";
         el.claimUpdateWeeklyBtn.style.display = isClaimTab ? "" : "none";
         el.claimReshapeMonthBtn.style.display = isClaimTab ? "" : "none";
+        el.saveClosingStatusBtn.style.display = isMonthlyClosingTab() ? "" : "none";
       }
 
       async function loadRecoverySheet_() {
@@ -5671,6 +5678,59 @@
           setStatus("표 넘기기 실패: " + error.message, "error");
         } finally {
           el.claimReshapeMonthBtn.disabled = false;
+        }
+      }
+
+      async function saveClosingStatus() {
+        const monthlyUrl = el.monthlyWebappUrl.value.trim();
+        const archiveUrl = el.claimClosingArchiveWebappUrl.value.trim();
+
+        if (!monthlyUrl) {
+          setStatus("월현황(주간) 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!archiveUrl) {
+          setStatus("26년 마감자료 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (!confirm(
+          "마감현황을 저장할까요?\n" +
+          "월현황(주간)의 마감(N) 시트 자료를 26년 마감자료의 이번달 {N}월마감(N) 시트 3행부터 덮어씁니다."
+        )) return;
+
+        setStatus("마감현황 저장 중... (시간이 걸릴 수 있습니다)", "");
+        el.saveClosingStatusBtn.disabled = true;
+
+        try {
+          const closingResponse = await fetch(
+            monthlyUrl + (monthlyUrl.includes("?") ? "&" : "?") + "action=closing"
+          );
+          const closingData = await closingResponse.json();
+          if (closingData.error) throw new Error("마감: " + closingData.error);
+
+          const response = await fetch(archiveUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "updateClosingStatus",
+              header: closingData.header || [],
+              rows: (closingData.rows || []).map(function(r) { return r.values; })
+            })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error);
+
+          setStatus(
+            "'" + data.sheet + "'에 " + data.writtenRows + "건 저장했습니다.",
+            "ok"
+          );
+        } catch (error) {
+          setStatus("마감현황 저장 실패: " + error.message, "error");
+        } finally {
+          el.saveClosingStatusBtn.disabled = false;
         }
       }
 
@@ -6626,6 +6686,7 @@
       el.downloadMonthlyFinalClosingBtn.addEventListener("click", downloadMonthlyFinalClosing);
       el.downloadFullBtn.addEventListener("click", downloadFullWorkbook);
       el.downloadClaimDashboardBtn.addEventListener("click", downloadClaimDashboardWorkbook);
+      el.saveClosingStatusBtn.addEventListener("click", saveClosingStatus);
       el.reloadBtn.addEventListener("click", function() {
         if (!state.currentSheet) {
           setStatus("먼저 탭을 선택하세요.", "error");
