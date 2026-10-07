@@ -139,10 +139,8 @@ const CAUSE_SHEET_IMAGE_BLOCK_GAP_ROWS = 1; // 사진 줄 사이 빈 줄
 // 가려지는 일이 없게 했습니다.
 const RECOVERY_BADGE_SIZE_PX = 40; // 뱃지 세로 크기(= 한 자리 뱃지의 가로 크기)
 const RECOVERY_BADGE_WIDE_WIDTH_PX = 52; // 두 자리 뱃지 가로 크기(세로는 동일)
-// 사진 오른쪽/아래쪽 모서리에서 뱃지까지 여백 — 오른쪽은 거의 끝까지
-// 붙이고(음수라 모서리를 살짝 넘어가 바짝 붙어 보임), 아래쪽은 약간
-// 띄웁니다.
-const RECOVERY_BADGE_MARGIN_X_PX = -24;
+// 사진 아래쪽 모서리에서 뱃지까지 여백(약간 띄움). 오른쪽은 여백 없이
+// 사진 자신의 실제 오른쪽 끝에 딱 맞춥니다(overlaySeqBadge_ 참고).
 const RECOVERY_BADGE_MARGIN_Y_PX = 2;
 
 // "정리파일다운로드"에서 제외할 시트(원본 데이터/양식 시트)
@@ -925,15 +923,15 @@ function totalColumnWidth_(sheet, fromCol, toCol) {
 
 
 /**************************************************************
- * 1열(A) 왼쪽 끝에서 pixelX만큼 떨어진 위치가 몇 번째 열의, 그 열
+ * startCol 왼쪽 끝에서 pixelX만큼 떨어진 위치가 몇 번째 열의, 그 열
  * 기준으로 얼마만큼(offsetX) 떨어진 자리인지 계산합니다. insertImage는
- * (열, 행, 열 안에서의 픽셀 오프셋)으로 위치를 지정해야 해서, "A열
- * 왼쪽 끝에서부터 누적 픽셀 위치" 기준으로 계산한 자리를 다시 열+
+ * (열, 행, 열 안에서의 픽셀 오프셋)으로 위치를 지정해야 해서, "어떤
+ * 열 왼쪽 끝에서부터 누적 픽셀 위치" 기준으로 계산한 자리를 다시 열+
  * 오프셋 쌍으로 바꿔주는 역할입니다.
  **************************************************************/
-function pixelXToColumnOffset_(sheet, pixelX) {
+function pixelXToColumnOffset_(sheet, startCol, pixelX) {
   let remaining = pixelX;
-  let col = 1;
+  let col = startCol;
 
   while (true) {
     const width = sheet.getColumnWidth(col);
@@ -1112,23 +1110,26 @@ function recoveryBadgeInfoForSeq_(seq) {
  * 사진 하나의 오른쪽 아래 모서리에 seq(순번) 숫자 뱃지 이미지를
  * 겹쳐 올립니다.
  *
- * blockStartRow는 이 줄 사진들의 기준 행, pixelX는 그 사진의 왼쪽
- * 끝이 1열(A) 기준으로 얼마나 떨어져 있는지(가로 전체 누적 픽셀),
- * photoOffsetY는 사진이 blockStartRow 안에서 시작하는 세로 오프셋
- * (항상 작은 값, 보통 4)입니다. 뱃지는 사진 폭/높이만큼 더한
- * "절대 픽셀 좌표"를 구한 뒤, pixelXToColumnOffset_/pixelYToRowOffset_로
- * 실제 열+오프셋/행+오프셋 쌍으로 바꿔서 넣습니다 — 사진 높이가 한
- * 행보다 훨씬 커서(약 5.5cm) offsetY를 그대로 큰 값으로 넘기면 엉뚱한
- * 자리(사진 위쪽)에 놓이기 때문입니다.
+ * 가로(오른쪽) 위치는 우리가 직접 계산해둔 값 대신, 방금 넣은 사진
+ * 자신이 실제로 어느 열/오프셋에 자리 잡았는지(photo.getAnchorCell(),
+ * getAnchorCellXOffset(), getWidth())를 다시 읽어와서 그 값 기준으로
+ * 딱 붙입니다 — 미리 계산한 열/오프셋과 실제 삽입된 이미지의 위치가
+ * 미세하게 어긋날 수 있어(반올림 등), 사진 자신의 실제 위치를 기준
+ * 삼아야 오른쪽 끝에 정확히 맞습니다. 세로(아래쪽) 위치는 기존 방식
+ * (blockStartRow 기준 오프셋 계산) 그대로 둡니다.
  **************************************************************/
-function overlaySeqBadge_(targetSheet, seq, blockStartRow, pixelX, photoOffsetY, photoWidth, photoHeight) {
+function overlaySeqBadge_(targetSheet, seq, photo, blockStartRow, photoOffsetY, photoHeight) {
   const badgeInfo = recoveryBadgeInfoForSeq_(seq);
   if (!badgeInfo) return;
 
-  const badgeAbsoluteX = Math.max(pixelX, pixelX + photoWidth - RECOVERY_BADGE_MARGIN_X_PX - badgeInfo.width);
+  const photoAnchorCol = photo.getAnchorCell().getColumn();
+  const photoOffsetXWithinAnchorCol = photo.getAnchorCellXOffset();
+  const photoWidth = photo.getWidth();
+
+  const badgeOffsetXWithinAnchorCol = photoOffsetXWithinAnchorCol + photoWidth - badgeInfo.width;
   const badgeAbsoluteY = Math.max(photoOffsetY, photoOffsetY + photoHeight - RECOVERY_BADGE_MARGIN_Y_PX - badgeInfo.height);
 
-  const xAnchor = pixelXToColumnOffset_(targetSheet, badgeAbsoluteX);
+  const xAnchor = pixelXToColumnOffset_(targetSheet, photoAnchorCol, badgeOffsetXWithinAnchorCol);
   const yAnchor = pixelYToRowOffset_(targetSheet, blockStartRow, badgeAbsoluteY);
 
   const badge = targetSheet.insertImage(badgeInfo.blob, xAnchor.column, yAnchor.row, xAnchor.offsetX, yAnchor.offsetY);
@@ -1200,7 +1201,7 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
         if (!fileId) throw new Error("드라이브 링크에서 파일 ID를 찾을 수 없습니다.");
 
         const pixelX = item.slotIndex * (slotWidth + CAUSE_SHEET_IMAGE_GAP_PX);
-        const anchor = pixelXToColumnOffset_(targetSheet, pixelX);
+        const anchor = pixelXToColumnOffset_(targetSheet, 1, pixelX);
 
         const blob = DriveApp.getFileById(fileId).getBlob();
         const image = targetSheet.insertImage(blob, anchor.column, blockStartRow, anchor.offsetX, 4);
@@ -1218,7 +1219,7 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
         image.setWidth(finalWidth).setHeight(finalHeight);
 
         if (finalHeight > maxHeight) maxHeight = finalHeight;
-        placedPhotos.push({ item: item, pixelX: pixelX, width: finalWidth, height: finalHeight });
+        placedPhotos.push({ item: item, image: image, width: finalWidth, height: finalHeight });
         insertedCount++;
       } catch (error) {
         failedCount++;
@@ -1228,7 +1229,7 @@ function insertCauseSheetImages_(targetSheet, lastDataRow, matchedImages) {
     // 2단계: 번호 뱃지는 이 줄의 사진을 전부 넣은 뒤에 올립니다 — 먼저
     // 넣은 사진 위에 뱃지가 가려질 일이 없게 순서를 분리했습니다.
     placedPhotos.forEach(function(p) {
-      overlaySeqBadge_(targetSheet, p.item.seq, blockStartRow, p.pixelX, 4, p.width, p.height);
+      overlaySeqBadge_(targetSheet, p.item.seq, p.image, blockStartRow, 4, p.height);
     });
 
     if (maxHeight === 0) maxHeight = CAUSE_SHEET_IMAGE_TARGET_HEIGHT; // 전부 실패했을 때 대비
