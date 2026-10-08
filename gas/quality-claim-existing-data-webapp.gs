@@ -39,7 +39,10 @@
  * doPost action="updateClosingStatus": "주간업무 > 마감 > 마감현황 저장"
  * 버튼 전용. body에 header(월현황(주간) "마감(N)" 시트의 실제 헤더
  * 배열)와 rows(그 시트의 데이터 행 배열, 헤더 제외)를 담아 보내면:
- * 1) 이번달(Asia/Seoul 기준) "{N}월마감(N)" 형식의 탭을 찾고
+ * 1) 이번달(Asia/Seoul 기준) "{N}월마감" 또는 "{N}월마감(숫자)" 탭을
+ *    찾고, 없으면 직전달 탭(예: 10월이면 9월마감(N))을 통째로 복사해서
+ *    "{N}월마감"이라는 이름으로 새로 만듭니다(1~2행 헤더/서식을 그대로
+ *    물려받기 위해 — 직전달 탭도 없으면 에러)
  * 2) 그 탭의 2행(실제 헤더 — 1행은 상위 제목행)과 이름이 같은 열끼리
  *    맞춰서(열 순서가 달라도 안전하도록) 3행부터 기존 내용을 지우고
  *    새 데이터를 씁니다(색상 열은 "061"처럼 0으로 시작해도 숫자로
@@ -113,12 +116,13 @@ const CLOSING_ARCHIVE_DATA_START_ROW_ = 3;
 
 /**************************************************************
  * Asia/Seoul 기준 이번달 숫자로 "{N}월마감" 또는 "{N}월마감(숫자)"와
- * 이름이 정확히 일치하는 탭을 찾습니다.
+ * 이름이 정확히 일치하는 탭을 찾습니다("월"과 "마감" 사이 공백은
+ * 있어도/없어도 인식 — doGet의 "1월 마감"도 인식한다는 것과 같은 이유).
  **************************************************************/
 function findCurrentMonthClosingArchiveSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const monthNum = Number(Utilities.formatDate(new Date(), "Asia/Seoul", "M"));
-  const pattern = new RegExp("^" + monthNum + "월마감(\\(\\d+\\))?$");
+  const pattern = new RegExp("^" + monthNum + "\\s*월\\s*마감(\\s*\\(\\d+\\))?$");
   const sheets = ss.getSheets();
 
   for (let i = 0; i < sheets.length; i++) {
@@ -131,6 +135,40 @@ function findCurrentMonthClosingArchiveSheet_() {
 }
 
 /**************************************************************
+ * 이번달 "{N}월마감" 탭이 아직 없을 때, 직전달 탭(예: 10월이면
+ * "9월마감(N)")을 통째로 복사해서 "{N}월마감"이라는 이름으로 만듭니다
+ * (1~2행 헤더/서식을 그대로 물려받기 위해 — 데이터 행은 이후
+ * updateClosingStatusAction_에서 지우고 새로 씁니다). 직전달 탭도 없으면
+ * 복사할 대상이 없으므로 에러를 던집니다.
+ **************************************************************/
+function createCurrentMonthClosingArchiveSheet_(monthNum) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const prevMonthNum = monthNum === 1 ? 12 : monthNum - 1;
+  const prevPattern = new RegExp("^" + prevMonthNum + "\\s*월\\s*마감");
+  const sheets = ss.getSheets();
+  let prevSheet = null;
+
+  for (let i = 0; i < sheets.length; i++) {
+    if (prevPattern.test(sheets[i].getName().trim())) {
+      prevSheet = sheets[i]; // 같은 접두사 탭이 여러 개면 나중 탭을 우선(doGet과 같은 기준)
+    }
+  }
+
+  if (!prevSheet) {
+    throw new Error(
+      "'" + monthNum + "월마감' 탭이 없고, 복사할 '" + prevMonthNum + "월마감(N)' 탭도 찾을 수 없습니다. 먼저 수동으로 탭을 만들어주세요."
+    );
+  }
+
+  const newSheet = prevSheet.copyTo(ss);
+  newSheet.setName(monthNum + "월마감");
+  ss.setActiveSheet(newSheet);
+  ss.moveActiveSheet(prevSheet.getIndex() + 1);
+
+  return newSheet;
+}
+
+/**************************************************************
  * "월현황(주간)" 웹앱의 "마감(N)" 시트 자료(header/rows, 헤더 제외한
  * 데이터 행만)를 이번달 "{N}월마감(N)" 탭의 3행부터 덮어씁니다.
  **************************************************************/
@@ -140,14 +178,16 @@ function updateClosingStatusAction_(sourceHeader, sourceRows) {
   }
 
   const found = findCurrentMonthClosingArchiveSheet_();
-  if (!found.sheet) {
-    return {
-      ok: false,
-      error: "'" + found.monthNum + "월마감(N)' 형식의 탭을 찾을 수 없습니다. 26년 마감자료 스프레드시트의 탭 이름을 확인해주세요."
-    };
+  let sheet = found.sheet;
+
+  if (!sheet) {
+    try {
+      sheet = createCurrentMonthClosingArchiveSheet_(found.monthNum);
+    } catch (error) {
+      return { ok: false, error: String(error.message || error) };
+    }
   }
 
-  const sheet = found.sheet;
   const lastColumn = sheet.getLastColumn();
 
   if (lastColumn < 1) {
