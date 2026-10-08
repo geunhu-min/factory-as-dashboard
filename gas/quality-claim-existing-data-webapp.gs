@@ -113,6 +113,36 @@ function normalizeText_(value) {
 // 이 스프레드시트의 "{N}월마감(N)" 탭들이 공통으로 쓰는 고정 레이아웃.
 const CLOSING_ARCHIVE_HEADER_ROW_ = 2;
 const CLOSING_ARCHIVE_DATA_START_ROW_ = 3;
+const CLOSING_ARCHIVE_DATE_COLUMN_LABELS = ["최종조치일", "반납일자"];
+
+/**************************************************************
+ * value(Date 객체 또는 JSON 직렬화된 ISO 날짜 문자열)에서 "yyyy-MM-dd"
+ * 문자열만 뽑아 돌려줍니다(monthly-final-closing-webapp.gs의
+ * parseFinalDateValue_와 같은 이유 — new Date(y,m,d)로 재조립하면
+ * 스크립트 기본 시간대가 끼어들어 날짜가 하루 밀릴 수 있어서, 시간대
+ * 영향이 없는 순수 날짜 문자열로 돌려줍니다). 날짜로 못 읽으면 원래
+ * 값을 그대로 돌려줍니다.
+ **************************************************************/
+function parseClosingArchiveDateValue_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd");
+  }
+
+  const text = String(value === null || value === undefined ? "" : value).trim();
+  if (!text) return value;
+
+  if (/T\d{2}:\d{2}/.test(text)) {
+    const parsed = new Date(text);
+    if (!isNaN(parsed.getTime())) {
+      return Utilities.formatDate(parsed, "Asia/Seoul", "yyyy-MM-dd");
+    }
+  }
+
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+
+  return match[1] + "-" + match[2] + "-" + match[3];
+}
 
 /**************************************************************
  * Asia/Seoul 기준 이번달 숫자로 "{N}월마감" 또는 "{N}월마감(숫자)"와
@@ -222,6 +252,20 @@ function updateClosingStatusAction_(sourceHeader, sourceRows) {
       if (srcIdx === -1) return "";
       const value = row[srcIdx];
       return value === undefined || value === null ? "" : value;
+    });
+  });
+
+  // 최종조치일/반납일자는 월현황(주간)에서 Date 셀로 저장돼 있어서,
+  // 이 웹앱까지 JSON으로 두 번(마감(N)→브라우저→여기) 거치는 동안
+  // "2026-10-02T07:00:00.000Z" 같은 UTC ISO 문자열로 바뀌어 올 수
+  // 있습니다. 그대로 쓰면 셀에 그 문자열이 그대로 보이므로, 쓰기 전에
+  // 한국시간 기준 "yyyy-MM-dd"로 바꿔줍니다.
+  CLOSING_ARCHIVE_DATE_COLUMN_LABELS.forEach(function(label) {
+    const colIndex = destHeader.indexOf(label);
+    if (colIndex === -1) return;
+
+    outputRows.forEach(function(row) {
+      row[colIndex] = parseClosingArchiveDateValue_(row[colIndex]);
     });
   });
 

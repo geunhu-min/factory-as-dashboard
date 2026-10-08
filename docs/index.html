@@ -5710,13 +5710,29 @@
           const closingData = await closingResponse.json();
           if (closingData.error) throw new Error("마감: " + closingData.error);
 
+          // Apps Script가 Date 셀을 JSON으로 보내면 "2026-10-02T07:00:00.000Z"
+          // 같은 UTC ISO 문자열이 되므로(화면 표시는 looksLikeIsoDateTime_/
+          // formatDateKST로 변환해서 보여주고 있었지만, 여기서는 시트에 그대로
+          // 쓰는 거라 미리 한국시간 기준 yyyy-MM-dd로 바꿔서 보내야 함).
+          const closingHeader = closingData.header || [];
+          const closingDateColIndexes = DATE_COLUMN_LABELS
+            .map(function(label) { return closingHeader.indexOf(label); })
+            .filter(function(i) { return i !== -1; });
+
+          const closingRows = (closingData.rows || []).map(function(r) {
+            return r.values.map(function(cellValue, colIndex) {
+              const isDateCol = closingDateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
+              return isDateCol ? formatDateKST(cellValue) : cellValue;
+            });
+          });
+
           const response = await fetch(archiveUrl, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
               action: "updateClosingStatus",
-              header: closingData.header || [],
-              rows: (closingData.rows || []).map(function(r) { return r.values; })
+              header: closingHeader,
+              rows: closingRows
             })
           });
 
