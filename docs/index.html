@@ -3215,19 +3215,70 @@
         return wrap;
       }
 
-      // 선택한 파일을 base64(데이터 URL의 ";base64," 뒤쪽)로 읽어옵니다.
-      function dailyFileToBase64_(file) {
+      // 선택한 파일을 데이터 URL로 읽어옵니다(PNG -> JPEG 변환에 전체
+      // 데이터 URL이 필요해서, base64만 바로 뽑지 않고 이 형태로 먼저 읽음).
+      function dailyFileToDataUrl_(file) {
         return new Promise(function(resolve, reject) {
           const reader = new FileReader();
-          reader.onload = function() {
-            const result = String(reader.result || "");
-            const marker = ";base64,";
-            const idx = result.indexOf(marker);
-            resolve(idx >= 0 ? result.slice(idx + marker.length) : result);
-          };
+          reader.onload = function() { resolve(String(reader.result || "")); };
           reader.onerror = function() { reject(reader.error || new Error("파일을 읽지 못했습니다.")); };
           reader.readAsDataURL(file);
         });
+      }
+
+      function dailyDataUrlToBase64_(dataUrl) {
+        const marker = ";base64,";
+        const idx = dataUrl.indexOf(marker);
+        return idx >= 0 ? dataUrl.slice(idx + marker.length) : dataUrl;
+      }
+
+      // 메인 대시보드(daily-stable-v23.js의 pngDataUrlToJpegDataUrl_)와 같은
+      // 이유 — 스크린샷 등 PNG는 사진 내용이어도 용량이 불필요하게 커서
+      // 업로드가 느려짐. 해상도는 그대로 두고 포맷만 고품질(95%) JPEG로
+      // 바꿔 전송 용량을 줄입니다. 실패하면 호출한 쪽에서 원본 그대로 씁니다.
+      function dailyPngDataUrlToJpegDataUrl_(dataUrl, quality) {
+        return new Promise(function(resolve, reject) {
+          const img = new Image();
+          img.onload = function() {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              canvas.getContext("2d").drawImage(img, 0, 0);
+              resolve(canvas.toDataURL("image/jpeg", quality));
+            } catch (err) {
+              reject(err);
+            }
+          };
+          img.onerror = function() { reject(new Error("PNG -> JPEG 변환 실패")); };
+          img.src = dataUrl;
+        });
+      }
+
+      // 선택한 사진 파일을 업로드용 {base64, mimeType, fileName}으로
+      // 준비합니다. PNG면 위 변환을 거쳐 JPEG로 바꾸고(실패 시 원본 PNG
+      // 그대로 폴백), 실제로 보낼 데이터 URL의 mimeType을 기준으로
+      // 확장자도 맞춰줍니다.
+      async function dailyPreparePhotoUpload_(file) {
+        const rawDataUrl = await dailyFileToDataUrl_(file);
+        const isPng = /^data:image\/png/i.test(rawDataUrl);
+        let dataUrl = rawDataUrl;
+
+        if (isPng) {
+          try {
+            dataUrl = await dailyPngDataUrlToJpegDataUrl_(rawDataUrl, 0.95);
+          } catch (_) {
+            dataUrl = rawDataUrl;
+          }
+        }
+
+        const mimeMatch = /^data:([^;,]+)/.exec(dataUrl);
+        const mimeType = mimeMatch ? mimeMatch[1] : (file.type || "image/jpeg");
+        const baseName = file.name.replace(/\.[a-z0-9]+$/i, "");
+        const ext = mimeType === "image/jpeg" ? ".jpg" : (file.name.match(/\.[a-z0-9]+$/i) || [""])[0];
+        const fileName = ext ? baseName + ext : file.name;
+
+        return { base64: dailyDataUrlToBase64_(dataUrl), mimeType: mimeType, fileName: fileName };
       }
 
       // 메인 대시보드(app.js의 ensureMediaProgressOverlay/updateMediaProgress/
@@ -3301,16 +3352,16 @@
         }, 1000);
 
         try {
-          const base64 = await dailyFileToBase64_(file);
+          const prepared = await dailyPreparePhotoUpload_(file);
           const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify({
               action: "uploadRecoveryImage",
               rowIndex: rowIndex,
-              fileName: file.name,
-              mimeType: file.type || "image/jpeg",
-              base64: base64
+              fileName: prepared.fileName,
+              mimeType: prepared.mimeType,
+              base64: prepared.base64
             })
           });
           const data = await response.json();
