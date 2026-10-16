@@ -187,7 +187,7 @@
       .monthly-counts-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
+        gap: 0;
         padding: 8px 12px;
         margin-bottom: 8px;
         border: 1px solid var(--border);
@@ -5424,10 +5424,12 @@
         const chungjuCount = innerCount + outerCount;
         const totalCount = chungjuCount + vnCount + uncollectedCount;
 
+        // 세그먼트 사이에 ", "를 글자로 직접 넣어서(CSS gap만으로는 복사할 때
+        // 쉼표 없이 공백만 붙어서) 표 위의 이 줄을 그대로 복사해 쓸 수 있게 함.
         el.monthlyCountsBar.innerHTML =
-          "<span><span class=\"count-label\">합계</span>" + totalCount + "건</span>" +
-          "<span><span class=\"count-label\">충주</span>" + chungjuCount + "건 (내작 " + innerCount + "건, 외작 " + outerCount + "건)</span>" +
-          "<span><span class=\"count-label\">VN</span>" + vnCount + "건</span>" +
+          "<span><span class=\"count-label\">합계</span>" + totalCount + "건, </span>" +
+          "<span><span class=\"count-label\">충주</span>" + chungjuCount + "건 (내작 " + innerCount + "건, 외작 " + outerCount + "건), </span>" +
+          "<span><span class=\"count-label\">VN</span>" + vnCount + "건, </span>" +
           "<span><span class=\"count-label\">미회수</span>" + uncollectedCount + "건</span>";
 
         el.monthlyCountsBar.hidden = false;
