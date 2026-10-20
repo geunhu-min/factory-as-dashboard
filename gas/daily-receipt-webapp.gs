@@ -31,6 +31,14 @@
  * 같아서 매핑 없이 붙여넣기만 합니다(S/T열 사진 링크/종류는 기존 값
  * 그대로 두고 건드리지 않음).
  *
+ * [신규] doPost action="uploadFile" — "추가" 버튼에서 링크 대신
+ * 사진/동영상 파일을 직접 선택했을 때 전용. body에 receiptNo/seq/code/
+ * kind(사진 또는 영상)/fileName/mimeType/base64를 담아 보내면, 드라이브
+ * 폴더("일일접수현황_직접첨부", 없으면 자동 생성)에 파일로 저장하고
+ * "링크 있는 사람 모두 보기" 권한을 준 뒤, 그 결과 링크를 action 없는
+ * 기본 doPost와 똑같은 방식으로 S열/T열에 바로 추가합니다. 응답의
+ * url을 화면에서 그대로 사용합니다.
+ *
  * [신규] doGet — 대시보드의 "일일업무" 페이지(포장일확인)가 이
  * 스프레드시트의 데이터를 읽을 때 씁니다:
  * - action="sheets": 모든 탭 이름 + gid + 행/열 수 목록
@@ -376,6 +384,24 @@ function jsonOutput_(payload) {
  * 아래부터는 기존에 배포되어 있던 코드입니다(그대로 유지).
  **************************************************************/
 
+// S열(링크)/T열(종류)을 각각 콤마로 split만 하면, 중간에 빈 링크가 하나라도
+// 끼어있을 때 links만 filter(Boolean)로 빈 칸을 빼면서 links/kinds 인덱스가
+// 서로 어긋난다(사진이 엉뚱한 kind를 받아 재생 아이콘이 겹쳐 보이는 등
+// "이상한 모양"으로 보이는 원인). 원래 위치 기준으로 짝을 맞춘 뒤 빈 링크만
+// 제거해서 항상 같은 길이로 맞춰 돌려준다.
+function parseLinksAndKinds_(linkStr, kindStr) {
+  var rawLinks = String(linkStr || '').split(',').map(function (v) { return v.trim(); });
+  var rawKinds = String(kindStr || '').split(',').map(function (v) { return v.trim(); });
+  var links = [];
+  var kinds = [];
+  rawLinks.forEach(function (link, i) {
+    if (!link) return;
+    links.push(link);
+    kinds.push(rawKinds[i] || '');
+  });
+  return { links: links, kinds: kinds };
+}
+
 function driveFileIdFromUrl(url) {
   var s = String(url || '');
   var m = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/) || s.match(/\/d\/([a-zA-Z0-9_-]+)/);
@@ -396,6 +422,34 @@ function fileOrderRank(fileName, customerName) {
   return m ? parseInt(m[1], 10) : 0; // 번호 없는 파일(이름.png)이 0으로 가장 먼저
 }
 
+/**************************************************************
+ * D열(접수번호)+E열(순번)+F열(부품코드)로 행을 찾습니다. 이 시트는
+ * 행이 수천 개라서 매번 getDataRange().getValues()로 전체를 통째로
+ * 읽어와 한 줄씩 비교하면(특히 사진/영상 업로드마다 매번) 느립니다.
+ * TextFinder로 D열에서 접수번호가 일치하는 후보 행만 먼저 좁힌 뒤,
+ * 그 몇 개 후보에 대해서만 E/F열을 읽어 순번+부품코드까지 비교합니다.
+ * 못 찾으면 -1을 반환합니다.
+ **************************************************************/
+function findReceiptRow_(sheet, receiptNo, seq, code) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2 || !receiptNo) return -1;
+
+  var finder = sheet.getRange(2, 4, lastRow - 1, 1)
+    .createTextFinder(receiptNo)
+    .matchEntireCell(true);
+  var matches = finder.findAll();
+
+  for (var i = 0; i < matches.length; i++) {
+    var row = matches[i].getRow();
+    var rowValues = sheet.getRange(row, 5, 1, 2).getValues()[0];
+    var rowSeq = String(rowValues[0] || '').trim();
+    var rowCode = String(rowValues[1] || '').trim();
+    if (rowSeq === seq && rowCode === code) return row;
+  }
+
+  return -1;
+}
+
 function doPost(e) {
   try {
     var payload = JSON.parse(e.postData.contents);
@@ -411,32 +465,28 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(appendResult)).setMimeType(ContentService.MimeType.JSON);
     }
 
-    var data = sheet.getDataRange().getValues();
+    if (payload.action === 'uploadFile') {
+      var uploadResult = uploadFileAndLinkAction_(sheet, payload);
+      return ContentService.createTextOutput(JSON.stringify(uploadResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
     var receiptNo = String(payload.receiptNo || '').trim();
     var seq = String(payload.seq || '').trim();
     var code = String(payload.code || '').trim();
-
-    var targetRow = -1;
-    for (var i = 0; i < data.length; i++) {
-      var rowReceiptNo = String(data[i][3] || '').trim();
-      var rowSeq = String(data[i][4] || '').trim();
-      var rowCode = String(data[i][5] || '').trim();
-      if (rowReceiptNo === receiptNo && rowSeq === seq && rowCode === code) {
-        targetRow = i + 1;
-        break;
-      }
-    }
+    var targetRow = findReceiptRow_(sheet, receiptNo, seq, code);
 
     if (targetRow < 0) {
       return ContentService.createTextOutput(JSON.stringify({ ok: true, updated: 0 }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var sCell = sheet.getRange(targetRow, 19);
-    var tCell = sheet.getRange(targetRow, 20);
-    var links = String(sCell.getValue() || '').split(',').map(function (v) { return v.trim(); }).filter(Boolean);
-    var kinds = String(tCell.getValue() || '').split(',').map(function (v) { return v.trim(); });
-    while (kinds.length < links.length) kinds.push('');
+    // S/T열을 따로 getValue() 두 번 부르지 않고 인접한 두 열을 한 번에
+    // 읽어서(API 호출 수를 줄여) 속도를 아낀다 — 아래 쓰기도 마찬가지.
+    var stRange = sheet.getRange(targetRow, 19, 1, 2);
+    var stValues = stRange.getValues()[0];
+    var parsedPair = parseLinksAndKinds_(stValues[0], stValues[1]);
+    var links = parsedPair.links;
+    var kinds = parsedPair.kinds;
 
     if (payload.action === 'delete') {
       var link = String(payload.link || '').trim();
@@ -460,14 +510,117 @@ function doPost(e) {
       }
     }
 
-    sCell.setValue(links.join(','));
-    tCell.setValue(kinds.join(','));
+    stRange.setValues([[links.join(','), kinds.join(',')]]);
     return ContentService.createTextOutput(JSON.stringify({ ok: true, updated: 1 }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**************************************************************
+ * "일일접수현황"에서 사진/동영상 파일을 직접 선택해 올렸을 때 호출.
+ * base64로 받은 파일을 드라이브에 저장하고(공유 설정까지) 그 결과
+ * 링크를 기존 doPost(action 없음)과 같은 방식으로 S열/T열에 바로
+ * 추가합니다. 반환값의 url을 화면에서 그대로 사용합니다.
+ **************************************************************/
+// 폴더 ID를 알면 여기 채워 넣으세요 — 그러면 매번 이름으로 폴더를 검색하지
+// 않고 바로 열어서(getFolderById) 그만큼 빨라집니다. 비워두면(기본값)
+// 기존처럼 이름으로 찾고, 처음 한 번 그 폴더의 ID를 응답(timings.folderId)과
+// 실행 기록 로그에 알려주니 그걸 복사해서 여기 넣으면 됩니다. 혹시 이
+// ID의 폴더가 없어지거나 접근이 안 되면 자동으로 이름 검색으로 되돌아갑니다.
+var UPLOAD_FOLDER_ID_ = '1bYZRtQYhxaZD7DAOUwQ5XFtFLbVR0K6e';
+
+// getOrCreateUploadFolder_가 ID로 바로 열었는지, 이름으로 다시 찾았는지를
+// 화면(브라우저 콘솔)에서도 바로 볼 수 있게 기록해둔다 — Apps Script
+// 실행 기록까지 안 들어가도, UPLOAD_FOLDER_ID_가 제대로 먹혔는지 바로 확인 가능.
+var lastFolderLookupMethod_ = '';
+
+function getOrCreateUploadFolder_() {
+  if (UPLOAD_FOLDER_ID_) {
+    try {
+      var folderById = DriveApp.getFolderById(UPLOAD_FOLDER_ID_);
+      lastFolderLookupMethod_ = 'id';
+      return folderById;
+    } catch (err) {
+      lastFolderLookupMethod_ = 'id-failed-fallback:' + err;
+      Logger.log('UPLOAD_FOLDER_ID_(' + UPLOAD_FOLDER_ID_ + ')로 폴더를 열지 못해 이름 검색으로 대체합니다: ' + err);
+    }
+  } else {
+    lastFolderLookupMethod_ = 'no-id-set';
+  }
+  var name = '일일접수현황_직접첨부';
+  var folders = DriveApp.getFoldersByName(name);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(name);
+  Logger.log('업로드 폴더 ID(고정하려면 UPLOAD_FOLDER_ID_에 붙여넣기): ' + folder.getId());
+  return folder;
+}
+
+function uploadFileAndLinkAction_(sheet, payload) {
+  var t0 = Date.now();
+  var timings = {};
+  var mark = function (label) { timings[label] = Date.now() - t0; };
+
+  var base64 = String(payload.base64 || '');
+  if (!base64) return { ok: false, error: '업로드할 파일 데이터가 없습니다.' };
+
+  var fileName = String(payload.fileName || 'upload');
+  var mimeType = String(payload.mimeType || 'application/octet-stream');
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(base64);
+  } catch (decodeErr) {
+    var badMatch = /[^A-Za-z0-9+/=]/.exec(base64);
+    var badInfo = badMatch
+      ? ('위치 ' + badMatch.index + '에 잘못된 문자 "' + badMatch[0] + '"(코드 ' + base64.charCodeAt(badMatch.index) + ') 발견, 주변: "' + base64.slice(Math.max(0, badMatch.index - 15), badMatch.index + 15) + '"')
+      : 'base64 문자 자체는 전부 정상(A-Za-z0-9+/=) - 길이/패딩 문제로 추정';
+    return {
+      ok: false,
+      error: '디코딩 실패 (받은 길이: ' + base64.length + '자, 4의 배수 여부: ' + (base64.length % 4 === 0) +
+        ', 끝부분: "' + base64.slice(-20) + '") - ' + badInfo + ' - ' + String(decodeErr)
+    };
+  }
+  mark('decode');
+
+  var blob = Utilities.newBlob(bytes, mimeType, fileName);
+  var folder = getOrCreateUploadFolder_();
+  // ID로 바로 연 경우는 이미 그 ID를 알고 있으니 folder.getId()를 또 부를
+  // 필요가 없다(속성 접근 한 번도 드라이브 쪽에 비용이 들 수 있어 굳이
+  // 안 해도 되는 호출은 뺀다). 이름 검색으로 대체된 경우에만(진단 목적으로
+  // 실제 ID를 알려주기 위해) 호출한다.
+  var folderId = (lastFolderLookupMethod_ === 'id') ? UPLOAD_FOLDER_ID_ : folder.getId();
+  mark('getFolder');
+  var file = folder.createFile(blob);
+  mark('createFile');
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  mark('setSharing');
+  var link = file.getUrl();
+
+  var receiptNo = String(payload.receiptNo || '').trim();
+  var seq = String(payload.seq || '').trim();
+  var code = String(payload.code || '').trim();
+  var targetRow = findReceiptRow_(sheet, receiptNo, seq, code);
+  mark('findRow');
+
+  if (targetRow < 0) {
+    Logger.log('uploadFile 단계별 소요시간(ms): ' + JSON.stringify(timings));
+    return { ok: true, url: link, updated: 0, timings: timings, folderId: folderId, folderLookupMethod: lastFolderLookupMethod_ };
+  }
+
+  var stRange = sheet.getRange(targetRow, 19, 1, 2);
+  var stValues = stRange.getValues()[0];
+  mark('readST');
+  var parsedPair = parseLinksAndKinds_(stValues[0], stValues[1]);
+  var links = parsedPair.links;
+  var kinds = parsedPair.kinds;
+  links.push(link);
+  kinds.push(String(payload.kind || '').trim());
+  stRange.setValues([[links.join(','), kinds.join(',')]]);
+  mark('writeST');
+
+  Logger.log('uploadFile 단계별 소요시간(ms, 누적): ' + JSON.stringify(timings));
+  return { ok: true, url: link, updated: 1, timings: timings, folderId: folderId, folderLookupMethod: lastFolderLookupMethod_ };
 }
 
 function dateToFolderFormat(value) {

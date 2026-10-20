@@ -15,8 +15,11 @@
  * 값(표시되는 그대로의 문자열)을
  * { ok: true, months: { "1월": [[...행...], ...], "2월": [...] } }
  * 형태의 JSON으로 돌려줍니다(뒤에 붙은 "마감(N)" 같은 글자는 떼고
- * "1월", "2월"처럼 정리해서 돌려줍니다). 대시보드가 매달 이 URL로
- * 다시 요청해서 새로 추가된 월 탭을 자동으로 읽어가므로, 매달 새
+ * "1월", "2월"처럼 정리해서 돌려줍니다). ?month=9월 처럼 파라미터를
+ * 주면 그 달 시트 하나만 읽어서 돌려주고(속도용), ?action=months
+ * 를 주면 데이터는 읽지 않고 존재하는 월 탭 이름 목록만 빠르게
+ * 돌려줍니다({ ok:true, months:["1월","2월",...] }). 대시보드가
+ * 매달 이 URL로 다시 요청해서 새로 추가된 월 탭을 자동으로 읽어가므로, 매달 새
  * CSV 링크를 다시 붙여넣지 않아도 됩니다.
  *
  * 배포 방법
@@ -70,12 +73,24 @@ function doGet(e) {
       return jsonOutput_({ url: ss.getUrl() });
     }
 
+    if (params.action === "months") {
+      const labels = [];
+      ss.getSheets().forEach((sheet) => {
+        const name = sheet.getName().trim();
+        const match = name.match(/^(\d{1,2})\s*월/);
+        if (match) labels.push(match[1] + "월");
+      });
+      return jsonOutput_({ ok: true, months: labels });
+    }
+
+    const monthFilter = String(params.month || "").trim();
     const months = {};
     ss.getSheets().forEach((sheet) => {
       const name = sheet.getName().trim();
       const match = name.match(/^(\d{1,2})\s*월/);
       if (!match) return;
       const monthLabel = match[1] + "월";
+      if (monthFilter && monthLabel !== monthFilter) return;
       months[monthLabel] = sheet.getDataRange().getDisplayValues();
     });
     return jsonOutput_({ ok: true, months: months });

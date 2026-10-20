@@ -53,11 +53,6 @@
       }
       .page-view[hidden] { display: none; }
 
-      /* 공개 배포판: 웹앱 URL을 코드에 고정해두고(DEPLOYED_CONFIG_ 참고)
-         입력/저장 UI 자체를 숨깁니다. 로컬(factory-as-sample)에는 이
-         규칙이 없어서 그 버전은 평소처럼 설정 화면이 보입니다. */
-      .config-panel { display: none !important; }
-
       .config-panel {
         display: flex;
         flex-direction: column;
@@ -607,6 +602,14 @@
             <button id="saveDailyServiceShipmentConfigBtn">서비스출고건 연결</button>
             <button type="button" id="openDailyServiceShipmentConfigBtn">열기</button>
           </div>
+          <div class="config-row">
+            <label>
+              웹 앱 URL
+              <input id="recoveryPhotoWebappUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+            </label>
+            <button id="saveRecoveryPhotoConfigBtn">회수사진 연결</button>
+            <button type="button" id="openRecoveryPhotoConfigBtn">열기</button>
+          </div>
           <div id="dailyPageStatusLine" class="status-line"></div>
         </div>
       </div>
@@ -683,6 +686,13 @@
         <button type="button" id="dailyServiceShipmentResultDownloadBtn">정리자료다운로드</button>
       </div>
 
+      <div id="dailyRecoveryStatusResultActions" class="added-entries-tabs">
+        <button type="button" id="dailyRecoveryStatusRefreshBtn">새로고침</button>
+        <span class="tabs-spacer"></span>
+        <button type="button" id="line4PhotoDownloadBtn">하자사진다운로드</button>
+        <button type="button" id="dailyRecoveryStatusAccumulateBtn">회수데이터 누적저장</button>
+      </div>
+
       <div id="dailyTableWrap" class="table-wrap">
         <table id="dailyTable">
           <thead><tr></tr></thead>
@@ -704,6 +714,32 @@
           <input type="date" id="dailyPackagingDateInput" class="recovery-date-input" />
           <button type="button" id="dailyPackagingDatePickerConfirmBtn" class="recovery-date-confirm">확인</button>
           <button type="button" id="dailyPackagingDatePickerCancelBtn" class="week-picker-cancel">취소</button>
+        </div>
+      </div>
+
+      <div id="line4PhotoDatePickerOverlay" class="week-picker-overlay" hidden>
+        <div class="week-picker-box">
+          <div class="week-picker-title">하자사진다운로드 조건을 선택하세요</div>
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin:8px 0 4px">포장처(선택 안 하면 전체)</label>
+          <div id="line4PhotoLineCheckboxes" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px"></div>
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin:8px 0 4px">현상분류</label>
+          <div style="display:flex;gap:14px;margin-bottom:8px">
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px">
+              <input type="checkbox" id="line4PhotoDetailAppearance" checked />외관
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px">
+              <input type="checkbox" id="line4PhotoDetailPackaging" checked />포장
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:13px">
+              <input type="checkbox" id="line4PhotoDetailProcessing" checked />가공
+            </label>
+          </div>
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin:8px 0 4px">시작일</label>
+          <input type="date" id="line4PhotoStartDateInput" class="recovery-date-input" />
+          <label style="display:block;font-size:12px;color:var(--text-muted);margin:8px 0 4px">종료일</label>
+          <input type="date" id="line4PhotoEndDateInput" class="recovery-date-input" />
+          <button type="button" id="line4PhotoDatePickerConfirmBtn" class="recovery-date-confirm">확인</button>
+          <button type="button" id="line4PhotoDatePickerCancelBtn" class="week-picker-cancel">취소</button>
         </div>
       </div>
 
@@ -812,6 +848,7 @@
         <button type="button" id="recoveryDatePickerCancelBtn" class="week-picker-cancel">취소</button>
       </div>
     </div>
+
 
 
     <div class="toolbar">
@@ -1252,6 +1289,19 @@
         recoveryDateInput: document.getElementById("recoveryDateInput"),
         recoveryDatePickerConfirmBtn: document.getElementById("recoveryDatePickerConfirmBtn"),
         recoveryDatePickerCancelBtn: document.getElementById("recoveryDatePickerCancelBtn"),
+        line4PhotoDownloadBtn: document.getElementById("line4PhotoDownloadBtn"),
+        line4PhotoDatePickerOverlay: document.getElementById("line4PhotoDatePickerOverlay"),
+        line4PhotoLineCheckboxes: document.getElementById("line4PhotoLineCheckboxes"),
+        line4PhotoDetailAppearance: document.getElementById("line4PhotoDetailAppearance"),
+        line4PhotoDetailPackaging: document.getElementById("line4PhotoDetailPackaging"),
+        line4PhotoDetailProcessing: document.getElementById("line4PhotoDetailProcessing"),
+        line4PhotoStartDateInput: document.getElementById("line4PhotoStartDateInput"),
+        line4PhotoEndDateInput: document.getElementById("line4PhotoEndDateInput"),
+        line4PhotoDatePickerConfirmBtn: document.getElementById("line4PhotoDatePickerConfirmBtn"),
+        line4PhotoDatePickerCancelBtn: document.getElementById("line4PhotoDatePickerCancelBtn"),
+        recoveryPhotoWebappUrl: document.getElementById("recoveryPhotoWebappUrl"),
+        saveRecoveryPhotoConfigBtn: document.getElementById("saveRecoveryPhotoConfigBtn"),
+        openRecoveryPhotoConfigBtn: document.getElementById("openRecoveryPhotoConfigBtn"),
         recoveryCsvUrl: document.getElementById("recoveryCsvUrl"),
         saveRecoveryConfigBtn: document.getElementById("saveRecoveryConfigBtn"),
         claimDashboardWebappUrl: document.getElementById("claimDashboardWebappUrl"),
@@ -1298,14 +1348,17 @@
         dailyRecoveryCleanRunBtn: document.getElementById("dailyRecoveryCleanRunBtn"),
         dailyRecoveryResultViewBtn: document.getElementById("dailyRecoveryResultViewBtn"),
         dailyRecoveryResultActions: document.getElementById("dailyRecoveryResultActions"),
+        dailyRecoveryResultSaveBtn: document.getElementById("dailyRecoveryResultSaveBtn"),
+        dailyRecoveryResultDownloadBtn: document.getElementById("dailyRecoveryResultDownloadBtn"),
         dailyServiceShipmentResultActions: document.getElementById("dailyServiceShipmentResultActions"),
         dailyServiceShipmentResultDeleteBtn: document.getElementById("dailyServiceShipmentResultDeleteBtn"),
         dailyServiceShipmentResultSaveBtn: document.getElementById("dailyServiceShipmentResultSaveBtn"),
         dailyServiceShipmentResultDownloadBtn: document.getElementById("dailyServiceShipmentResultDownloadBtn"),
-        dailyRecoveryResultSaveBtn: document.getElementById("dailyRecoveryResultSaveBtn"),
-        dailyRecoveryResultDownloadBtn: document.getElementById("dailyRecoveryResultDownloadBtn"),
         dailyRecoveryAccumulateBtn: document.getElementById("dailyRecoveryAccumulateBtn"),
         dailyRecoveryStatusResultBtn: document.getElementById("dailyRecoveryStatusResultBtn"),
+        dailyRecoveryStatusRefreshBtn: document.getElementById("dailyRecoveryStatusRefreshBtn"),
+        dailyRecoveryStatusAccumulateBtn: document.getElementById("dailyRecoveryStatusAccumulateBtn"),
+        dailyRecoveryStatusResultActions: document.getElementById("dailyRecoveryStatusResultActions"),
         dailyRecoveryStatusResultWrap: document.getElementById("dailyRecoveryStatusResultWrap"),
         dailyRecoveryStatusResultTable: document.getElementById("dailyRecoveryStatusResultTable"),
         dailyRecoveryStatusImageInput: document.getElementById("dailyRecoveryStatusImageInput"),
@@ -1431,35 +1484,12 @@
         }
       }
 
-      // 공개 배포판(GitHub Pages) 전용 — 웹앱 URL을 화면에서 입력받지
-      // 않고 여기에 고정해둡니다. 값이 바뀌면 로컬(quality-claim-dashboard/
-      // factory-as-sample)에서 새 URL로 확인/테스트한 뒤, 여기 값을
-      // 고쳐서 이 저장소(factory-as-dashboard/docs)에 다시 배포해주세요.
-      // 연결 설정 입력칸/저장 버튼은 CSS로 숨겨져 있어 화면에는 안 보입니다.
-      const DEPLOYED_CONFIG_ = {
-        url: "https://script.google.com/macros/s/AKfycbwe1nUakn8k9EX9uLUXDWtXkkoBk1bS054EAgnPw-gINjadfSVw6pObJW2Imji1lD1xjg/exec",
-        monthlyUrl: "https://script.google.com/macros/s/AKfycbx2CLgt5cyHjLzw2PJBWCj5OHEszXcuxJJG6RHdKLIhZ3qL39zhIAyw5E52hOr25QotRg/exec",
-        recoveryCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQsgy26KZsOCX_QtQI80iGPLvHyK5YyIAGwIt7sVT_aha-FWEIJJtfASGQvleKJJLw2YKr19Q_jTQeJ/pub?gid=1071469387&single=true&output=csv",
-        claimDashboardUrl: "https://script.google.com/macros/s/AKfycbxwrmUU-4oyOLhdcVNXCCXyRAR8wNiVlPFIgMoYUhYw1TziuJ6jqL5h8WQIjplq1J9C/exec",
-        claimClosingArchiveUrl: "https://script.google.com/macros/s/AKfycbzkhRq1szTTz6X-XcgGihEgV67Unrc2Cs5lSRie-RRoCZF-b9iimfBQHtBzOLAoHTsM/exec",
-        monthlyClosingUrl: "https://script.google.com/macros/s/AKfycbw29lo_8VefQNFXj601fU7fJ6Lcyd95yPNadsG-NsJ4WgTnGmmUoxhsBrPXjXIU0Y7e/exec",
-        dailyPackagingUrl: "https://script.google.com/macros/s/AKfycby7RKggqjlqwrdgd_yYznCOzDMuSvh58nMNBP4-___VewBSD4fKWCrzf-JPTIvTTIIs/exec",
-        dailyReceiptUrl: "https://script.google.com/macros/s/AKfycbz0l4t_M-xnbRshQ4U3EqbsRgCTHirvO9w2sjIDWMfM03E3HR75DpyGdHN5Q2zPsede/exec",
-        dailyReceiptStatusUrl: "https://script.google.com/macros/s/AKfycbxJ927kuhE_GC54KBCewvkIBzQoDT0q6ii56YB7BNRxSNkXT2RMb5H7_u5nYDaRMceaig/exec",
-        dailyRecoveryUrl: "https://script.google.com/macros/s/AKfycbxylHVinZ-L-L9OicVpAbvrvUf9W_m-Tl9SP8SLF96-zYathIueS-2PrCcmbpdLCZtC/exec",
-        dailyRecoveryAccumulateUrl: "https://script.google.com/macros/s/AKfycbxSW92DD6ILXwcGdVZEVs3asz2kITXWG0ZPtZjE3-ZcsnV186yx_kGMFUSVrx4nVvXK4A/exec"
-      };
-
       // server.js(로컬 서버)가 있는지 여부 — "/api/google-published-csv"
       // CORS 우회 프록시처럼 서버가 있어야만 되는 기능이 이 값을 보고
       // 정적 호스팅(GitHub Pages 등)에서는 다른 방법을 쓰도록 갈라탑니다.
-      // 공개 배포판은 항상 서버가 없는 쪽으로 갈라탑니다.
       let hasLocalConfigServer_ = false;
 
       async function readConfig_() {
-        return DEPLOYED_CONFIG_;
-        // 아래 코드는 로컬 서버/localStorage를 쓰던 예전 경로입니다
-        // (공개 배포판에서는 위 return으로 대체되어 실행되지 않음).
         try {
           const response = await fetch("/api/config");
           if (!response.ok) throw new Error("no config server");
@@ -1508,6 +1538,7 @@
         el.dailyRecoveryWebappUrl.value = saved.dailyRecoveryUrl || "";
         el.dailyRecoveryAccumulateWebappUrl.value = saved.dailyRecoveryAccumulateUrl || "";
         el.dailyServiceShipmentWebappUrl.value = saved.dailyServiceShipmentUrl || "";
+        el.recoveryPhotoWebappUrl.value = saved.recoveryPhotoUrl || "";
         dailyPackagingLastDate = saved.dailyPackagingLastDate || "";
       }
 
@@ -1671,6 +1702,14 @@
         saveConfigField_(
           { dailyServiceShipmentUrl: el.dailyServiceShipmentWebappUrl.value.trim() },
           "서비스출고건",
+          el.dailyPageStatusLine
+        );
+      }
+
+      function saveRecoveryPhotoConfig() {
+        saveConfigField_(
+          { recoveryPhotoUrl: el.recoveryPhotoWebappUrl.value.trim() },
+          "회수사진",
           el.dailyPageStatusLine
         );
       }
@@ -3100,6 +3139,7 @@
       // 별도의 표를 씁니다.
       function hideDailyRecoveryStatusResult_() {
         el.dailyRecoveryStatusResultBtn.classList.remove("active");
+        el.dailyRecoveryStatusResultActions.classList.remove("visible");
         el.dailyRecoveryStatusResultWrap.style.display = "none";
         el.dailyRecoveryStatusResultTable.querySelector("thead").innerHTML = "";
         el.dailyRecoveryStatusResultTable.querySelector("tbody").innerHTML = "";
@@ -3134,6 +3174,7 @@
       }
 
       function renderDailyRecoveryStatusTable_() {
+        el.dailyRecoveryStatusResultActions.classList.add("visible");
         el.dailyRecoveryStatusResultWrap.style.display = "";
 
         const thead = el.dailyRecoveryStatusResultTable.querySelector("thead");
@@ -4779,8 +4820,6 @@
         }
       }
 
-      // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
-      // 실행해서 "정리" 시트를 지우고 새 정리 결과로 덮어씁니다.
       // "자료정리" 완료 후 "정리" 시트 내용을 표로 보여줍니다(2공장유상마감의
       // monthlyClosingTable을 그대로 재사용 — 읽기 전용으로 보이도록
       // monthlyClosingCurrentSheet를 비워서 편집 가능 조건과 안 겹치게 합니다).
@@ -4848,6 +4887,8 @@
         }
       }
 
+      // "자료정리" 버튼 — 연결한 스프레드시트에서 정리(action="clean")를
+      // 실행해서 "정리" 시트를 지우고 새 정리 결과로 덮어씁니다.
       async function cleanMonthlyInhouseData() {
         const url = el.monthlyInhouseWebappUrl.value.trim();
 
@@ -6188,6 +6229,171 @@
         });
       }
 
+      // "회수현황" 표에 이미 불러와져 있는 dailyRecoveryStatusRows에서
+      // "포장라인/원인공정" 값의 "/" 앞부분(기본 라인 토큰)만 모아
+      // 중복 없이 돌려줍니다. 서버를 다시 부르지 않고 화면에 이미 있는
+      // 데이터로 바로 드롭다운을 채우기 위함입니다.
+      function line4PhotoAvailableLines_() {
+        const lineIdx = dailyRecoveryStatusHeader.indexOf("포장라인/원인공정");
+        if (lineIdx < 0) return [];
+
+        const seen = new Set();
+        dailyRecoveryStatusRows.forEach(function(row) {
+          const raw = String((row.values || [])[lineIdx] || "").trim();
+          if (!raw) return;
+          const primary = raw.split("/")[0].trim();
+          if (primary) seen.add(primary);
+        });
+
+        return Array.from(seen).sort(function(a, b) { return a.localeCompare(b, "ko"); });
+      }
+
+      // "하자사진다운로드" 버튼 — 포장처/현상상세/회수 날짜 범위를 고르게 함.
+      function pickLine4PhotoDateRange_() {
+        return new Promise(function(resolve) {
+          // 포장처도 현상상세처럼 체크박스로 중복 선택할 수 있게 합니다 —
+          // 하나도 안 고르면 전체(필터 없음)로 취급합니다.
+          el.line4PhotoLineCheckboxes.innerHTML = "";
+          line4PhotoAvailableLines_().forEach(function(line) {
+            const label = document.createElement("label");
+            label.style.cssText = "display:flex;align-items:center;gap:4px;font-size:13px";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.value = line;
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(line));
+            el.line4PhotoLineCheckboxes.appendChild(label);
+          });
+
+          el.line4PhotoDetailAppearance.checked = true;
+          el.line4PhotoDetailPackaging.checked = true;
+          el.line4PhotoDetailProcessing.checked = true;
+          el.line4PhotoStartDateInput.value = "";
+          el.line4PhotoEndDateInput.value = "";
+
+          function cleanup() {
+            el.line4PhotoDatePickerOverlay.hidden = true;
+            el.line4PhotoDatePickerConfirmBtn.removeEventListener("click", onConfirm);
+            el.line4PhotoDatePickerCancelBtn.removeEventListener("click", onCancel);
+          }
+
+          function onConfirm() {
+            const startDate = el.line4PhotoStartDateInput.value;
+            const endDate = el.line4PhotoEndDateInput.value;
+            if (!startDate || !endDate) return; // 둘 다 골라야 진행
+            if (startDate > endDate) {
+              alert("시작일이 종료일보다 늦을 수 없습니다.");
+              return;
+            }
+            const detailTypes = [];
+            if (el.line4PhotoDetailAppearance.checked) detailTypes.push("외관");
+            if (el.line4PhotoDetailPackaging.checked) detailTypes.push("포장");
+            if (el.line4PhotoDetailProcessing.checked) detailTypes.push("가공");
+            if (!detailTypes.length) {
+              alert("현상분류를 하나 이상 선택하세요.");
+              return;
+            }
+            const lines = Array.prototype.slice.call(
+              el.line4PhotoLineCheckboxes.querySelectorAll("input[type=checkbox]:checked")
+            ).map(function(checkbox) { return checkbox.value; });
+
+            cleanup();
+            resolve({
+              lines: lines,
+              detailTypes: detailTypes,
+              startDate: startDate,
+              endDate: endDate
+            });
+          }
+
+          function onCancel() {
+            cleanup();
+            resolve(null);
+          }
+
+          el.line4PhotoDatePickerConfirmBtn.addEventListener("click", onConfirm);
+          el.line4PhotoDatePickerCancelBtn.addEventListener("click", onCancel);
+
+          el.line4PhotoDatePickerOverlay.hidden = false;
+        });
+      }
+
+      // "하자사진다운로드" — 고른 조건에 맞는 행을 "회수데이터" 웹앱에서
+      // 찾아 받은 뒤(action=queryRecoveryDefectPhotos), 그 결과를 "회수사진"
+      // 웹앱으로 보내 시트1을 비우고 새로 채운 뒤(사진은 가로 5.5cm, 세로는
+      // 원본 비율) 엑셀로 내려받습니다.
+      async function downloadLine4DefectPhotosExcel_() {
+        const queryUrl = el.dailyRecoveryAccumulateWebappUrl.value.trim();
+        if (!queryUrl) {
+          setDailyStatus_("회수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const exportUrl = el.recoveryPhotoWebappUrl.value.trim();
+        if (!exportUrl) {
+          setDailyStatus_("회수사진 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        const cond = await pickLine4PhotoDateRange_();
+        if (!cond) return;
+
+        setDailyStatus_("하자사진다운로드 중... (대상 찾는 중)", "");
+        el.line4PhotoDownloadBtn.disabled = true;
+
+        try {
+          const queryResponse = await fetch(queryUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({
+              action: "queryRecoveryDefectPhotos",
+              startDate: cond.startDate,
+              endDate: cond.endDate,
+              lines: cond.lines,
+              detailTypes: cond.detailTypes
+            })
+          });
+
+          const queryData = await queryResponse.json();
+          if (queryData.error) throw new Error(queryData.error);
+
+          if (queryData.warning) {
+            setDailyStatus_(queryData.warning, "error");
+            return;
+          }
+
+          const rows = queryData.rows || [];
+          if (!rows.length) {
+            setDailyStatus_(
+              "조건(" + cond.startDate + " ~ " + cond.endDate + ", " + (cond.lines.length ? cond.lines.join(",") : "전체") +
+                ", " + cond.detailTypes.join("/") + ")에 맞는 사진이 없습니다.",
+              ""
+            );
+            return;
+          }
+
+          setDailyStatus_("하자사진다운로드 중... (" + rows.length + "건, 시트1에 채우는 중)", "");
+
+          const exportResponse = await fetch(exportUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "exportToSheet1", rows: rows })
+          });
+
+          const exportData = await exportResponse.json();
+          if (exportData.error || exportData.ok === false) {
+            throw new Error(exportData.error || "회수사진 시트1 내보내기에 실패했습니다.");
+          }
+
+          downloadBase64File_(exportData.base64, exportData.fileName);
+          setDailyStatus_("하자사진다운로드 완료: " + rows.length + "건 (" + exportData.fileName + ")", "ok");
+        } catch (error) {
+          setDailyStatus_("하자사진다운로드 실패: " + error.message, "error");
+        } finally {
+          el.line4PhotoDownloadBtn.disabled = false;
+        }
+      }
+
       async function matchRecovery() {
         const webappUrl = el.webappUrl.value.trim();
         const recoveryCsvUrl = el.recoveryCsvUrl.value.trim();
@@ -6412,6 +6618,7 @@
       el.saveDailyRecoveryConfigBtn.addEventListener("click", saveDailyRecoveryConfig);
       el.saveDailyRecoveryAccumulateConfigBtn.addEventListener("click", saveDailyRecoveryAccumulateConfig);
       el.saveDailyServiceShipmentConfigBtn.addEventListener("click", saveDailyServiceShipmentConfig);
+      el.saveRecoveryPhotoConfigBtn.addEventListener("click", saveRecoveryPhotoConfig);
       el.dailyServiceShipmentReplaceBtn.addEventListener("click", replaceDailyServiceShipmentData);
       el.dailyServiceShipmentCleanBtn.addEventListener("click", runDailyServiceShipmentClean);
       el.dailyServiceShipmentResultViewBtn.addEventListener("click", function() {
@@ -6475,6 +6682,10 @@
           resetDailyTableView_();
         }
       });
+      el.dailyRecoveryStatusRefreshBtn.addEventListener("click", viewDailyRecoveryStatusResult_);
+      // "정리결과"의 "회수데이터 누적저장"과 같은 기능(회수데이터
+      // 스프레드시트를 새 탭으로 열기)을 회수현황 쪽에도 그대로 둠.
+      el.dailyRecoveryStatusAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
       el.dailyRecoveryStatusImageInput.addEventListener("change", function(event) {
         const file = event.target.files && event.target.files[0];
         event.target.value = "";
@@ -6483,6 +6694,7 @@
       el.dailyPackagingReplaceBtn.addEventListener("click", replaceDailyPackagingData);
       el.dailyPackagingDateCheckBtn.addEventListener("click", checkDailyPackagingDate);
       el.dailyPackagingDownloadBtn.addEventListener("click", downloadDailyPackagingExcel);
+      el.line4PhotoDownloadBtn.addEventListener("click", downloadLine4DefectPhotosExcel_);
       // 정리시트/퍼시스/일룸 등 하위 탭과 유상마감다운로드 버튼들은
       // "2공장유상마감" 자료라서, 그 탭이 켜져 있을 때만 보이게 합니다.
       function refreshMonthlyClosingTabsVisibility_() {
@@ -6767,6 +6979,9 @@
       });
       el.openDailyServiceShipmentConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.dailyServiceShipmentWebappUrl.value, el.dailyPageStatusLine, "서비스출고건");
+      });
+      el.openRecoveryPhotoConfigBtn.addEventListener("click", function() {
+        openConnectedSpreadsheet_(el.recoveryPhotoWebappUrl.value, el.dailyPageStatusLine, "회수사진");
       });
       el.openConfigBtn.addEventListener("click", function() {
         openConnectedSpreadsheet_(el.webappUrl.value, el.statusLine, "주간 정리파일");

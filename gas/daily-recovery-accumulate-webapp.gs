@@ -53,6 +53,14 @@
  * - doPost action="deleteRecoveryImage": [신규] "회수현황" 표의 라이트박스
  *   "삭제" 버튼 전용. body의 rowIndex로 Q열 값을 비우고, 그 값이 이
  *   파일이 올린 드라이브 링크면 휴지통으로 보냅니다.
+ * - doPost action="queryRecoveryDefectPhotos": [신규] "일일업무 > 일일회수현황 >
+ *   하자사진다운로드" 버튼 전용. body에 startDate/endDate("yyyy-MM-dd"),
+ *   lines(포장라인/원인공정 접두어 배열, 빈 배열이면 전체 — 여러 개 고르면
+ *   그 중 하나로 시작하는 행이면 포함), detailTypes(현상분류 허용 값 배열,
+ *   예 ["외관","포장","가공"])를 담아 보내면, "회수누적" 탭에서 그 조건 +
+ *   사진(Q열)이 있는 행만 모아 JSON으로 반환합니다(엑셀 생성/사진 삽입은
+ *   하지 않음 — 화면이 이 결과를 "회수사진" 스프레드시트 전용 웹앱으로
+ *   다시 보내서 처리합니다).
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -172,6 +180,10 @@ function doPost(e) {
       return jsonOutput_(exportFullWorkbookAction_());
     }
 
+    if (action === "queryRecoveryDefectPhotos") {
+      return jsonOutput_(queryRecoveryDefectPhotosAction_(body.startDate, body.endDate, body.lines, body.detailTypes));
+    }
+
     if (action === "archiveOldMonthlySheets") {
       return jsonOutput_(archiveOldMonthlySheetsAction_());
     }
@@ -203,6 +215,11 @@ const RECOVERY_STATUS_COLUMN_LABELS = [
   "회수 날짜", "문서번호", "품명", "색상", "부적합내역", "포장라인/원인공정", "고객명"
 ];
 const RECOVERY_STATUS_IMAGE_COLUMN = 17; // Q열(1-based)
+// "하자사진다운로드" 필터 전용 — 외관/포장/가공 체크박스는 "현상분류" 열
+// (값이 정확히 "외관"/"포장"/"가공")을 봅니다. "이의제기"는 현상분류가
+// "취급"이나 "감성"인 건이라, 이 체크박스들에서 애초에 선택하지 않으면
+// 자연히 제외되므로 별도 제외 로직은 두지 않습니다.
+const RECOVERY_STATUS_DETAIL_TYPE_LABEL = "현상분류";
 
 
 // "회수 날짜" 열이 실제 Date 값이면 JSON으로 내보낼 때 UTC ISO 문자열
@@ -279,6 +296,101 @@ function recoveryStatusAction_() {
   }
 
   return { sheet: RECOVERY_STATUS_SHEET_NAME, header: outputHeader, rows: rows };
+}
+
+
+/**************************************************************
+ * "하자사진다운로드" 버튼 전용 — "회수누적" 탭에서 다음 조건을 모두
+ * 만족하는 행만 찾아 그 내용(텍스트 + 사진 드라이브 파일ID)을 JSON으로
+ * 돌려줍니다(엑셀 생성은 하지 않음 — 화면이 이 결과를 "회수사진"
+ * 스프레드시트 전용 웹앱(recovery-photo-export-webapp.gs)에 보내서
+ * 시트1에 쓰고 내보내는 건 그쪽이 담당):
+ * - 회수 날짜가 startDate~endDate(둘 다 "yyyy-MM-dd") 사이
+ * - lines가 비어있지 않으면 포장라인/원인공정이 그 중 하나로 시작
+ *   (여러 포장처를 중복 선택할 수 있어서 OR 조건으로 매칭)
+ * - 현상분류(RECOVERY_STATUS_DETAIL_TYPE_LABEL)가 detailTypes 배열에 포함
+ * - 사진(Q열)이 실제로 있는 행
+ * 반환되는 각 행에는 "현상상세" 열 값도 defectDetail로 같이 담아
+ * 돌려줍니다(엑셀의 "현상상세" 칸은 이 값을 씁니다 — 부적합내역이
+ * 아님. 부적합내역은 defect로 별도로 담아두기만 하고 엑셀에는 안 씀).
+ **************************************************************/
+function queryRecoveryDefectPhotosAction_(startDate, endDate, lines, detailTypes) {
+  const start = String(startDate || "").trim();
+  const end = String(endDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    throw new Error("시작일/종료일 형식이 올바르지 않습니다(yyyy-MM-dd).");
+  }
+
+  const lineFilters = Array.isArray(lines) ? lines.map(normalizeText_).filter(Boolean) : [];
+  const detailFilter = Array.isArray(detailTypes) ? detailTypes.map(normalizeText_).filter(Boolean) : [];
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RECOVERY_STATUS_SHEET_NAME);
+  if (!sheet) {
+    throw new Error("'" + RECOVERY_STATUS_SHEET_NAME + "' 탭을 찾을 수 없습니다.");
+  }
+
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+  if (lastRow < 2 || lastColumn < 1) {
+    return { ok: true, rows: [] };
+  }
+
+  const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  const header = values[0];
+
+  const idx = {
+    date: header.indexOf("회수 날짜"),
+    docNo: header.indexOf("문서번호"),
+    name: header.indexOf("품명"),
+    color: header.indexOf("색상"),
+    defect: header.indexOf("부적합내역"),
+    line: header.indexOf("포장라인/원인공정"),
+    customer: header.indexOf("고객명"),
+    detailType: header.indexOf(RECOVERY_STATUS_DETAIL_TYPE_LABEL), // "현상분류"(외관/포장/가공)
+    defectDetail: header.indexOf("현상상세") // 실제 "현상상세" 열(부적합내역과는 다른 열)
+  };
+  const imageColIndex = RECOVERY_STATUS_IMAGE_COLUMN - 1;
+
+  if (idx.detailType === -1) {
+    return {
+      ok: true,
+      rows: [],
+      warning: "'" + RECOVERY_STATUS_DETAIL_TYPE_LABEL + "' 열을 '" + RECOVERY_STATUS_SHEET_NAME +
+        "' 탭 헤더에서 찾지 못했습니다. 실제 열 이름을 확인해주세요."
+    };
+  }
+
+  const matched = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const dateStr = idx.date === -1 ? "" : formatRecoveryDateValue_(row[idx.date]);
+    if (!dateStr || dateStr < start || dateStr > end) continue;
+
+    const lineText = idx.line === -1 ? "" : normalizeText_(row[idx.line]);
+    if (lineFilters.length && !lineFilters.some(function(prefix) { return lineText.indexOf(prefix) === 0; })) continue;
+
+    const detailText = normalizeText_(row[idx.detailType]);
+    if (detailFilter.length && detailFilter.indexOf(detailText) === -1) continue;
+
+    const imageUrl = imageColIndex < row.length ? normalizeText_(row[imageColIndex]) : "";
+    const fileId = driveFileIdFromRecoveryUrl_(imageUrl);
+    if (!fileId) continue;
+
+    matched.push({
+      date: dateStr,
+      docNo: idx.docNo === -1 ? "" : normalizeText_(row[idx.docNo]),
+      name: idx.name === -1 ? "" : normalizeText_(row[idx.name]),
+      color: idx.color === -1 ? "" : normalizeText_(row[idx.color]),
+      defect: idx.defect === -1 ? "" : normalizeText_(row[idx.defect]),
+      line: lineText,
+      detailType: detailText,
+      defectDetail: idx.defectDetail === -1 ? "" : normalizeText_(row[idx.defectDetail]),
+      customer: idx.customer === -1 ? "" : normalizeText_(row[idx.customer]),
+      fileId: fileId
+    });
+  }
+
+  return { ok: true, rows: matched };
 }
 
 
