@@ -4104,7 +4104,8 @@
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + "에 " + data.addedCount + "건 추가했습니다.", "ok");
+          const updatedNote = data.updatedCount ? ", 기존 " + data.updatedCount + "건 내용 갱신" : "";
+          setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + "에 " + data.addedCount + "건 추가했습니다" + updatedNote + ".", "ok");
 
           // 원본 추가건 시트는 지우지 않으므로(새로고침해도 방금 처리한
           // 행이 그대로 보여야 헷갈리지 않음), 표에서 행을 걸러내지 않고

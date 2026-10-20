@@ -474,11 +474,14 @@ const MEETING_MATERIAL_SUMMARY_COLOR = "#fff4d6";
  *
  * 대시보드에서 체크박스로 고른 추가건 행들(rows)만 회의자료 형식으로
  * 바꿔서, 회의자료에 아직 없는(접수번호+순번+부품코드+고객명 기준)
- * 건만 뒤에 추가합니다. 이미 있는 행(직접 입력해둔 생산로트/원인처/
- * 포장처/유형/하자내역/미결구분 포함)은 그대로 두고, 맨 아래 "일일합계"
- * 요약행(금액/패널티 합계)만 매번 다시 계산해서 항상 마지막 줄에
- * 오도록 다시 씁니다. 원본 추가건 시트는 지우지 않습니다(새로고침해도
- * 방금 처리한 행이 그대로 보여야 헷갈리지 않는다는 요청).
+ * 건만 뒤에 추가합니다. 이미 있는 행은 그 외 열(접수일자/수량/금액 등)은
+ * 그대로 두고, 생산로트/원인처/포장처/유형/하자내역/미결구분만 이번에
+ * 새로 입력된 값(빈칸이 아닌 것만)으로 덮어씁니다 — 추가건에서 값을
+ * 고쳐 넣고 같은 건을 다시 체크해 저장하면 회의자료 쪽에도 반영되도록.
+ * 맨 아래 "일일합계" 요약행(금액/패널티 합계)만 매번 다시 계산해서
+ * 항상 마지막 줄에 오도록 다시 씁니다. 원본 추가건 시트는 지우지
+ * 않습니다(새로고침해도 방금 처리한 행이 그대로 보여야 헷갈리지
+ * 않는다는 요청).
  *
  * 예전에는 추가건 → 접수저장건 → 회의자료 순으로 한 단계 거쳐야
  * 했지만, 그 중간 시트가 필요 없어져서 이제 추가건에서 바로 옵니다.
@@ -548,15 +551,25 @@ function generateMeetingMaterialAction_(rows, extras) {
     realRows = realRows.slice(0, realRows.length - 1);
   }
 
-  // 접수번호+순번+부품코드+고객명 기준 중복 검사(회의자료 쪽 열 위치)
-  const existingKeys = new Set(realRows.map(function(row) {
-    return [
+  // 접수번호+순번+부품코드+고객명 기준 중복 검사(회의자료 쪽 열 위치) —
+  // 이미 있는 행의 realRows 안 위치도 같이 기억해둬서, 추가건에서 같은
+  // 건을 다시 체크해 저장했을 때 생산로트/원인처/포장처/유형/하자내역/
+  // 미결구분을 최신 값으로 갱신할 수 있게 합니다.
+  const existingRowIndexByKey = new Map();
+  realRows.forEach(function(row, idx) {
+    const key = [
       normalizeText_(row[3]), // 접수번호
       normalizeText_(row[4]), // 순번
       normalizeText_(row[5]), // 부품코드
       normalizeText_(row[8])  // 고객명
     ].join("||");
-  }));
+    if (!existingRowIndexByKey.has(key)) existingRowIndexByKey.set(key, idx);
+  });
+
+  const MEETING_EXTRA_FIELDS = ["생산로트", "원인처", "포장처", "유형", "하자내역", "미결구분"];
+  const meetingExtraColIndexes = MEETING_EXTRA_FIELDS.map(function(label) {
+    return MEETING_MATERIAL_HEADER.indexOf(label);
+  });
 
   let nextNumber = realRows.reduce(function(max, row) {
     return Math.max(max, Number(row[1]) || 0);
@@ -564,6 +577,12 @@ function generateMeetingMaterialAction_(rows, extras) {
 
   const today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
   const newRows = [];
+  let updatedCount = 0;
+  // 이번 호출 안에서 똑같은 건이 두 번 체크됐을 때(원래도 가능했던
+  // 상황) 새 행을 두 번 추가하지 않도록, 새로 추가하는 키만 따로
+  // 기억해둡니다(existingRowIndexByKey는 realRows 인덱스 전용이라
+  // 섞어 쓰면 인덱스가 어긋남).
+  const seenNewKeys = new Set();
 
   rows.forEach(function(row, rowPos) {
     // 접수저장건 쪽 열 위치(E접수번호+F순번+L부품코드+J고객명)로 키를 만들어 비교
@@ -573,11 +592,28 @@ function generateMeetingMaterialAction_(rows, extras) {
       normalizeText_(row[11]), // L열 부품코드
       normalizeText_(row[9])   // J열 고객명
     ].join("||");
-    if (existingKeys.has(key)) return;
-    existingKeys.add(key);
+    const extra = (extras && extras[rowPos]) || [];
+
+    if (existingRowIndexByKey.has(key)) {
+      // 이미 회의자료에 있는 건 — 추가건 표에서 이번에 직접 입력한
+      // 값만(빈칸은 건드리지 않고 기존 값 유지) 생산로트/원인처/포장처/
+      // 유형/하자내역/미결구분에 반영합니다. 그 외 열(수량/금액 등)은
+      // 회의자료 쪽에서 따로 고쳤을 수 있어 그대로 둡니다.
+      const existingRow = realRows[existingRowIndexByKey.get(key)];
+      let changed = false;
+      meetingExtraColIndexes.forEach(function(colIndex, i) {
+        if (colIndex !== -1 && normalizeText_(extra[i]) !== "" && existingRow[colIndex] !== extra[i]) {
+          existingRow[colIndex] = extra[i];
+          changed = true;
+        }
+      });
+      if (changed) updatedCount++;
+      return;
+    }
+    if (seenNewKeys.has(key)) return;
+    seenNewKeys.add(key);
 
     const amount = Number(String(row[34]).replace(/,/g, "")) || 0; // AI열 금액
-    const extra = (extras && extras[rowPos]) || [];
 
     newRows.push([
       today,
@@ -664,7 +700,7 @@ function generateMeetingMaterialAction_(rows, extras) {
     meetingSheet.getRange(summaryRowNumber, 1, 1, columnCount).setBackground(MEETING_MATERIAL_SUMMARY_COLOR);
   }
 
-  return { ok: true, addedCount: newRows.length, totalRows: finalRows.length };
+  return { ok: true, addedCount: newRows.length, updatedCount: updatedCount, totalRows: finalRows.length };
 }
 
 
