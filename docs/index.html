@@ -2746,6 +2746,18 @@
       // 들어있지 않아서 문자열로 유추할 수 없음).
       let dailyCurrentAddedFactory = "";
 
+      // 추가건 표의 "구분" 열 바로 다음에 끼워 넣는, 회의자료 쪽에서
+      // 직접 입력하던 빈 칸들 — 미리 여기서 채워두면 "회의자료 저장" 시
+      // 그대로 회의자료 시트에 들어감(회의자료 헤더의 같은 이름 열과 매칭).
+      // 추가건 시트 자체에는 없는 열이라 불러올 때마다 화면에서만
+      // 끼워 넣고, 저장 직전에 다시 떼어내서 원래 추가건 열 구성으로
+      // 되돌린 뒤 보냅니다(generateMeetingMaterialAction_의 고정 열
+      // 위치 매핑이 깨지지 않도록).
+      const ADDED_ENTRY_EXTRA_LABELS = ["생산로트", "원인처", "포장처", "유형", "하자내역", "미결구분"];
+      // 위 칸들을 끼워 넣은 실제 위치(구분 열 다음 인덱스) — 추가건 탭을
+      // 새로 불러올 때마다 갱신되고, "회의자료 저장" 시 다시 떼어낼 때 씀.
+      let dailyAddedEntryExtraInsertIndex = -1;
+
       async function selectDailyAddedEntriesTab_(tabBtn) {
         el.dailyAddedEntriesTabs.querySelectorAll("button[data-sheet]").forEach(function(b) {
           b.classList.remove("active");
@@ -2767,8 +2779,28 @@
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, sortFilterEnabled: true });
-          setDailyStatus_(sheetName + " " + (data.rows || []).length + "건 불러왔습니다.", "ok");
+          const originalHeader = data.header || [];
+          const foundIdx = originalHeader.indexOf("구분");
+          // "구분" 열을 못 찾으면 끝에 덧붙입니다(저장 시 떼어내는 로직과
+          // 같은 기준점을 쓰면 되므로 어디든 일관되게만 두면 안전).
+          dailyAddedEntryExtraInsertIndex = foundIdx !== -1 ? foundIdx + 1 : originalHeader.length;
+
+          const header = originalHeader.slice(0, dailyAddedEntryExtraInsertIndex)
+            .concat(ADDED_ENTRY_EXTRA_LABELS, originalHeader.slice(dailyAddedEntryExtraInsertIndex));
+          const rows = (data.rows || []).map(function(row) {
+            return {
+              rowIndex: row.rowIndex,
+              values: row.values.slice(0, dailyAddedEntryExtraInsertIndex)
+                .concat(["", "", "", "", "", ""], row.values.slice(dailyAddedEntryExtraInsertIndex))
+            };
+          });
+
+          renderDailyTable_(header, rows, {
+            checkable: true,
+            sortFilterEnabled: true,
+            editableColumnLabels: ADDED_ENTRY_EXTRA_LABELS
+          });
+          setDailyStatus_(sheetName + " " + rows.length + "건 불러왔습니다.", "ok");
         } catch (error) {
           // 탭 전환 실패 시 이전 탭의 표 내용이 새 탭이 활성화된 채로
           // 화면에 남아 헷갈리지 않도록 표만 비웁니다(탭 바 자체는 유지).
@@ -4036,7 +4068,21 @@
         }
 
         const checkedPositions = Array.from(dailyCheckedRowPositions).sort(function(a, b) { return a - b; });
-        const checkedRows = checkedPositions.map(function(pos) { return dailyCurrentRows[pos].values; });
+
+        // 화면에서만 "구분" 다음에 끼워 넣어뒀던 생산로트/원인처/포장처/
+        // 유형/하자내역/미결구분 칸을 다시 떼어내서, 원래 추가건 열
+        // 구성(rows)과 직접 입력한 값(extras)을 따로 보냅니다 —
+        // generateMeetingMaterialAction_의 고정 열 위치(D열 브랜드,
+        // AI열 금액 등) 매핑이 안 끼워 넣은 상태를 전제로 하기 때문.
+        const insertAt = dailyAddedEntryExtraInsertIndex;
+        const extraCount = ADDED_ENTRY_EXTRA_LABELS.length;
+        const checkedRows = checkedPositions.map(function(pos) {
+          const values = dailyCurrentRows[pos].values;
+          return values.slice(0, insertAt).concat(values.slice(insertAt + extraCount));
+        });
+        const checkedExtras = checkedPositions.map(function(pos) {
+          return dailyCurrentRows[pos].values.slice(insertAt, insertAt + extraCount);
+        });
 
         if (!checkedRows.length) {
           setDailyStatus_("회의자료로 저장할 항목을 체크하세요.", "error");
@@ -4052,7 +4098,7 @@
           const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: "generateMeetingMaterial", rows: checkedRows })
+            body: JSON.stringify({ action: "generateMeetingMaterial", rows: checkedRows, extras: checkedExtras })
           });
           const data = await response.json();
           if (data.error) throw new Error(data.error);

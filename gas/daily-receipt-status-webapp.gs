@@ -163,7 +163,7 @@ function doPost(e) {
     }
 
     if (action === "generateMeetingMaterial") {
-      return jsonOutput_(generateMeetingMaterialAction_(body.rows || []));
+      return jsonOutput_(generateMeetingMaterialAction_(body.rows || [], body.extras || []));
     }
 
     if (action === "exportMeetingMaterial") {
@@ -489,13 +489,17 @@ const MEETING_MATERIAL_SUMMARY_COLOR = "#fff4d6";
  * D열(브랜드)→구분, E열(접수번호)→접수번호, F열(순번)→순번,
  * L열(부품코드)→부품코드, O열(칼라)→색상, J열(고객명)→고객명,
  * Q열(조치)→수량, AI열(금액)→금액. 생산로트/원인처/포장처/유형/
- * 하자내역/미결구분은 직접 입력하도록 빈칸으로 둡니다. 패널티는
+ * 하자내역/미결구분은 대시보드의 추가건 확인 표에서 "구분" 열 다음에
+ * 직접 입력할 수 있게 미리 끼워 넣어뒀던 빈 칸으로, extras[i]에 rows[i]와
+ * 같은 순서로 [생산로트, 원인처, 포장처, 유형, 하자내역, 미결구분]
+ * 배열이 들어옵니다(직접 입력 안 했으면 빈 문자열). extras를 안 보내는
+ * 예전 호출과도 호환되도록, 없으면 그냥 전부 빈칸으로 둡니다. 패널티는
  * 새로 추가되는 모든 행에 60,000을 자동으로 채웁니다. R열(일일합계)은
  * 각 행마다 그 행의 금액+패널티를 자동으로 채우고(기존 행도 매번
  * 다시 계산), 맨 아래 요약행의 일일합계 칸에는 금액 합계+패널티
  * 합계(=일일합계 열 전체 합계)를 채웁니다.
  **************************************************************/
-function generateMeetingMaterialAction_(rows) {
+function generateMeetingMaterialAction_(rows, extras) {
   if (!rows.length) return { ok: true, addedCount: 0 };
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -561,7 +565,7 @@ function generateMeetingMaterialAction_(rows) {
   const today = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
   const newRows = [];
 
-  rows.forEach(function(row) {
+  rows.forEach(function(row, rowPos) {
     // 접수저장건 쪽 열 위치(E접수번호+F순번+L부품코드+J고객명)로 키를 만들어 비교
     const key = [
       normalizeText_(row[4]),  // E열 접수번호
@@ -573,6 +577,7 @@ function generateMeetingMaterialAction_(rows) {
     existingKeys.add(key);
 
     const amount = Number(String(row[34]).replace(/,/g, "")) || 0; // AI열 금액
+    const extra = (extras && extras[rowPos]) || [];
 
     newRows.push([
       today,
@@ -582,13 +587,13 @@ function generateMeetingMaterialAction_(rows) {
       padSequenceValue_(row[5] || ""), // F열 순번
       row[11] || "", // L열 부품코드
       row[14] || "", // O열 칼라 → 색상
-      "",            // 생산로트(직접 입력)
+      extra[0] || "", // 생산로트(추가건 표에서 직접 입력)
       row[9] || "",  // J열 고객명
-      "",            // 원인처(직접 입력)
-      "",            // 포장처(직접 입력)
-      "",            // 유형(직접 입력)
-      "",            // 하자내역(직접 입력)
-      "",            // 미결구분(직접 입력)
+      extra[1] || "", // 원인처(추가건 표에서 직접 입력)
+      extra[2] || "", // 포장처(추가건 표에서 직접 입력)
+      extra[3] || "", // 유형(추가건 표에서 직접 입력)
+      extra[4] || "", // 하자내역(추가건 표에서 직접 입력)
+      extra[5] || "", // 미결구분(추가건 표에서 직접 입력)
       row[16] || "", // Q열 조치 → 수량
       amount,
       MEETING_MATERIAL_PENALTY_AMOUNT,
