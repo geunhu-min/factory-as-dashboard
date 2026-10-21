@@ -674,6 +674,7 @@
       </div>
 
       <div id="dailyMeetingMaterialActions" class="added-entries-tabs">
+        <button type="button" id="dailyMeetingMaterialSortBtn">순서정렬</button>
         <span class="tabs-spacer"></span>
         <button type="button" id="dailyMeetingMaterialDeletePreviousBtn" class="warning">전일자료 삭제</button>
         <button type="button" id="dailyMeetingMaterialDeleteBtn" class="warning">삭제</button>
@@ -1381,6 +1382,7 @@
         dailyReceiptStatusCheckAddedBtn: document.getElementById("dailyReceiptStatusCheckAddedBtn"),
         dailyMeetingMaterialViewBtn: document.getElementById("dailyMeetingMaterialViewBtn"),
         dailyMeetingMaterialActions: document.getElementById("dailyMeetingMaterialActions"),
+        dailyMeetingMaterialSortBtn: document.getElementById("dailyMeetingMaterialSortBtn"),
         dailyMeetingMaterialDeletePreviousBtn: document.getElementById("dailyMeetingMaterialDeletePreviousBtn"),
         dailyMeetingMaterialSaveBtn: document.getElementById("dailyMeetingMaterialSaveBtn"),
         dailyMeetingMaterialDeleteBtn: document.getElementById("dailyMeetingMaterialDeleteBtn"),
@@ -2944,6 +2946,142 @@
       // 건이 아니므로 체크박스/선택전체/수정을 적용하지 않습니다.
       const MEETING_MATERIAL_SUMMARY_LABEL_TEXT = "일일합계";
 
+      // "순서정렬" 버튼으로 화면에서 순서를 바꾼 뒤(아직 시트에는 반영
+      // 안 됨) "저장"을 누르면, 평소의 칸별 수정 저장 대신 지금 화면
+      // 순서 그대로를 시트에 다시 쓰는 전용 액션(saveMeetingMaterialOrder)을
+      // 호출하도록 하는 플래그. 새로 불러오거나 그 저장이 끝나면 꺼집니다.
+      let dailyMeetingMaterialOrderDirty = false;
+
+      // 메인 대시보드(daily-stable-v23.js)의 "고객클레임 일일접수 내역"
+      // 표가 쓰는 고정 정렬 규칙과 같은 기준(원인처 라인 순 → 외주는
+      // 업체별로 묶어서 시공미결 업체 먼저 → 분류 → 하자내역 접두어 →
+      // 코드)이되, 맨 앞에 "미결구분 값이 있는 행 먼저"라는 우선순위를
+      // 하나 더 추가합니다(사용자 확인 2026-10-21).
+      function meetingSourceGroupLabel_(source) {
+        const s = String(source || "").trim();
+        if (/^1\s*라인/.test(s)) return "1라인";
+        if (/^[34]\s*라인/.test(s)) return "4라인";
+        if (/^7\s*라인/.test(s)) return "7라인";
+        if (/외주/.test(s)) return "외주";
+        if (/구매/.test(s)) return "구매";
+        return "기타";
+      }
+
+      function meetingSourceRank_(source) {
+        const label = meetingSourceGroupLabel_(source);
+        if (label === "1라인" || label === "4라인") return 1;
+        if (label === "7라인") return 2;
+        if (label === "외주") return 3;
+        if (label === "구매") return 4;
+        return 5;
+      }
+
+      function meetingCategoryRank_(type) {
+        const t = String(type || "").trim();
+        if (/감성|취급/.test(t)) return 3; // 감성/취급
+        return 2; // 고객불만(기본값) — 시공미결은 미결구분 유무로 이미 앞서 갈라놨음
+      }
+
+      function meetingDefectPrefixRank_(defect) {
+        const t = String(defect || "").trim();
+        if (t.indexOf("상판") === 0) return 1;
+        if (/^(좌|우)?도어/.test(t)) return 2;
+        return 3;
+      }
+
+      // "순서정렬" 버튼 — 화면에 불러와져 있는 회의자료 행(일일합계
+      // 요약행 제외)을 위 기준으로 다시 정렬하고, 번호 열도 새 순서
+      // 그대로 1부터 다시 매깁니다. 아직 시트에는 반영되지 않고(화면만
+      // 바뀜), "저장"을 눌러야 실제 시트 행 순서가 바뀝니다.
+      // value || ""는 숫자 0이 그대로 들어있는 칸(예: 미결구분="0")을
+      // falsy로 보고 빈칸처럼 취급해버리는 문제가 있어서, null/undefined/
+      // 빈 문자열일 때만 빈 칸으로 보는 전용 체크를 씁니다.
+      function meetingCellHasValue_(value) {
+        return !(value === null || value === undefined || String(value).trim() === "");
+      }
+
+      function sortDailyMeetingMaterialOrder_() {
+        const header = dailyCurrentHeader;
+        const numberIdx = header.indexOf("번호");
+        const pendingIdx = header.indexOf("미결구분");
+        const sourceIdx = header.indexOf("원인처");
+        const typeIdx = header.indexOf("유형");
+        const defectIdx = header.indexOf("하자내역");
+        const codeIdx = header.indexOf("부품코드");
+
+        if (numberIdx === -1 || pendingIdx === -1 || sourceIdx === -1) {
+          setDailyStatus_("정렬에 필요한 열(번호/미결구분/원인처)을 찾을 수 없습니다.", "error");
+          return;
+        }
+
+        const summaryRows = dailyCurrentRows.filter(function(row) {
+          return row.values[0] === MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+        });
+        const realRows = dailyCurrentRows.filter(function(row) {
+          return row.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+        });
+
+        if (!realRows.length) {
+          setDailyStatus_("정렬할 항목이 없습니다.", "error");
+          return;
+        }
+
+        // 외주 업체 중 시공미결(미결구분에 값 있음) 건이 하나라도 있는
+        // 업체를, 그렇지 않은 업체보다 먼저 오게 하기 위한 사전 집계
+        // (메인 대시보드와 같은 이유 — 업체명 알파벳 순으로만 묶으면
+        // 시공미결이 없는 업체가 먼저 와버림).
+        const outsourcePendingVendors = new Set();
+        realRows.forEach(function(row) {
+          const source = String(row.values[sourceIdx] || "").trim();
+          const hasPending = meetingCellHasValue_(row.values[pendingIdx]);
+          if (meetingSourceRank_(source) === 3 && hasPending) outsourcePendingVendors.add(source);
+        });
+
+        realRows.sort(function(a, b) {
+          const aPending = meetingCellHasValue_(a.values[pendingIdx]) ? 0 : 1;
+          const bPending = meetingCellHasValue_(b.values[pendingIdx]) ? 0 : 1;
+          if (aPending !== bPending) return aPending - bPending;
+
+          const aSource = String(a.values[sourceIdx] || "").trim();
+          const bSource = String(b.values[sourceIdx] || "").trim();
+          const aRank = meetingSourceRank_(aSource);
+          const bRank = meetingSourceRank_(bSource);
+          if (aRank !== bRank) return aRank - bRank;
+
+          if (aRank === 3) {
+            const aVendorPending = outsourcePendingVendors.has(aSource) ? 0 : 1;
+            const bVendorPending = outsourcePendingVendors.has(bSource) ? 0 : 1;
+            if (aVendorPending !== bVendorPending) return aVendorPending - bVendorPending;
+            const vendorCompare = aSource.localeCompare(bSource, "ko");
+            if (vendorCompare !== 0) return vendorCompare;
+          }
+
+          const aCategoryRank = meetingCategoryRank_(a.values[typeIdx]);
+          const bCategoryRank = meetingCategoryRank_(b.values[typeIdx]);
+          if (aCategoryRank !== bCategoryRank) return aCategoryRank - bCategoryRank;
+
+          const aDefectRank = meetingDefectPrefixRank_(a.values[defectIdx]);
+          const bDefectRank = meetingDefectPrefixRank_(b.values[defectIdx]);
+          if (aDefectRank !== bDefectRank) return aDefectRank - bDefectRank;
+
+          if (aRank !== 3) {
+            const sourceCompare = aSource.localeCompare(bSource, "ko");
+            if (sourceCompare !== 0) return sourceCompare;
+          }
+
+          return String(a.values[codeIdx] || "").localeCompare(String(b.values[codeIdx] || ""), "ko");
+        });
+
+        realRows.forEach(function(row, i) {
+          row.values[numberIdx] = i + 1;
+        });
+
+        dailyCurrentRows = realRows.concat(summaryRows);
+        dailyMeetingMaterialOrderDirty = true;
+        redrawDailyTable_();
+        setDailyStatus_("정렬했습니다. \"저장\"을 눌러야 시트에도 반영됩니다.", "ok");
+      }
+
       async function viewDailyMeetingMaterial_() {
         const url = el.dailyReceiptStatusWebappUrl.value.trim();
 
@@ -2968,6 +3106,7 @@
           }).length;
 
           renderDailyTable_(data.header || [], meetingMaterialRows, { checkable: true, editable: true });
+          dailyMeetingMaterialOrderDirty = false;
           setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " " + meetingMaterialRealCount + "건 불러왔습니다.", "ok");
         } catch (error) {
           // 실패했는데 표는 이전 화면(다른 시트) 내용 그대로 남고 이
@@ -3939,11 +4078,46 @@
       }
 
       // 회의자료 표에서 수정한(칸을 직접 고친) 행들을 저장합니다.
+      // "순서정렬"을 눌러서 화면 순서가 바뀐 상태라면(dailyMeetingMaterialOrderDirty),
+      // 칸별 수정 저장 대신 지금 화면 순서 그대로를 시트에 다시 쓰는
+      // 전용 액션을 대신 호출합니다(순서 자체는 rowIndex로 콕 집어
+      // 고치는 일반 저장 방식으로는 반영할 수 없어서).
       async function saveDailyMeetingMaterialEdits() {
         const url = el.dailyReceiptStatusWebappUrl.value.trim();
 
         if (!url) {
           setDailyStatus_("일일접수현황 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+          return;
+        }
+
+        if (dailyMeetingMaterialOrderDirty) {
+          const realRows = dailyCurrentRows.filter(function(row) {
+            return row.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
+          });
+
+          setDailyStatus_("정렬된 순서 저장 중...", "");
+          el.dailyMeetingMaterialSaveBtn.disabled = true;
+
+          try {
+            const response = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                action: "saveMeetingMaterialOrder",
+                rows: realRows.map(function(row) { return row.values; })
+              })
+            });
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+
+            dailyMeetingMaterialOrderDirty = false;
+            await viewDailyMeetingMaterial_();
+            setDailyStatus_("정렬된 순서로 " + data.savedCount + "건 저장했습니다.", "ok");
+          } catch (error) {
+            setDailyStatus_("저장 실패: " + error.message, "error");
+          } finally {
+            el.dailyMeetingMaterialSaveBtn.disabled = false;
+          }
           return;
         }
 
@@ -6914,6 +7088,7 @@
           await viewDailyMeetingMaterial_();
         }
       });
+      el.dailyMeetingMaterialSortBtn.addEventListener("click", sortDailyMeetingMaterialOrder_);
       el.dailyMeetingMaterialDeletePreviousBtn.addEventListener("click", deletePreviousDaysMeetingMaterial);
       el.dailyMeetingMaterialSaveBtn.addEventListener("click", saveDailyMeetingMaterialEdits);
       el.dailyMeetingMaterialDeleteBtn.addEventListener("click", deleteDailyMeetingMaterialCheckedRows);

@@ -166,6 +166,10 @@ function doPost(e) {
       return jsonOutput_(generateMeetingMaterialAction_(body.rows || [], body.extras || []));
     }
 
+    if (action === "saveMeetingMaterialOrder") {
+      return jsonOutput_(saveMeetingMaterialOrderAction_(body.rows || []));
+    }
+
     if (action === "exportMeetingMaterial") {
       return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([MEETING_MATERIAL_SHEET_NAME], "회의자료"));
     }
@@ -664,6 +668,17 @@ function generateMeetingMaterialAction_(rows, extras) {
 
   const finalRows = allRealRows.concat([summaryRow]);
 
+  writeMeetingMaterialFinalRows_(meetingSheet, finalRows, columnCount, lastRow);
+
+  return { ok: true, addedCount: newRows.length, updatedCount: updatedCount, totalRows: finalRows.length };
+}
+
+/**************************************************************
+ * "회의자료" 시트 2행부터를 finalRows(데이터 행 + 맨 끝 일일합계
+ * 요약행)로 통째로 덮어씁니다. generateMeetingMaterialAction_와
+ * sortMeetingMaterialAction_이 공통으로 씁니다.
+ **************************************************************/
+function writeMeetingMaterialFinalRows_(meetingSheet, finalRows, columnCount, lastRow) {
   if (lastRow >= 2) {
     // 이전 요약행의 노란색 배경이 새로 채워지는 실제 데이터 행에
     // 남아있지 않도록, 내용과 배경을 함께 지운 뒤 다시 씁니다.
@@ -699,8 +714,45 @@ function generateMeetingMaterialAction_(rows, extras) {
     const summaryRowNumber = finalRows.length + 1; // 1행은 헤더, 데이터는 2행부터
     meetingSheet.getRange(summaryRowNumber, 1, 1, columnCount).setBackground(MEETING_MATERIAL_SUMMARY_COLOR);
   }
+}
 
-  return { ok: true, addedCount: newRows.length, updatedCount: updatedCount, totalRows: finalRows.length };
+/**************************************************************
+ * "순서정렬" 버튼 액션 — 정렬 자체(원인처/분류/하자내역 접두어 등 순위
+ * 계산)는 대시보드 쪽(factory-as-sample/index.html)에서 이미 끝내고,
+ * 정렬 결과(rows — 일일합계 요약행 제외, 화면에 보이는 순서 그대로의
+ * 전체 행 배열)를 그대로 보내줍니다. 여기서는 그 순서 그대로 시트에
+ * 다시 쓰기만 합니다(금액/패널티 합계는 내용이 안 바뀌므로 직접
+ * 다시 계산해서 요약행을 새로 만듭니다).
+ **************************************************************/
+function saveMeetingMaterialOrderAction_(rows) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const meetingSheet = ss.getSheetByName(MEETING_MATERIAL_SHEET_NAME);
+  if (!meetingSheet) throw new Error("'" + MEETING_MATERIAL_SHEET_NAME + "' 시트를 찾을 수 없습니다.");
+
+  const columnCount = MEETING_MATERIAL_HEADER.length;
+  const lastRow = meetingSheet.getLastRow();
+
+  const fixedRows = rows.map(function(row) {
+    return normalizeRowLength_(row, columnCount);
+  });
+
+  const amountTotal = fixedRows.reduce(function(sum, row) {
+    return sum + (Number(String(row[MEETING_MATERIAL_AMOUNT_COLUMN_INDEX]).replace(/,/g, "")) || 0);
+  }, 0);
+  const penaltyTotal = fixedRows.reduce(function(sum, row) {
+    return sum + (Number(String(row[MEETING_MATERIAL_PENALTY_COLUMN_INDEX]).replace(/,/g, "")) || 0);
+  }, 0);
+
+  const summaryRow = normalizeRowLength_([MEETING_MATERIAL_SUMMARY_LABEL], columnCount);
+  summaryRow[MEETING_MATERIAL_AMOUNT_COLUMN_INDEX] = amountTotal;
+  summaryRow[MEETING_MATERIAL_PENALTY_COLUMN_INDEX] = penaltyTotal;
+  summaryRow[MEETING_MATERIAL_DAILY_TOTAL_COLUMN_INDEX] = amountTotal + penaltyTotal;
+
+  const finalRows = fixedRows.concat([summaryRow]);
+
+  writeMeetingMaterialFinalRows_(meetingSheet, finalRows, columnCount, lastRow);
+
+  return { ok: true, savedCount: fixedRows.length };
 }
 
 
