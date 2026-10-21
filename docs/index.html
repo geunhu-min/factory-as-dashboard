@@ -387,7 +387,13 @@
       thead th.sortable-col:hover { filter: brightness(0.95); }
       thead th .sort-arrow { color: var(--accent); font-weight: 700; }
 
-      thead th.filterable-col { position: relative; }
+      /* position: relative를 여기 따로 주지 않습니다 — thead th의
+         position: sticky가 이미 absolute 자식(.daily-filter-dropdown)의
+         기준이 되어주고(sticky도 relative/absolute/fixed처럼 containing
+         block이 됨), 여기서 relative로 다시 덮어쓰면 그 이름 선택자가
+         더 구체적이라 sticky를 이겨버려서 이 열(회사/구분/미결구분)만
+         스크롤할 때 고정되지 않고 같이 넘어가버리는 버그가 있었습니다
+         (고정된 다른 헤더 칸 자리에 스크롤된 본문 행의 값이 비쳐 보임). */
       .daily-filter-btn {
         margin-left: 4px;
         padding: 0 4px;
@@ -1158,17 +1164,19 @@
       // colLabels로 찾은 각 열을, 그 열의 실제 내용(헤더+모든 행) 중
       // 가장 넓은 너비에 딱 맞게 줄입니다(다른 칸과의 공통 너비를 맞추는
       // applyNarrowColumnWidths_와 달리, 각 열이 자기 내용 크기를 그대로 씀).
-      function applyContentFitColumnWidths_(headerList, colLabels, theadRowEl, tbodyEl, widthPlan) {
+      function applyContentFitColumnWidths_(headerList, colLabels, theadRowEl, tbodyEl, widthPlan, domPosOf) {
+        const toDomPos = domPosOf || function(i) { return i; };
         const headerCells = theadRowEl.querySelectorAll("th");
 
         colLabels.forEach(function(label) {
           const colIndex = findHeaderIndex_(headerList, label);
           if (colIndex === -1) return;
+          const domPos = toDomPos(colIndex);
 
-          const th = headerCells[colIndex + LEADING_COLUMNS];
+          const th = headerCells[domPos + LEADING_COLUMNS];
           if (!th) return;
 
-          const tds = tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")");
+          const tds = tbodyEl.querySelectorAll("td:nth-child(" + (domPos + LEADING_COLUMNS + 1) + ")");
 
           let width = measureTextWidth_(th.textContent);
           tds.forEach(function(td) {
@@ -1184,7 +1192,7 @@
             td.style.maxWidth = width + "px";
           });
 
-          if (widthPlan) widthPlan[colIndex + LEADING_COLUMNS] = width;
+          if (widthPlan) widthPlan[domPos + LEADING_COLUMNS] = width;
         });
       }
 
@@ -1193,43 +1201,47 @@
       // 맞춥니다. referenceLabel 열이 이미 줄여져 있는지와 상관없이
       // 항상 그 열의 실제 내용을 직접 다시 재서 계산하므로, 이 함수를
       // 호출하는 순서는 상관없습니다.
-      function applyContentFitRelativeWidth_(headerList, targetLabel, referenceLabel, multiplier, theadRowEl, tbodyEl, widthPlan) {
+      function applyContentFitRelativeWidth_(headerList, targetLabel, referenceLabel, multiplier, theadRowEl, tbodyEl, widthPlan, domPosOf) {
+        const toDomPos = domPosOf || function(i) { return i; };
         const targetIndex = findHeaderIndex_(headerList, targetLabel);
         const referenceIndex = findHeaderIndex_(headerList, referenceLabel);
         if (targetIndex === -1 || referenceIndex === -1) return;
+        const targetDomPos = toDomPos(targetIndex);
+        const referenceDomPos = toDomPos(referenceIndex);
 
         const headerCells = theadRowEl.querySelectorAll("th");
-        const refTh = headerCells[referenceIndex + LEADING_COLUMNS];
+        const refTh = headerCells[referenceDomPos + LEADING_COLUMNS];
         if (!refTh) return;
 
         let refWidth = measureTextWidth_(refTh.textContent);
-        tbodyEl.querySelectorAll("td:nth-child(" + (referenceIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+        tbodyEl.querySelectorAll("td:nth-child(" + (referenceDomPos + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
           const cellWidth = measureTextWidth_(td.textContent);
           if (cellWidth > refWidth) refWidth = cellWidth;
         });
         refWidth += 24;
 
         const targetWidth = Math.round(refWidth * multiplier);
-        const targetTh = headerCells[targetIndex + LEADING_COLUMNS];
+        const targetTh = headerCells[targetDomPos + LEADING_COLUMNS];
         if (targetTh) {
           targetTh.style.width = targetWidth + "px";
           targetTh.style.maxWidth = targetWidth + "px";
         }
 
-        tbodyEl.querySelectorAll("td:nth-child(" + (targetIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+        tbodyEl.querySelectorAll("td:nth-child(" + (targetDomPos + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
           td.style.width = targetWidth + "px";
           td.style.maxWidth = targetWidth + "px";
         });
 
-        if (widthPlan) widthPlan[targetIndex + LEADING_COLUMNS] = targetWidth;
+        if (widthPlan) widthPlan[targetDomPos + LEADING_COLUMNS] = targetWidth;
       }
 
-      function applyMinColumnWidth_(colIndex, minWidthPx, theadRowEl, tbodyEl) {
+      function applyMinColumnWidth_(colIndex, minWidthPx, theadRowEl, tbodyEl, domPosOf) {
+        const domPos = domPosOf ? domPosOf(colIndex) : colIndex;
         const headerCells = theadRowEl.querySelectorAll("th");
-        const th = headerCells[colIndex + LEADING_COLUMNS];
+        const th = headerCells[domPos + LEADING_COLUMNS];
         if (th) th.style.minWidth = minWidthPx + "px";
 
-        tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+        tbodyEl.querySelectorAll("td:nth-child(" + (domPos + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
           td.style.minWidth = minWidthPx + "px";
         });
       }
@@ -1977,7 +1989,11 @@
           // (회의자료 등). 이 열만 contentEditable이 되므로 Tab 이동도
           // 자연스럽게 이 열들 사이에서만 됨.
           editableColumnLabels: (options && options.editableColumnLabels) || null,
-          sortFilterEnabled: !!(options && options.sortFilterEnabled)
+          sortFilterEnabled: !!(options && options.sortFilterEnabled),
+          // 지정하면(예: 추가건 확인) 이 이름의 열만, 이 순서대로 보여주고
+          // 나머지는 숨깁니다. 지정 안 하면(null) 기존처럼 전체 열을 원래
+          // 순서대로 다 보여줍니다.
+          visibleColumnLabels: (options && options.visibleColumnLabels) || null
         };
         dailySortColIndex = -1;
         dailySortDirection = "";
@@ -2157,6 +2173,25 @@
               .map(function(label) { return findHeaderIndex_(header, label); })
               .filter(function(i) { return i !== -1; })
           : null;
+        // visibleColumnLabels가 지정돼 있으면(추가건 확인 등) 그 이름의
+        // 열만, 그 순서대로 렌더링합니다(지정 안 하면 기존처럼 전체 열을
+        // 원래 순서 그대로). sticky 헤더가 있는 표에서 다 그린 뒤에 DOM을
+        // 재배치/숨김 처리하면 스크롤 시 헤더가 깨지는 버그가 있어서,
+        // 처음부터 이 순서로 셀을 만듭니다 — 그래서 아래 두 loop(헤더/
+        // 바디)가 원래의 header.forEach/row.values.forEach 대신 이
+        // 배열을 돕니다. toDomPos_는 원래 colIndex를 실제 DOM 위치로
+        // 바꿔주는 함수로, 폭 계산 함수들(applyNarrowColumnWidths_ 등)에
+        // 넘겨서 올바른 셀에 폭을 적용하게 합니다(visibleColumnLabels가
+        // 없으면 항등함수라 기존 표들은 동작이 전혀 안 바뀜).
+        const displayColIndexes = dailyTableOptions_.visibleColumnLabels
+          ? dailyTableOptions_.visibleColumnLabels
+              .map(function(label) { return findHeaderIndex_(header, label); })
+              .filter(function(i) { return i !== -1; })
+          : header.map(function(_, i) { return i; });
+        const toDomPos_ = function(colIndex) {
+          const pos = displayColIndexes.indexOf(colIndex);
+          return pos === -1 ? colIndex : pos;
+        };
         const dailyColumnWidthPlan_ = {};
 
         el.dailyThead.innerHTML = "";
@@ -2192,7 +2227,8 @@
         el.dailyThead.appendChild(leadTh);
 
         const sortFilterEnabled = dailyTableOptions_.sortFilterEnabled;
-        header.forEach(function(label, colIndex) {
+        displayColIndexes.forEach(function(colIndex) {
+          const label = header[colIndex];
           let th;
           if (sortFilterEnabled && (label.includes("부품명") || label.includes("접수번호"))) {
             th = buildDailySortableHeaderCell_(label, colIndex);
@@ -2291,7 +2327,8 @@
 
           tr.appendChild(leadTd);
 
-          row.values.forEach(function(cellValue, colIndex) {
+          displayColIndexes.forEach(function(colIndex) {
+            const cellValue = row.values[colIndex];
             const td = document.createElement("td");
             const isCellEditable = editable && !isSummaryRow &&
               (editableColIndexes_ ? editableColIndexes_.indexOf(colIndex) !== -1 : true);
@@ -2370,15 +2407,15 @@
         });
 
         if (genericNarrowColIndexes.length) {
-          applyNarrowColumnWidths_(header, genericNarrowColIndexes, el.dailyThead, el.dailyTbody, undefined, dailyColumnWidthPlan_);
+          applyNarrowColumnWidths_(header, genericNarrowColIndexes, el.dailyThead, el.dailyTbody, undefined, dailyColumnWidthPlan_, toDomPos_);
         }
         if (partNameColIndex !== -1) {
-          applyNarrowColumnWidths_(header, [partNameColIndex], el.dailyThead, el.dailyTbody, "부품코드", dailyColumnWidthPlan_);
+          applyNarrowColumnWidths_(header, [partNameColIndex], el.dailyThead, el.dailyTbody, "부품코드", dailyColumnWidthPlan_, toDomPos_);
         }
 
         const defectDetailColIndex = findHeaderIndex_(header, DEFECT_DETAIL_COLUMN_LABEL);
         if (defectDetailColIndex !== -1) {
-          applyMinColumnWidth_(defectDetailColIndex, DEFECT_DETAIL_COLUMN_MIN_WIDTH, el.dailyThead, el.dailyTbody);
+          applyMinColumnWidth_(defectDetailColIndex, DEFECT_DETAIL_COLUMN_MIN_WIDTH, el.dailyThead, el.dailyTbody, toDomPos_);
         }
 
         // table-layout:auto에서는 열 폭 지정(width)이 그냥 참고값이라,
@@ -2392,14 +2429,14 @@
         const fixedLayoutActive = itemNameColIndex !== -1 || barosColIndex !== -1;
         if (el.dailyTable) el.dailyTable.classList.toggle("fixed-layout", fixedLayoutActive);
 
-        applyContentFitColumnWidths_(header, CONTENT_FIT_COLUMN_LABELS, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+        applyContentFitColumnWidths_(header, CONTENT_FIT_COLUMN_LABELS, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_, toDomPos_);
 
         if (itemNameColIndex !== -1) {
-          applyContentFitRelativeWidth_(header, "품목명칭", "접수번호", 2, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+          applyContentFitRelativeWidth_(header, "품목명칭", "접수번호", 2, el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_, toDomPos_);
         }
 
         if (barosColIndex !== -1) {
-          applyContentFitColumnWidths_(header, ["번호", "0", "바로스"], el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_);
+          applyContentFitColumnWidths_(header, ["번호", "0", "바로스"], el.dailyThead, el.dailyTbody, dailyColumnWidthPlan_, toDomPos_);
         }
 
         if (el.dailyTable) {
@@ -2826,6 +2863,19 @@
       // 되돌린 뒤 보냅니다(generateMeetingMaterialAction_의 고정 열
       // 위치 매핑이 깨지지 않도록).
       const ADDED_ENTRY_EXTRA_LABELS = ["생산로트", "원인처", "포장처", "유형", "하자내역", "미결구분"];
+
+      // "추가건 확인" 표에서 실제로 보여줄 열과 그 순서 — 체크박스/번호
+      // 칸은 항상 맨 앞에 따로 붙는 열이라 여기엔 안 넣음. 나머지 열(0,
+      // 실적사업소, 대리점, 제품코드, 반납, 출고예정일, 최종조치일자,
+      // 요구내역, 시공일자, 기존시공팀, 서비스팀, 시공미결처리건)은
+      // 화면에서만 숨기고(원본 추가건 시트/회의자료 저장 시 보내는 값에는
+      // 영향 없음) 보여줌.
+      const ADDED_ENTRY_VISIBLE_LABELS = [
+        "번호", "회사", "브랜드", "접수번호", "순번", "접수자", "고객명",
+        "서비스센터", "부품코드", "(신)부품코드", "부품명", "칼라", "조치",
+        "구분", "생산로트", "원인처", "포장처", "유형", "하자내역",
+        "미결구분", "하자발생시점"
+      ];
       // 위 칸들을 끼워 넣은 실제 위치(구분 열 다음 인덱스) — 추가건 탭을
       // 새로 불러올 때마다 갱신되고, "회의자료 저장" 시 다시 떼어낼 때 씀.
       let dailyAddedEntryExtraInsertIndex = -1;
@@ -2871,7 +2921,8 @@
             checkable: true,
             editable: true,
             sortFilterEnabled: true,
-            editableColumnLabels: ADDED_ENTRY_EXTRA_LABELS
+            editableColumnLabels: ADDED_ENTRY_EXTRA_LABELS,
+            visibleColumnLabels: ADDED_ENTRY_VISIBLE_LABELS
           });
           setDailyStatus_(sheetName + " " + rows.length + "건 불러왔습니다.", "ok");
         } catch (error) {
@@ -5571,25 +5622,27 @@
         return -1;
       }
 
-      function applyNarrowColumnWidths_(headerList, narrowColIndexes, theadRowEl, tbodyEl, referenceLabel, widthPlan) {
+      function applyNarrowColumnWidths_(headerList, narrowColIndexes, theadRowEl, tbodyEl, referenceLabel, widthPlan, domPosOf) {
+        const toDomPos = domPosOf || function(i) { return i; };
         const headerCells = theadRowEl.querySelectorAll("th");
         const refIndex = findHeaderIndex_(headerList, referenceLabel || NARROW_WIDTH_REFERENCE_LABEL);
-        const refCell = refIndex !== -1 ? headerCells[refIndex + LEADING_COLUMNS] : null;
+        const refCell = refIndex !== -1 ? headerCells[toDomPos(refIndex) + LEADING_COLUMNS] : null;
         const width = refCell ? Math.ceil(refCell.getBoundingClientRect().width) : NARROW_FALLBACK_WIDTH;
 
         narrowColIndexes.forEach(function(colIndex) {
-          const th = headerCells[colIndex + LEADING_COLUMNS];
+          const domPos = toDomPos(colIndex);
+          const th = headerCells[domPos + LEADING_COLUMNS];
           if (th) {
             th.style.maxWidth = width + "px";
             th.style.width = width + "px";
           }
 
-          tbodyEl.querySelectorAll("td:nth-child(" + (colIndex + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
+          tbodyEl.querySelectorAll("td:nth-child(" + (domPos + LEADING_COLUMNS + 1) + ")").forEach(function(td) {
             td.style.maxWidth = width + "px";
             td.style.width = width + "px";
           });
 
-          if (widthPlan) widthPlan[colIndex + LEADING_COLUMNS] = width;
+          if (widthPlan) widthPlan[domPos + LEADING_COLUMNS] = width;
         });
       }
 
