@@ -3026,34 +3026,45 @@
           return;
         }
 
-        // 외주 업체 중 시공미결(미결구분에 값 있음) 건이 하나라도 있는
-        // 업체를, 그렇지 않은 업체보다 먼저 오게 하기 위한 사전 집계
-        // (메인 대시보드와 같은 이유 — 업체명 알파벳 순으로만 묶으면
-        // 시공미결이 없는 업체가 먼저 와버림).
-        const outsourcePendingVendors = new Set();
+        // 외주/구매 업체(원인처 값 그대로) 중 시공미결(미결구분에 값
+        // 있음) 건이 하나라도 있는 업체를, 그렇지 않은 업체보다 먼저
+        // 오게 하기 위한 사전 집계(사용자 확인 2026-10-21 — 업체명
+        // 알파벳 순으로만 묶으면 시공미결이 없는 업체가 먼저 와버림).
+        const vendorHasPending = new Set();
         realRows.forEach(function(row) {
           const source = String(row.values[sourceIdx] || "").trim();
+          const rank = meetingSourceRank_(source);
           const hasPending = meetingCellHasValue_(row.values[pendingIdx]);
-          if (meetingSourceRank_(source) === 3 && hasPending) outsourcePendingVendors.add(source);
+          if ((rank === 3 || rank === 4) && hasPending) vendorHasPending.add(source);
         });
 
+        // 정렬 우선순위(사용자 확인 2026-10-21):
+        // 1) 원인처 분류(1/4라인 → 7라인 → 외주 → 구매 → 기타)
+        // 2) 외주/구매는 업체(원인처 값)별로 묶되, 시공미결 건이 하나라도
+        //    있는 업체가 먼저, 같은 그룹 안에서는 업체명 가나다순 →
+        //    그 업체 안에서는 미결구분 있는 행이 먼저. 1/4라인/7라인/
+        //    기타는 업체 구분 없이 그 분류 안에서 미결구분 있는 행이 먼저.
+        // 3) 유형(고객불만/감성·취급) → 4) 하자내역 접두어 → 5) 부품코드
         realRows.sort(function(a, b) {
-          const aPending = meetingCellHasValue_(a.values[pendingIdx]) ? 0 : 1;
-          const bPending = meetingCellHasValue_(b.values[pendingIdx]) ? 0 : 1;
-          if (aPending !== bPending) return aPending - bPending;
-
           const aSource = String(a.values[sourceIdx] || "").trim();
           const bSource = String(b.values[sourceIdx] || "").trim();
           const aRank = meetingSourceRank_(aSource);
           const bRank = meetingSourceRank_(bSource);
           if (aRank !== bRank) return aRank - bRank;
 
-          if (aRank === 3) {
-            const aVendorPending = outsourcePendingVendors.has(aSource) ? 0 : 1;
-            const bVendorPending = outsourcePendingVendors.has(bSource) ? 0 : 1;
-            if (aVendorPending !== bVendorPending) return aVendorPending - bVendorPending;
-            const vendorCompare = aSource.localeCompare(bSource, "ko");
-            if (vendorCompare !== 0) return vendorCompare;
+          const aPending = meetingCellHasValue_(a.values[pendingIdx]) ? 0 : 1;
+          const bPending = meetingCellHasValue_(b.values[pendingIdx]) ? 0 : 1;
+
+          if (aRank === 3 || aRank === 4) {
+            if (aSource !== bSource) {
+              const aVendorPending = vendorHasPending.has(aSource) ? 0 : 1;
+              const bVendorPending = vendorHasPending.has(bSource) ? 0 : 1;
+              if (aVendorPending !== bVendorPending) return aVendorPending - bVendorPending;
+              return aSource.localeCompare(bSource, "ko");
+            }
+            if (aPending !== bPending) return aPending - bPending;
+          } else {
+            if (aPending !== bPending) return aPending - bPending;
           }
 
           const aCategoryRank = meetingCategoryRank_(a.values[typeIdx]);
@@ -3064,7 +3075,7 @@
           const bDefectRank = meetingDefectPrefixRank_(b.values[defectIdx]);
           if (aDefectRank !== bDefectRank) return aDefectRank - bDefectRank;
 
-          if (aRank !== 3) {
+          if (aRank !== 3 && aRank !== 4) {
             const sourceCompare = aSource.localeCompare(bSource, "ko");
             if (sourceCompare !== 0) return sourceCompare;
           }
