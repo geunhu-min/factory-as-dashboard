@@ -641,7 +641,6 @@
       </div>
 
       <div id="dailyRecoveryStatusActions" class="toolbar factory-actions">
-        <button type="button" id="dailyRecoveryViewBtn">반납내역서</button>
         <button type="button" id="dailyRecoveryReplaceBtn">반납내역서 정리 교체</button>
         <button type="button" id="dailyRecoveryCleanRunBtn">반납내역서 정리실행</button>
         <button type="button" id="dailyRecoveryResultViewBtn">정리결과</button>
@@ -1360,7 +1359,6 @@
         dailyManualBtn: document.getElementById("dailyManualBtn"),
         dailyReceiptStatusActions: document.getElementById("dailyReceiptStatusActions"),
         dailyRecoveryStatusActions: document.getElementById("dailyRecoveryStatusActions"),
-        dailyRecoveryViewBtn: document.getElementById("dailyRecoveryViewBtn"),
         dailyRecoveryReplaceBtn: document.getElementById("dailyRecoveryReplaceBtn"),
         dailyRecoveryCleanRunBtn: document.getElementById("dailyRecoveryCleanRunBtn"),
         dailyRecoveryResultViewBtn: document.getElementById("dailyRecoveryResultViewBtn"),
@@ -1775,7 +1773,6 @@
         el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
         el.dailyMeetingMaterialViewBtn.classList.remove("active");
         el.dailyMeetingMaterialActions.classList.remove("visible");
-        el.dailyRecoveryViewBtn.classList.remove("active");
         el.dailyRecoveryResultViewBtn.classList.remove("active");
         el.dailyRecoveryResultActions.classList.remove("visible");
         el.dailyServiceShipmentResultViewBtn.classList.remove("active");
@@ -2978,33 +2975,6 @@
           // 초기화해서 "현재 아무 표도 안 보이는" 상태로 되돌립니다.
           resetDailyTableView_();
           setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " 불러오기 실패: " + error.message, "error");
-        }
-      }
-
-      // "반납내역서" 버튼 — 연결한 스프레드시트의 시트1을 접수현황처럼
-      // 표로 그대로 불러와 보여줍니다(읽기 전용).
-      async function viewDailyRecoveryDoc_() {
-        const url = el.dailyRecoveryWebappUrl.value.trim();
-
-        if (!url) {
-          setDailyStatus_("반납내역서 정리 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
-          return;
-        }
-
-        setDailyStatus_("반납내역서 불러오는 중...", "");
-
-        try {
-          const requestUrl = url + (url.includes("?") ? "&" : "?") +
-            "action=read&sheet=" + encodeURIComponent("시트1");
-          const response = await fetch(requestUrl);
-          const data = await response.json();
-          if (data.error) throw new Error(data.error);
-
-          renderDailyTable_(data.header || [], data.rows || [], { checkable: false, sortFilterEnabled: true });
-          setDailyStatus_("반납내역서 " + (data.rows || []).length + "건 불러왔습니다.", "ok");
-        } catch (error) {
-          resetDailyTableView_();
-          setDailyStatus_("반납내역서 불러오기 실패: " + error.message, "error");
         }
       }
 
@@ -6721,21 +6691,6 @@
       el.dailyServiceShipmentResultSaveBtn.addEventListener("click", saveDailyServiceShipmentResultEdits);
       el.dailyServiceShipmentResultDownloadBtn.addEventListener("click", downloadDailyServiceShipmentResultExcel);
       el.dailyRecoveryAccumulateBtn.addEventListener("click", openDailyRecoveryAccumulateSheet);
-      // "반납내역서"/"정리결과"는 서로 다른 표를 같은 자리에 보여주는
-      // 관계라, 하나를 켜면 다른 하나는 꺼지게 합니다("정리결과"만
-      // 저장/다운로드/누적저장 버튼 줄(dailyRecoveryResultActions)이 같이 뜸).
-      el.dailyRecoveryViewBtn.addEventListener("click", function() {
-        const isActive = el.dailyRecoveryViewBtn.classList.toggle("active");
-
-        if (isActive) {
-          el.dailyRecoveryResultViewBtn.classList.remove("active");
-          el.dailyRecoveryResultActions.classList.remove("visible");
-          hideDailyRecoveryStatusResult_();
-          viewDailyRecoveryDoc_();
-        } else {
-          resetDailyTableView_();
-        }
-      });
       el.dailyRecoveryReplaceBtn.addEventListener("click", replaceDailyRecoveryData);
       el.dailyRecoveryCleanRunBtn.addEventListener("click", runDailyRecoveryClean);
       el.dailyRecoveryResultViewBtn.addEventListener("click", function() {
@@ -6743,7 +6698,6 @@
         el.dailyRecoveryResultActions.classList.toggle("visible", isActive);
 
         if (isActive) {
-          el.dailyRecoveryViewBtn.classList.remove("active");
           hideDailyRecoveryStatusResult_();
           viewDailyRecoveryResult_();
         } else {
@@ -6752,13 +6706,12 @@
       });
       el.dailyRecoveryResultSaveBtn.addEventListener("click", saveDailyRecoveryResultEdits);
       el.dailyRecoveryResultDownloadBtn.addEventListener("click", downloadDailyRecoveryResultExcel);
-      // "회수현황" — 위 둘과 같은 자리에 보여주는 전용 표(이미지 칸이
-      // 있어서 일반 dailyTable은 못 씀). 켤 때 다른 두 표는 꺼줍니다.
+      // "회수현황" — 위와 같은 자리에 보여주는 전용 표(이미지 칸이
+      // 있어서 일반 dailyTable은 못 씀). 켤 때 다른 표는 꺼줍니다.
       el.dailyRecoveryStatusResultBtn.addEventListener("click", function() {
         const isActive = el.dailyRecoveryStatusResultBtn.classList.toggle("active");
 
         if (isActive) {
-          el.dailyRecoveryViewBtn.classList.remove("active");
           el.dailyRecoveryResultViewBtn.classList.remove("active");
           el.dailyRecoveryResultActions.classList.remove("visible");
           el.dailyThead.innerHTML = "";
