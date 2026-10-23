@@ -395,8 +395,21 @@ function readAllValues_(sheet) {
 /**************************************************************
  * 시트 내용을 지우고 header + dataRows로 완전히 새로 씁니다.
  **************************************************************/
+// 구글 시트의 기본 행 높이(픽셀) — "행 크기 조정" 대화상자에 기본값으로
+// 뜨는 값과 같음. 기존 행(헤더 포함)이 "데이터에 맞추기"로 이미
+// 설정돼 있으면 그 행 자체의 높이도 내용에 따라 들쭉날쭉할 수 있어서,
+// 그 값을 그대로 가져다 쓰지 않고 이 고정값으로 통일합니다.
+const DEFAULT_ROW_HEIGHT_PX = 20;
+
 function writeSheetFullReplace_(sheet, header, dataRows) {
-  sheet.clear();
+  // sheet.clear()는 내용뿐 아니라 서식 전체를 지우는데, 이때 행 높이가
+  // "행 높이 지정"(고정값)으로 돼 있던 행도 "데이터에 맞추기"(자동)로
+  // 리셋돼버립니다 — 그래서 뒤에서 setRowHeights로 아무리 값을 다시
+  // 지정해도, 그 자동 모드 자체는 안 풀려서 내용에 따라 계속 들쭉날쭉
+  // 해졌습니다(유형별자료는 이 함수를 안 거쳐서 원래 지정한 고정값이
+  // 그대로 유지됨 — 비교해보면 알 수 있음). clearContents()는 셀 값만
+  // 지우고 행 높이 모드 같은 서식은 그대로 둬서 이 문제가 없습니다.
+  sheet.clearContents();
 
   const allRows = header.length ? [header].concat(dataRows) : dataRows;
   if (!allRows.length) return;
@@ -431,6 +444,19 @@ function writeSheetFullReplace_(sheet, header, dataRows) {
   }
 
   sheet.getRange(1, 1, normalized.length, columnCount).setValues(normalized);
+
+  // 줄바꿈이 든 셀 값은 WRAP 상태면 구글 시트가 여러 줄을 다 보여주려고
+  // 행 높이를 계속 자동으로 늘리려고 합니다. CLIP으로 바꾸면 한 줄만
+  // 보여주고 나머지는 숨겨서 행 높이를 늘릴 필요 자체가 없어집니다 —
+  // 내용 전체는 그 셀을 클릭하면 수식 입력줄에서 볼 수 있습니다.
+  sheet.getRange(1, 1, normalized.length, columnCount).setWrapStrategy(SpreadsheetApp.WrapStrategy.CLIP);
+
+  // setRowHeights()는 숫자를 지정해도 그 행이 "데이터에 맞추기"(자동)
+  // 상태면 그 모드 자체를 안 풀어줘서, 내용에 따라 계속 들쭉날쭉
+  // 했습니다. setRowHeightsForced()가 바로 이 경우를 위한
+  // 전용 메서드로, "데이터에 맞추기"를 "행 높이 지정" 고정값으로
+  // 강제로 바꿔줍니다(공식 문서에도 이 차이가 명시돼 있음).
+  sheet.setRowHeightsForced(1, normalized.length, DEFAULT_ROW_HEIGHT_PX);
 }
 
 
