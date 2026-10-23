@@ -879,9 +879,9 @@
       <button id="openMonthlyFinalClosingAmountBtn" type="button">외작/구매 금액입력</button>
       <button id="downloadMonthlyFinalClosingBtn">마감자료다운로드</button>
       <button id="downloadClaimDashboardBtn">누적표엑셀다운로드</button>
-      <button id="saveClosingStatusBtn" class="warning" style="display:none;">마감현황 저장</button>
-      <span id="dirtyCount" class="dirty-count"></span>
-      <button id="saveRowsBtn" class="primary" disabled>변경사항 저장</button>
+      <button id="saveClosingStatusBtn" class="warning" style="display:none;">주간마감현황저장</button>
+      <span id="dirtyCount" class="dirty-count" style="display:none;"></span>
+      <button id="saveRowsBtn" class="primary" disabled style="display:none;">변경사항 저장</button>
     </div>
 
     <div id="statusLine" class="status-line"></div>
@@ -1042,10 +1042,6 @@
 
       function isOpenAsSheetTab() {
         return state.currentSheet === OPEN_AS_SHEET_KEY;
-      }
-
-      function isMonthlyClosingTab() {
-        return state.currentSheet === MONTHLY_CLOSING_KEY;
       }
 
       function isDeleteSheetTab() {
@@ -5354,7 +5350,17 @@
         el.removeDeletedToolbarBtn.style.display = isDeleteTab ? "" : "none";
         el.claimUpdateWeeklyBtn.style.display = isClaimTab ? "" : "none";
         el.claimReshapeMonthBtn.style.display = isClaimTab ? "" : "none";
-        el.saveClosingStatusBtn.style.display = isMonthlyClosingTab() ? "" : "none";
+        // "마감" 탭일 때만이 아니라 주간업무 페이지에 있는 동안은 항상
+        // 보이게(요청: "주간업무 선택시에 해당 부분에 고정으로 노출").
+        el.saveClosingStatusBtn.style.display = isWeeklyPageActive_() ? "" : "none";
+      }
+
+      // 상단 "주간업무" 페이지 탭이 지금 열려있는지 — 주간업무 안의
+      // 어느 하위 탭(월현황/마감/로데이터/1~5주/회수누적/월현황누적표)을
+      // 보고 있든 true입니다.
+      function isWeeklyPageActive_() {
+        const page = document.getElementById("weeklyPage");
+        return !!page && !page.hidden;
       }
 
       async function loadRecoverySheet_() {
@@ -7298,6 +7304,14 @@
           Object.keys(pageViews).forEach(function(key) {
             pageViews[key].hidden = key !== page;
           });
+
+          // "주간마감현황저장"은 페이지 전환만으로 보임/숨김이 바뀌는
+          // 버튼이라 페이지를 바꿀 때마다 다시 계산합니다. 전체
+          // refreshActionButtonsVisibility()를 다시 부르면, "변경사항
+          // 저장" 같은(현재 탭이 read-only로 확정되기 전까지는 기본
+          // 노출인) 다른 버튼까지 같이 엉뚱하게 다시 계산돼버려서 이
+          // 버튼 하나만 직접 갱신합니다.
+          el.saveClosingStatusBtn.style.display = isWeeklyPageActive_() ? "" : "none";
         });
       });
 
