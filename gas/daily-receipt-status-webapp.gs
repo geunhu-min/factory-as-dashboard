@@ -321,8 +321,45 @@ function buildKeySet_(values) {
 
 
 /**************************************************************
- * 시트 전체 값을 읽어옵니다. F열(순번)은 getValues() 대신
- * getDisplayValues()로 읽습니다 — 원본 시트에 그 열이 실제로는
+ * values(getRange(rangeStartRow, rangeStartCol, ...)로 읽은 2차원
+ * 배열)에서, 세로로 합쳐진(병합된) 셀 때문에 비어있는 칸을 그 병합의
+ * 맨 위 값으로 채웁니다. getValues()/getDisplayValues()는 병합된
+ * 범위의 맨 위 칸에만 실제 값을 주고 나머지 칸은 빈 값으로 주는데,
+ * 그 칸이 접수번호/순번/고객명 등 비교 기준 열이면 키가 비어 "다른
+ * 행"으로 잘못 인식되는 문제가 있습니다(추가건 분석에서 이전데이터
+ * 쪽 비교가 틀어지는 원인 — 유난히 큰 행 높이는 대개 이 세로 병합
+ * 때문). mergedRanges는 sheet.getRange(...).getMergedRanges()로
+ * 미리 구해둔 걸 그대로 넘기면 됩니다.
+ **************************************************************/
+function fillMergedGaps_(values, mergedRanges, rangeStartRow, rangeStartCol) {
+  const rangeRowCount = values.length;
+  const rangeColCount = rangeRowCount && values[0] ? values[0].length : 0;
+
+  mergedRanges.forEach(function(mergedRange) {
+    const mergeStartRow = mergedRange.getRow();
+    const mergeStartCol = mergedRange.getColumn();
+    const mergeEndRow = mergeStartRow + mergedRange.getNumRows() - 1;
+    const mergeEndCol = mergeStartCol + mergedRange.getNumColumns() - 1;
+
+    const overlapStartRow = Math.max(mergeStartRow, rangeStartRow);
+    const overlapEndRow = Math.min(mergeEndRow, rangeStartRow + rangeRowCount - 1);
+    const overlapStartCol = Math.max(mergeStartCol, rangeStartCol);
+    const overlapEndCol = Math.min(mergeEndCol, rangeStartCol + rangeColCount - 1);
+    if (overlapStartRow > overlapEndRow || overlapStartCol > overlapEndCol) return;
+
+    const topValue = values[mergeStartRow - rangeStartRow][mergeStartCol - rangeStartCol];
+    for (let r = overlapStartRow; r <= overlapEndRow; r++) {
+      for (let c = overlapStartCol; c <= overlapEndCol; c++) {
+        values[r - rangeStartRow][c - rangeStartCol] = topValue;
+      }
+    }
+  });
+}
+
+/**************************************************************
+ * 시트 전체 값을 읽어옵니다. 세로 병합으로 비어 보이는 칸은
+ * fillMergedGaps_로 맨 위 값을 채워 넣습니다. F열(순번)은 getValues()
+ * 대신 getDisplayValues()로 읽습니다 — 원본 시트에 그 열이 실제로는
  * 숫자(1, 2...)로 저장되어 있고 "00" 같은 서식으로 화면에만 0을
  * 채워 보여주는 경우, getValues()는 서식을 무시한 숫자만 주지만
  * getDisplayValues()는 화면에 보이는 그대로("02")를 문자열로 주기
@@ -334,12 +371,17 @@ function readAllValues_(sheet) {
   const lastColumn = sheet.getLastColumn();
   if (lastRow < 1 || lastColumn < 1) return [];
 
-  const values = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
+  const fullRange = sheet.getRange(1, 1, lastRow, lastColumn);
+  const values = fullRange.getValues();
+  const mergedRanges = fullRange.getMergedRanges();
+
+  fillMergedGaps_(values, mergedRanges, 1, 1);
 
   if (lastColumn >= SEQUENCE_COLUMN_NUMBER) {
     const sequenceDisplayValues = sheet
       .getRange(1, SEQUENCE_COLUMN_NUMBER, lastRow, 1)
       .getDisplayValues();
+    fillMergedGaps_(sequenceDisplayValues, mergedRanges, 1, SEQUENCE_COLUMN_NUMBER);
 
     for (let i = 0; i < values.length; i++) {
       values[i][SEQUENCE_COLUMN_NUMBER - 1] = sequenceDisplayValues[i][0];
@@ -1117,8 +1159,16 @@ function normalizeText_(value) {
   if (value instanceof Date) {
     return Utilities.formatDate(value, "Asia/Seoul", "yyyy-MM-dd");
   }
+  // 엑셀에서 줄바꿈(Alt+Enter)이 들어있는 긴 내용을 그대로 복사해오면
+  // 셀 안에 실제 개행 문자가 생기고 행 높이도 같이 커지는데, trim()은
+  // 앞뒤 공백만 지우고 가운데 개행/연속 공백은 그대로 남겨서, 같은
+  // 내용이라도 줄바꿈 유무/위치가 다르면 비교 키가 달라져 버립니다
+  // (추가건 분석의 접수번호/순번/고객명/부품코드/부품명 비교가 그래서
+  // 틀어지는 경우가 있었음). 개행/탭/연속 공백을 전부 공백 하나로
+  // 뭉쳐서 비교하면 이 차이에 영향받지 않습니다.
   const text = String(value === null || value === undefined ? "" : value)
     .replace(/[▲▼△▽]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
   const isoDateMatch = text.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}/);
   if (isoDateMatch) return isoDateMatch[1];
