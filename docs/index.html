@@ -673,6 +673,11 @@
         <button type="button" id="dailyMoveToSavedBtn">회의자료 저장</button>
       </div>
 
+      <div id="dailyMeetingMaterialTopActions" class="added-entries-tabs">
+        <span class="tabs-spacer"></span>
+        <button type="button" id="dailyReceiptConnectBtn">접수데이터 연결</button>
+      </div>
+
       <div id="dailyMeetingMaterialActions" class="added-entries-tabs">
         <button type="button" id="dailyMeetingMaterialSortBtn">순서정렬</button>
         <span class="tabs-spacer"></span>
@@ -1377,6 +1382,8 @@
         dailyReceiptStatusReplaceBtn: document.getElementById("dailyReceiptStatusReplaceBtn"),
         dailyReceiptStatusCheckAddedBtn: document.getElementById("dailyReceiptStatusCheckAddedBtn"),
         dailyMeetingMaterialViewBtn: document.getElementById("dailyMeetingMaterialViewBtn"),
+        dailyMeetingMaterialTopActions: document.getElementById("dailyMeetingMaterialTopActions"),
+        dailyReceiptConnectBtn: document.getElementById("dailyReceiptConnectBtn"),
         dailyMeetingMaterialActions: document.getElementById("dailyMeetingMaterialActions"),
         dailyMeetingMaterialSortBtn: document.getElementById("dailyMeetingMaterialSortBtn"),
         dailyMeetingMaterialDeletePreviousBtn: document.getElementById("dailyMeetingMaterialDeletePreviousBtn"),
@@ -1771,6 +1778,7 @@
         el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
         el.dailyMeetingMaterialViewBtn.classList.remove("active");
         el.dailyMeetingMaterialActions.classList.remove("visible");
+        el.dailyMeetingMaterialTopActions.classList.remove("visible");
         el.dailyRecoveryResultViewBtn.classList.remove("active");
         el.dailyRecoveryResultActions.classList.remove("visible");
         el.dailyServiceShipmentResultViewBtn.classList.remove("active");
@@ -7083,6 +7091,7 @@
         if (isVisible) {
           el.dailyMeetingMaterialViewBtn.classList.remove("active");
           el.dailyMeetingMaterialActions.classList.remove("visible");
+          el.dailyMeetingMaterialTopActions.classList.remove("visible");
           el.dailyPackagingDateCheckToggleBtn.classList.remove("active");
           el.dailyPackagingActions.classList.remove("visible");
 
@@ -7095,6 +7104,7 @@
       el.dailyMeetingMaterialViewBtn.addEventListener("click", async function() {
         const isActive = el.dailyMeetingMaterialViewBtn.classList.toggle("active");
         el.dailyMeetingMaterialActions.classList.toggle("visible", isActive);
+        el.dailyMeetingMaterialTopActions.classList.toggle("visible", isActive);
 
         if (isActive) {
           el.dailyReceiptStatusCheckAddedBtn.classList.remove("active");
@@ -7111,6 +7121,9 @@
       el.dailyMeetingMaterialDeleteBtn.addEventListener("click", deleteDailyMeetingMaterialCheckedRows);
       el.dailyMeetingMaterialDownloadBtn.addEventListener("click", downloadMeetingMaterialExcel);
       el.dailyReceiptAccumulateBtn.addEventListener("click", accumulateDailyReceiptData);
+      el.dailyReceiptConnectBtn.addEventListener("click", function() {
+        openConnectedSpreadsheet_(el.dailyReceiptWebappUrl.value, el.dailyStatusLine, "접수데이터");
+      });
       el.dailyAddedEntriesTabs.querySelectorAll("button[data-sheet]").forEach(function(tabBtn) {
         tabBtn.addEventListener("click", function() { selectDailyAddedEntriesTab_(tabBtn); });
       });
@@ -7149,6 +7162,7 @@
           el.dailyAddedEntriesTabs.classList.remove("visible");
           el.dailyMeetingMaterialViewBtn.classList.remove("active");
           el.dailyMeetingMaterialActions.classList.remove("visible");
+          el.dailyMeetingMaterialTopActions.classList.remove("visible");
         }
 
         resetDailyTableView_();
