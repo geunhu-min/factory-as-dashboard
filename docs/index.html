@@ -52,6 +52,7 @@
         color: var(--accent-text);
       }
       .page-view[hidden] { display: none; }
+      .work-manual-subnav { display: flex; gap: 6px; margin: 0 0 12px; }
 
       /* 공개 배포판: 웹앱 URL을 코드에 고정해두고(DEPLOYED_CONFIG_ 참고)
          입력/저장 UI 자체를 숨깁니다. 로컬(factory-as-sample)에는 이
@@ -133,6 +134,7 @@
       button:hover { filter: brightness(0.97); }
 
       .factory-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+      .factory-tabs[hidden] { display: none; }
       .factory-tabs .tabs-spacer { flex: 1; }
       .factory-tabs button {
         background: var(--bg-soft);
@@ -369,6 +371,44 @@
         min-width: 44px;
         text-align: center;
       }
+      .daily-video-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.72);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+      }
+      .daily-video-modal-overlay.open { display: flex; }
+      .daily-video-modal-box {
+        position: relative;
+        background: #fff;
+        border-radius: 10px;
+        padding: 20px;
+        width: 92vw;
+        max-width: 720px;
+        max-height: 86vh;
+        overflow: auto;
+      }
+      .daily-video-modal-close {
+        position: absolute;
+        right: 12px;
+        top: 10px;
+        border: 0;
+        background: #fff;
+        font-size: 22px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+      .daily-video-modal-title { margin: 0 0 14px; font-size: 16px; }
+      .daily-video-modal-player {
+        display: block;
+        width: 100%;
+        max-height: 60vh;
+        margin-top: 12px;
+        background: #000;
+      }
       #dailyTable thead th.seq-header-cell,
       #dailyTable tbody td.seq-cell {
         width: 44px;
@@ -556,6 +596,36 @@
       <button type="button" class="page-nav-btn active" data-page="daily">일일업무</button>
       <button type="button" class="page-nav-btn" data-page="weekly">주간업무</button>
       <button type="button" class="page-nav-btn" data-page="monthly">월간업무</button>
+      <button type="button" class="page-nav-btn" id="workManualToggleBtn">업무메뉴얼</button>
+    </div>
+
+    <div id="workManualRow" hidden>
+      <div class="work-manual-subnav">
+        <button type="button" class="page-nav-btn active" id="workManualDailyToggleBtn">일일업무</button>
+        <button type="button" class="page-nav-btn" id="workManualWeeklyToggleBtn">주간업무</button>
+        <button type="button" class="page-nav-btn" id="workManualMonthlyToggleBtn">월간업무</button>
+      </div>
+      <div id="workManualDailyPanel">
+        <div class="factory-tabs">
+          <button type="button" id="dailyReceiptStatusManualBtn">일일접수현황 메뉴얼</button>
+          <button type="button" id="dailyRecoveryStatusManualBtn">일일회수현황 메뉴얼</button>
+          <button type="button" id="dailyServiceShipmentManualBtn">서비스출고건 확인 메뉴얼</button>
+        </div>
+        <div id="dailyReceiptStatusManualSubRow" class="factory-tabs" hidden>
+          <button type="button" id="dailyReceiptStatusManualOpenBtn">메뉴얼</button>
+          <button type="button" id="dailyReceiptStatusVideoBtn">영상확인</button>
+        </div>
+        <div id="dailyRecoveryStatusManualSubRow" class="factory-tabs" hidden>
+          <button type="button" id="dailyRecoveryStatusManualOpenBtn">메뉴얼</button>
+          <button type="button" id="dailyRecoveryStatusVideoBtn">영상확인</button>
+        </div>
+        <div id="dailyServiceShipmentManualSubRow" class="factory-tabs" hidden>
+          <button type="button" id="dailyServiceShipmentManualOpenBtn">메뉴얼</button>
+          <button type="button" id="dailyServiceShipmentVideoBtn">영상확인</button>
+        </div>
+      </div>
+      <div id="workManualWeeklyPanel" class="factory-tabs" hidden></div>
+      <div id="workManualMonthlyPanel" class="factory-tabs" hidden></div>
     </div>
 
     <div id="dailyPage" class="page-view">
@@ -1334,6 +1404,26 @@
         saveMonthlyClosingConfigBtn: document.getElementById("saveMonthlyClosingConfigBtn"),
         monthlyConfigPanelToggleBtn: document.getElementById("monthlyConfigPanelToggleBtn"),
         monthlyRegularTaskManualBtn: document.getElementById("monthlyRegularTaskManualBtn"),
+        workManualToggleBtn: document.getElementById("workManualToggleBtn"),
+        workManualRow: document.getElementById("workManualRow"),
+        workManualDailyToggleBtn: document.getElementById("workManualDailyToggleBtn"),
+        workManualWeeklyToggleBtn: document.getElementById("workManualWeeklyToggleBtn"),
+        workManualMonthlyToggleBtn: document.getElementById("workManualMonthlyToggleBtn"),
+        workManualDailyPanel: document.getElementById("workManualDailyPanel"),
+        workManualWeeklyPanel: document.getElementById("workManualWeeklyPanel"),
+        workManualMonthlyPanel: document.getElementById("workManualMonthlyPanel"),
+        dailyReceiptStatusManualBtn: document.getElementById("dailyReceiptStatusManualBtn"),
+        dailyReceiptStatusManualSubRow: document.getElementById("dailyReceiptStatusManualSubRow"),
+        dailyReceiptStatusManualOpenBtn: document.getElementById("dailyReceiptStatusManualOpenBtn"),
+        dailyReceiptStatusVideoBtn: document.getElementById("dailyReceiptStatusVideoBtn"),
+        dailyRecoveryStatusManualSubRow: document.getElementById("dailyRecoveryStatusManualSubRow"),
+        dailyRecoveryStatusManualOpenBtn: document.getElementById("dailyRecoveryStatusManualOpenBtn"),
+        dailyRecoveryStatusVideoBtn: document.getElementById("dailyRecoveryStatusVideoBtn"),
+        dailyServiceShipmentManualSubRow: document.getElementById("dailyServiceShipmentManualSubRow"),
+        dailyServiceShipmentManualOpenBtn: document.getElementById("dailyServiceShipmentManualOpenBtn"),
+        dailyServiceShipmentVideoBtn: document.getElementById("dailyServiceShipmentVideoBtn"),
+        dailyRecoveryStatusManualBtn: document.getElementById("dailyRecoveryStatusManualBtn"),
+        dailyServiceShipmentManualBtn: document.getElementById("dailyServiceShipmentManualBtn"),
         monthlyConfigPanelBody: document.getElementById("monthlyConfigPanelBody"),
         monthlyPageStatusLine: document.getElementById("monthlyPageStatusLine"),
         dailyPackagingWebappUrl: document.getElementById("dailyPackagingWebappUrl"),
@@ -2750,6 +2840,115 @@
             if (event.key === "Escape") popup.close();
           });
         } catch (_) {}
+      }
+
+      // 상단 "업무메뉴얼" 토글에서 여는 개별 메뉴얼 팝업 공용 틀.
+      // 내용은 추후 추가 예정이라 지금은 안내 문구만 표시합니다.
+      function showWorkManualPopup_(title) {
+        const width = 560;
+        const height = 680;
+        const left = Math.max(0, Math.round((window.screen.width - width) / 2));
+        const top = Math.max(0, Math.round((window.screen.height - height) / 2));
+
+        const popup = window.open(
+          "",
+          "workManual_" + Date.now(),
+          "popup=yes,width=" + width + ",height=" + height + ",left=" + left + ",top=" + top +
+            ",menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes"
+        );
+        if (!popup) return;
+
+        popup.document.write(`<!doctype html>
+          <html lang="ko">
+            <head>
+              <meta charset="utf-8" />
+              <title>${title}</title>
+              <style>
+                body { margin:0; font-family:"Malgun Gothic","Segoe UI",Arial,sans-serif; color:#0f172a; background:#f7f7f7; }
+                header { position:relative; padding:16px 40px 16px 20px; border-bottom:1px solid #dde3ea; background:#fff; }
+                h1 { margin:0; font-size:18px; }
+                .close { position:absolute; right:12px; top:10px; border:0; background:#fff; font-size:22px; font-weight:900; cursor:pointer; }
+                .body { padding:20px 24px 28px; font-size:13px; color:#64748b; }
+              </style>
+            </head>
+            <body>
+              <header><button class="close" onclick="window.close()">&times;</button><h1>${title}</h1></header>
+              <div class="body">메뉴얼 내용은 추후 추가 예정입니다.</div>
+            </body>
+          </html>`);
+        popup.document.close();
+
+        try {
+          popup.document.addEventListener("keydown", function(event) {
+            if (event.key === "Escape") popup.close();
+          });
+        } catch (_) {}
+      }
+
+      // 업무메뉴얼의 각 "영상확인" 버튼 — 영상 파일을 직접 선택해서
+      // 바로 재생해볼 수 있는 모달입니다. 서버 저장 없이 이 브라우저
+      // 세션에서만 재생되므로, 다시 열면 파일을 다시 선택해야 합니다.
+      // 3개 버튼(일일접수현황/일일회수현황/서비스출고건 확인)이 모달
+      // 하나를 공유하고, 열 때마다 제목만 바꿔 끼웁니다.
+      let dailyManualVideoObjectUrl_ = null;
+
+      function ensureDailyManualVideoModal_() {
+        let overlay = document.getElementById("dailyManualVideoModal");
+        if (overlay) return overlay;
+
+        overlay = document.createElement("div");
+        overlay.id = "dailyManualVideoModal";
+        overlay.className = "daily-video-modal-overlay";
+        overlay.innerHTML =
+          '<div class="daily-video-modal-box">' +
+            '<button type="button" class="daily-video-modal-close">&times;</button>' +
+            '<h2 class="daily-video-modal-title"></h2>' +
+            '<input type="file" accept="video/*" class="daily-video-modal-file" />' +
+            '<video class="daily-video-modal-player" controls hidden></video>' +
+          '</div>';
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener("click", function(event) {
+          if (event.target === overlay) closeDailyManualVideoModal_();
+        });
+        overlay.querySelector(".daily-video-modal-close").addEventListener("click", closeDailyManualVideoModal_);
+        overlay.querySelector(".daily-video-modal-file").addEventListener("change", function(event) {
+          const file = event.target.files && event.target.files[0];
+          if (!file) return;
+          if (dailyManualVideoObjectUrl_) URL.revokeObjectURL(dailyManualVideoObjectUrl_);
+          dailyManualVideoObjectUrl_ = URL.createObjectURL(file);
+
+          const player = overlay.querySelector(".daily-video-modal-player");
+          player.src = dailyManualVideoObjectUrl_;
+          player.hidden = false;
+          player.play().catch(function() {});
+        });
+        document.addEventListener("keydown", function(event) {
+          if (event.key === "Escape" && overlay.classList.contains("open")) closeDailyManualVideoModal_();
+        });
+
+        return overlay;
+      }
+
+      function openDailyManualVideoModal_(title) {
+        const overlay = ensureDailyManualVideoModal_();
+        overlay.querySelector(".daily-video-modal-title").textContent = title;
+
+        const player = overlay.querySelector(".daily-video-modal-player");
+        player.pause();
+        player.removeAttribute("src");
+        player.hidden = true;
+        overlay.querySelector(".daily-video-modal-file").value = "";
+
+        overlay.classList.add("open");
+      }
+
+      function closeDailyManualVideoModal_() {
+        const overlay = document.getElementById("dailyManualVideoModal");
+        if (!overlay) return;
+        overlay.classList.remove("open");
+        const player = overlay.querySelector(".daily-video-modal-player");
+        if (player) player.pause();
       }
 
       async function replaceDailyReceiptStatusData() {
@@ -7082,6 +7281,71 @@
       el.dailyManualBtn.addEventListener("click", showDailyManual_);
       el.monthlyRegularTaskManualBtn.addEventListener("click", showMonthlyRegularTaskManual_);
 
+      el.workManualToggleBtn.addEventListener("click", function() {
+        const isActive = el.workManualToggleBtn.classList.toggle("active");
+        el.workManualRow.hidden = !isActive;
+
+        pageNavButtons.forEach(function(b) {
+          b.classList.toggle("active", !isActive && b.dataset.page === currentPageKey);
+        });
+        Object.keys(pageViews).forEach(function(key) {
+          pageViews[key].hidden = isActive ? true : key !== currentPageKey;
+        });
+        el.saveClosingStatusBtn.style.display = isWeeklyPageActive_() ? "" : "none";
+      });
+
+      const workManualSubTabs = [
+        { btn: el.workManualDailyToggleBtn, panel: el.workManualDailyPanel },
+        { btn: el.workManualWeeklyToggleBtn, panel: el.workManualWeeklyPanel },
+        { btn: el.workManualMonthlyToggleBtn, panel: el.workManualMonthlyPanel }
+      ];
+      workManualSubTabs.forEach(function(tab) {
+        tab.btn.addEventListener("click", function() {
+          workManualSubTabs.forEach(function(other) {
+            other.btn.classList.toggle("active", other === tab);
+            other.panel.hidden = other !== tab;
+          });
+        });
+      });
+
+      // 일일접수현황/일일회수현황/서비스출고건 확인 메뉴얼 버튼은
+      // 서로 배타적인 탭입니다 — 하나를 누르면 그것만 활성화되고
+      // 그 아래 메뉴얼/영상확인 서브 버튼도 그 버튼 것만 보입니다.
+      const dailyManualExclusiveTabs_ = [
+        { btn: el.dailyReceiptStatusManualBtn, panel: el.dailyReceiptStatusManualSubRow },
+        { btn: el.dailyRecoveryStatusManualBtn, panel: el.dailyRecoveryStatusManualSubRow },
+        { btn: el.dailyServiceShipmentManualBtn, panel: el.dailyServiceShipmentManualSubRow }
+      ];
+      dailyManualExclusiveTabs_.forEach(function(tab) {
+        tab.btn.addEventListener("click", function() {
+          const willActivate = !tab.btn.classList.contains("active");
+          dailyManualExclusiveTabs_.forEach(function(other) {
+            const isThisOne = other === tab && willActivate;
+            other.btn.classList.toggle("active", isThisOne);
+            other.panel.hidden = !isThisOne;
+          });
+        });
+      });
+
+      el.dailyReceiptStatusManualOpenBtn.addEventListener("click", function() {
+        showWorkManualPopup_("일일접수현황 메뉴얼");
+      });
+      el.dailyReceiptStatusVideoBtn.addEventListener("click", function() {
+        openDailyManualVideoModal_("일일접수현황 영상확인");
+      });
+      el.dailyRecoveryStatusManualOpenBtn.addEventListener("click", function() {
+        showWorkManualPopup_("일일회수현황 메뉴얼");
+      });
+      el.dailyRecoveryStatusVideoBtn.addEventListener("click", function() {
+        openDailyManualVideoModal_("일일회수현황 영상확인");
+      });
+      el.dailyServiceShipmentManualOpenBtn.addEventListener("click", function() {
+        showWorkManualPopup_("서비스출고건 확인 메뉴얼");
+      });
+      el.dailyServiceShipmentVideoBtn.addEventListener("click", function() {
+        openDailyManualVideoModal_("서비스출고건 확인 영상확인");
+      });
+
       el.dailyReceiptStatusReplaceBtn.addEventListener("click", replaceDailyReceiptStatusData);
       el.dailyReceiptStatusCheckAddedBtn.addEventListener("click", async function() {
         const isVisible = el.dailyCheckAddedConfirmRow.classList.toggle("visible");
@@ -7302,18 +7566,22 @@
         });
       });
 
-      const pageNavButtons = Array.from(document.querySelectorAll(".page-nav-btn"));
+      const pageNavButtons = Array.from(document.querySelectorAll(".page-nav-btn[data-page]"));
       const pageViews = {
         daily: document.getElementById("dailyPage"),
         weekly: document.getElementById("weeklyPage"),
         monthly: document.getElementById("monthlyPage")
       };
+      let currentPageKey = "daily";
 
       pageNavButtons.forEach(function(btn) {
         btn.addEventListener("click", function() {
           const page = btn.dataset.page;
+          currentPageKey = page;
 
           pageNavButtons.forEach(function(b) { b.classList.toggle("active", b === btn); });
+          el.workManualToggleBtn.classList.remove("active");
+          el.workManualRow.hidden = true;
 
           Object.keys(pageViews).forEach(function(key) {
             pageViews[key].hidden = key !== page;
