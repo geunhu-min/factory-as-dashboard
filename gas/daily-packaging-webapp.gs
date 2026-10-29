@@ -58,8 +58,9 @@
  *   writeSheet2Action_에서 고정값으로 맞춰져 있어 바로 가로로 출력할
  *   수 있습니다).
  * - 스프레드시트를 열면 메뉴 막대에 "포장실적상세 도구" 메뉴가 추가되고,
- *   그 안의 "마지막 행 A열로 이동"을 누르면 현재 보고 있는 탭의 맨
- *   마지막 데이터 행 A열로 화면이 이동합니다(onOpen 참고).
+ *   그 안의 "마지막 행 다음 행 A열로 이동"을 누르면 현재 보고 있는
+ *   탭의 맨 마지막 데이터 행 바로 다음 행 A열로 화면이 이동합니다
+ *   (onOpen 참고).
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -109,20 +110,30 @@ const DEFAULT_FONT_FAMILY = "Malgun Gothic";
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("포장실적상세 도구")
-    .addItem("마지막 행 A열로 이동", "goToLastRowColumnA")
+    .addItem("마지막 행 다음 행 A열로 이동", "goToLastRowColumnA")
     .addToUi();
 }
 
 
 /**************************************************************
- * 현재 보고 있는 탭의 맨 마지막 데이터 행 A열로 화면을 이동합니다.
- * 데이터가 전혀 없는 빈 시트라면 A1으로 이동합니다.
+ * 현재 보고 있는 탭의 맨 마지막 데이터 행 "다음" 행 A열로 화면을
+ * 이동합니다(새 데이터를 바로 이어 붙여 입력할 수 있도록). 데이터가
+ * 전혀 없는 빈 시트라면 A1으로 이동합니다.
  **************************************************************/
 function goToLastRowColumnA() {
   const sheet = SpreadsheetApp.getActiveSheet();
-  const lastRow = Math.max(sheet.getLastRow(), 1);
+  const lastRow = sheet.getLastRow();
+  const targetRow = lastRow === 0 ? 1 : lastRow + 1;
 
-  sheet.getRange(lastRow, 1).activate();
+  // 데이터가 시트의 실제 행 수(maxRows) 끝까지 꽉 차 있으면
+  // lastRow + 1은 시트 범위를 벗어나 getRange()가 예외를 던지고,
+  // 메뉴에서는 그 예외가 조용히 삼켜져서 "아무 반응 없음"처럼
+  // 보입니다. 그 경우에만 행을 하나 늘려서 이동할 자리를 만듭니다.
+  if (targetRow > sheet.getMaxRows()) {
+    sheet.insertRowAfter(sheet.getMaxRows());
+  }
+
+  sheet.getRange(targetRow, 1).activate();
 }
 
 
