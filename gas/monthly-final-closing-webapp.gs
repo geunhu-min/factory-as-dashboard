@@ -3,9 +3,10 @@
  *
  * 배포 위치
  * ------------------------------------------------------------
- * 이 파일은 "월마감" 스프레드시트(종합(N)/마감(N)/VN(N)/내작(N)/
- * 설계(N)/외작(N)/구매(N) 탭이 이미 만들어져 있는 파일)의
- * 확장 프로그램 > Apps Script 프로젝트에 추가합니다.
+ * 이 파일은 "월마감" 스프레드시트(종합(N)/마감(N) 탭이 이미 만들어져
+ * 있는 파일. VN(N)/미회수(N)/내작(N)/설계(N)/외작(N)/구매(N)은 매달
+ * 해당 건이 있을 때만 있으면 됨 — 아래 "주의" 참고)의 확장 프로그램 >
+ * Apps Script 프로젝트에 추가합니다.
  *
  * 하는 일
  * ------------------------------------------------------------
@@ -16,6 +17,7 @@
  * - 종합: 받은 종합 내용 그대로 씀
  * - 마감: 받은 마감 내용 그대로 씀
  * - VN: 종합에서 포장이 "VN"인 행만
+ * - 미회수: 종합에서 포장이 "미회수"인 행만 — VN 탭 바로 다음 자리
  * - 내작: 종합에서 원인이 1라인/3라인/4라인/7라인인 행만 — 1라인
  *   (제품코드순) → 빈행 → 3라인+4라인(제품코드순) → 빈행 →
  *   7라인(제품코드순)
@@ -44,9 +46,13 @@
  * ------------------------------------------------------------
  * - 토큰 검증이 없으므로 URL을 아는 사람은 누구나 이 시트를 읽고
  *   덮어쓸 수 있습니다.
- * - 종합(N)/마감(N)/VN(N)/내작(N)/설계(N)/외작(N)/구매(N) 탭이 이미
- *   있어야 합니다(이름 뒤 숫자는 매번 바뀌어도 됨). 없으면 에러를
- *   던집니다 — 새로 만들지 않습니다.
+ * - 종합(N)/마감(N) 탭은 이미 있어야 합니다(이름 뒤 숫자는 매번
+ *   바뀌어도 됨). 없으면 에러를 던집니다 — 새로 만들지 않습니다.
+ * - VN(N)/미회수(N)/내작(N)/설계(N)/외작(N)/구매(N) 탭은 있으면
+ *   그대로 쓰고, 없는데 그 달에 해당하는 행도 없으면 새로 만들지
+ *   않고 건너뜁니다(빈 탭을 미리 만들어두지 않음). 탭이 없는데
+ *   해당하는 행이 있으면 종합/마감/VN/미회수/내작/설계/외작/구매
+ *   순서를 지켜 바로 앞 탭 다음 자리에 새로 만듭니다.
  * - VN/설계 탭은 정렬 기준을 따로 안 주셔서 종합의 원래 순서를 그대로
  *   유지했습니다. 원하시는 정렬이 있으면 말씀해주세요.
  **************************************************************/
@@ -222,13 +228,27 @@ function rebuildMonthlyClosingSheetsAction_(body) {
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  writeMonthlyFinalSheet_(ss, "종합", summaryHeader, summaryRows);
-  writeMonthlyFinalSheet_(ss, "마감", closingHeader, closingRows);
+  // 종합/마감은 항상 미리 있어야 하는 탭(없으면 에러). 그 뒤
+  // VN/미회수/내작/설계/외작/구매는 전부 "탭이 있으면 그대로 쓰고,
+  // 탭이 없는데 그 달에 해당하는 행도 없으면 새로 만들지 않고
+  // 건너뛰는" 공통 규칙을 씁니다. cursorSheet는 지금까지 실제로
+  // 쓰여진(또는 이미 있던) 마지막 탭을 가리켜서, 그다음 탭을 새로
+  // 만들어야 할 때 항상 "바로 직전 탭 다음 자리"에 들어가게 합니다
+  // (중간 탭이 없는 달이어도 순서가 흐트러지지 않음).
+  let cursorSheet = writeMonthlyFinalSheet_(ss, "종합", summaryHeader, summaryRows);
+  cursorSheet = writeMonthlyFinalSheet_(ss, "마감", closingHeader, closingRows);
 
   const vnRows = summaryRows.filter(function(row) {
     return normalizeText_(row[packageIdx]) === "VN";
   });
-  writeMonthlyFinalSheet_(ss, "VN", summaryHeader, vnRows);
+  const vnSheet = writeMonthlyFinalSheetOptional_(ss, "VN", summaryHeader, vnRows, cursorSheet);
+  if (vnSheet) cursorSheet = vnSheet;
+
+  const uncollectedRows = summaryRows.filter(function(row) {
+    return normalizeText_(row[packageIdx]) === "미회수";
+  });
+  const uncollectedSheet = writeMonthlyFinalSheetOptional_(ss, "미회수", summaryHeader, uncollectedRows, cursorSheet);
+  if (uncollectedSheet) cursorSheet = uncollectedSheet;
 
   const inhouseSourceRows = summaryRows.filter(function(row) {
     const cause = normalizeText_(row[causeIdx]);
@@ -237,24 +257,27 @@ function rebuildMonthlyClosingSheetsAction_(body) {
       INHOUSE_LINE_7.indexOf(cause) !== -1;
   });
   const inhouseRows = buildInhouseGroupedRows_(inhouseSourceRows, causeIdx, productCodeIdx);
-  writeMonthlyFinalSheet_(ss, "내작", summaryHeader, inhouseRows);
+  const inhouseSheet = writeMonthlyFinalSheetOptional_(ss, "내작", summaryHeader, inhouseRows, cursorSheet);
+  if (inhouseSheet) cursorSheet = inhouseSheet;
 
   const designRows = summaryRows.filter(function(row) {
     return normalizeText_(row[causeIdx]) === "제품기술팀";
   });
-  writeMonthlyFinalSheet_(ss, "설계", summaryHeader, designRows);
+  const designSheet = writeMonthlyFinalSheetOptional_(ss, "설계", summaryHeader, designRows, cursorSheet);
+  if (designSheet) cursorSheet = designSheet;
 
   const outsourceSourceRows = summaryRows.filter(function(row) {
     return /^외주\(/.test(normalizeText_(row[causeIdx]));
   });
   const outsourceRows = buildCauseGroupedRows_(outsourceSourceRows, causeIdx, productCodeIdx, amountIdx, true);
-  writeMonthlyFinalSheet_(ss, "외작", summaryHeader, outsourceRows);
+  const outsourceSheet = writeMonthlyFinalSheetOptional_(ss, "외작", summaryHeader, outsourceRows, cursorSheet);
+  if (outsourceSheet) cursorSheet = outsourceSheet;
 
   const purchaseSourceRows = summaryRows.filter(function(row) {
     return /^구매\(/.test(normalizeText_(row[causeIdx]));
   });
   const purchaseRows = buildCauseGroupedRows_(purchaseSourceRows, causeIdx, productCodeIdx, amountIdx, true);
-  writeMonthlyFinalSheet_(ss, "구매", summaryHeader, purchaseRows);
+  writeMonthlyFinalSheetOptional_(ss, "구매", summaryHeader, purchaseRows, cursorSheet);
 
   return { ok: true };
 }
@@ -354,6 +377,39 @@ function writeMonthlyFinalSheet_(ss, label, header, rows) {
     throw new Error("'" + label + "(N)' 형식의 탭을 찾을 수 없습니다. 월마감 스프레드시트의 탭 이름을 확인해주세요.");
   }
 
+  writeMonthlyFinalSheetContent_(sheet, label, header, rows);
+  return sheet;
+}
+
+
+/**************************************************************
+ * VN/미회수/내작/설계/외작/구매처럼 매달 데이터가 있을 수도 없을
+ * 수도 있는 탭 전용. 탭이 이미 있으면 그대로 쓰고, 없는데 이번에
+ * 해당 데이터(rows)가 있으면 insertAfterSheet 바로 다음 자리에 새로
+ * 만들어서 씁니다. 탭도 없고 데이터도 없으면 아무것도 하지 않고
+ * null을 반환합니다(빈 탭을 미리 만들어두지 않음). 그 외에는 쓴
+ * 시트를 반환하므로, 호출하는 쪽에서 다음 탭을 새로 만들 때 쓸
+ * "바로 직전 탭" 기준으로 이어서 쓸 수 있습니다.
+ **************************************************************/
+function writeMonthlyFinalSheetOptional_(ss, label, header, rows, insertAfterSheet) {
+  let sheet = findMonthlyFinalSheet_(ss, label);
+
+  if (!sheet) {
+    if (!rows.length) return null;
+    const insertIndex = insertAfterSheet ? insertAfterSheet.getIndex() : ss.getSheets().length;
+    sheet = ss.insertSheet(label, insertIndex);
+  }
+
+  writeMonthlyFinalSheetContent_(sheet, label, header, rows);
+  return sheet;
+}
+
+
+/**************************************************************
+ * writeMonthlyFinalSheet_/writeMonthlyFinalSheetOptional_가 탭을
+ * 찾거나 만든 뒤 공통으로 쓰는 실제 쓰기 로직.
+ **************************************************************/
+function writeMonthlyFinalSheetContent_(sheet, label, header, rows) {
   const columnCount = header.length;
   const dataRows = rows.map(function(row) { return normalizeRowLength_(row, columnCount); });
 
