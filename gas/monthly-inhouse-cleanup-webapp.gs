@@ -32,8 +32,8 @@
  *   합계 없이) 1번부터 다시 번호 매겨 같은 서식으로 담습니다. 자세한
  *   내용은 cleanMonthlyInhouseListAction_/writeCompanySheet_ 참고.
  * - doPost action="exportResult": "정리파일다운로드" 버튼 액션.
- *   "정리(N)" 시트 하나만 담은 xlsx를 base64로 반환합니다(서식/글꼴
- *   그대로 유지됨).
+ *   "정리(N)"/"아름산업(N)"/"바른산업(N)"/"다올산업(N)" 네 시트(시트1
+ *   제외)를 담은 xlsx를 base64로 반환합니다(서식/글꼴 그대로 유지됨).
  *
  * 배포 방법
  * ------------------------------------------------------------
@@ -150,10 +150,17 @@ function doPost(e) {
     }
 
     if (action === "exportResult") {
-      // "정리"는 자료정리 때마다 "정리(N)"으로 이름이 바뀌므로, 정확한
-      // 이름 대신 패턴으로 찾습니다.
-      const resultSheet = findOrCreateSuffixedSheet_(SpreadsheetApp.getActiveSpreadsheet(), CLEAN_RESULT_SHEET_NAME);
-      return jsonOutput_(exportSheetsSubsetAsXlsxBase64_([resultSheet.getName()], "월마감내작건정리"));
+      // "정리"/"아름산업"/"바른산업"/"다올산업"은 자료정리 때마다
+      // "이름(건수)"로 이름이 바뀌므로, 정확한 이름 대신 패턴으로
+      // 찾습니다. 시트1은 원본 데이터라서 내보내지 않습니다.
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const exportLabels = [CLEAN_RESULT_SHEET_NAME].concat(
+        PACKAGE_GROUPS.map(function(group) { return group.companyName; })
+      );
+      const exportSheetNames = exportLabels.map(function(label) {
+        return findOrCreateSuffixedSheet_(ss, label).getName();
+      });
+      return jsonOutput_(exportSheetsSubsetAsXlsxBase64_(exportSheetNames, "월마감내작건정리"));
     }
 
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
