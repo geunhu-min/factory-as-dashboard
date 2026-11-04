@@ -39,14 +39,16 @@
  * - doPost action="checkAddedEntries": "추가건 확인" 버튼 액션.
  *   FACTORY_GROUPS(현재는 퍼시스 하나만 등록됨 — 원래 퍼시스/일룸 두
  *   회사였는데 일룸 쪽 시트는 없앴음)별로 "유형별자료" 시트와
- *   "이전데이터" 시트를 E열(접수번호)+F열(순번)+J열(고객명)+
- *   L열(부품코드)+N열(부품명) 기준으로 비교해서(rowKey_ 참고 —
- *   접수번호+순번+고객명만으로는 한 접수건에 딸린 여러 부품 행이 같은
- *   키로 묶일 수 있어 부품코드/부품명까지 같이 봅니다), 유형별자료에는
- *   있는데 이전데이터에는 없는(=새로 추가된) 행만 골라 "추가건" 시트에
- *   지우고 새로 씁니다. 둘 다 처리한 뒤에는, 다음 비교 기준이
- *   되도록 이전데이터 시트를 그 시점의 유형별자료 시트 전체 내용으로
- *   다시 덮어씁니다. 응답에 회사별 추가 건수를 담아 돌려줍니다.
+ *   "이전데이터" 시트를 접수번호+순번+고객명+부품코드+부품명 기준으로
+ *   비교해서(rowKey_ 참고 — 접수번호+순번+고객명만으로는 한 접수건에
+ *   딸린 여러 부품 행이 같은 키로 묶일 수 있어 부품코드/부품명까지
+ *   같이 봅니다), 유형별자료에는 있는데 이전데이터에는 없는(=새로
+ *   추가된) 행만 골라 "추가건" 시트에 지우고 새로 씁니다. 이 5개 열은
+ *   열 번호가 아니라 각 시트 자신의 헤더(1행)에서 이름으로 찾으므로,
+ *   ERP 다운로드 포맷이 바뀌어 열 순서가 달라져도 매칭이 깨지지
+ *   않습니다. 둘 다 처리한 뒤에는, 다음 비교 기준이 되도록 이전데이터
+ *   시트를 그 시점의 유형별자료 시트 전체 내용으로 다시 덮어씁니다.
+ *   응답에 회사별 추가 건수를 담아 돌려줍니다.
  * - doPost action="deleteAddedEntries": "삭제" 버튼 액션. 대시보드에서
  *   체크박스로 고른 추가건 행들을 "추가건" 시트에서 지웁니다. body에
  *   factory("퍼시스", FACTORY_GROUPS의 label과 맞춰야 함)와 rows(선택한
@@ -193,11 +195,13 @@ function doPost(e) {
  * "추가건 확인" 버튼 액션
  *
  * FACTORY_GROUPS에 등록된 회사(현재는 퍼시스 하나)별로 "유형별자료"
- * 시트를 "이전데이터" 시트와 비교해서 rowKey_(E열 접수번호+F열 순번+
- * J열 고객명+L열 부품코드+N열 부품명) 조합이 이전데이터에는 없고
- * 유형별자료에만 있는(=새로 추가된) 행만 "추가건" 시트에 지우고 새로
- * 씁니다. 둘 다 처리한 뒤에는, 다음 비교 기준이 되도록 이전데이터
- * 시트를 그 시점의 유형별자료 시트 전체 내용으로 다시 덮어씁니다.
+ * 시트를 "이전데이터" 시트와 비교해서 rowKey_(접수번호+순번+고객명+
+ * 부품코드+부품명) 조합이 이전데이터에는 없고 유형별자료에만 있는
+ * (=새로 추가된) 행만 "추가건" 시트에 지우고 새로 씁니다. 두 시트의
+ * 열 순서가 서로 달라도 되도록, 비교 키에 쓰는 열은 각 시트 자신의
+ * 헤더에서 이름으로 찾습니다(findRowKeyColumnIndexes_ 참고). 둘 다
+ * 처리한 뒤에는, 다음 비교 기준이 되도록 이전데이터 시트를 그 시점의
+ * 유형별자료 시트 전체 내용으로 다시 덮어씁니다.
  **************************************************************/
 const FACTORY_GROUPS = [
   { label: "퍼시스", typeSheet: "유형별자료", compareSheet: "이전데이터", addedSheet: "추가건" }
@@ -251,8 +255,18 @@ function checkAddedEntriesAction_() {
       throw new Error("1행이 비어있으면 심각한 오류가 발생합니다. 확인해주세요.");
     }
 
+    // 비교 키에 쓰는 열은 두 시트가 서로 다른 순서로 저장돼 있을 수
+    // 있으므로(바로 이 시점이 그런 경우 — 유형별자료는 오늘 받은 최신
+    // 포맷, 이전데이터는 직전 실행 때의 포맷), 각자 자기 시트의 헤더
+    // 에서 이름으로 찾아 따로 계산합니다.
+    const typeKeyColIndexes = findRowKeyColumnIndexes_(typeHeaderRow, group.typeSheet);
+
     const compareValues = readAllValues_(compareSheet);
-    const compareKeys = buildKeySet_(compareValues);
+    const compareHeaderRow = compareValues.length ? compareValues[0] : [];
+    const compareKeyColIndexes = compareHeaderRow.length
+      ? findRowKeyColumnIndexes_(compareHeaderRow, group.compareSheet)
+      : [];
+    const compareKeys = buildKeySet_(compareValues, compareKeyColIndexes);
 
     const supplierColIndex = findHeaderIndexLenient_(typeHeaderRow, PRODUCT_SUPPLIER_COLUMN_LABEL);
 
@@ -266,7 +280,7 @@ function checkAddedEntriesAction_() {
     const addedRows = [];
     for (let i = 1; i < typeValues.length; i++) {
       const row = typeValues[i];
-      if (compareKeys.has(rowKey_(row))) continue;
+      if (compareKeys.has(rowKey_(row, typeKeyColIndexes))) continue;
 
       // 조회할 때 사람이 직접 제품공급업체를 퍼시스충주1/2로 필터링해서
       // 붙여넣도록 안내하고 있는데, 필터가 안 된 자료가 섞여 들어와도
@@ -293,28 +307,41 @@ function checkAddedEntriesAction_() {
 
 
 /**************************************************************
- * E열(접수번호)+F열(순번)+J열(고객명)+L열(부품코드)+N열(부품명)을
- * 합친 비교 키. 접수번호+순번+고객명만으로는 한 접수건에 여러 부품이
- * 딸려 순번이 비어있거나 같은 값으로 중복될 수 있어서(실제로 이
- * 조합만으로 서로 다른 두 행이 같은 키로 묶여 "추가건 확인"에서
- * 중복 집계되거나 "삭제"에서 엉뚱한 행까지 함께 지워지는 문제가
- * 있었음), 부품을 구분하는 L열/N열까지 같이 넣어 키를 더 좁힙니다.
+ * 접수번호+순번+고객명+부품코드+부품명을 합친 비교 키. 접수번호+순번+
+ * 고객명만으로는 한 접수건에 여러 부품이 딸려 순번이 비어있거나 같은
+ * 값으로 중복될 수 있어서(실제로 이 조합만으로 서로 다른 두 행이
+ * 같은 키로 묶여 "추가건 확인"에서 중복 집계되거나 "삭제"에서 엉뚱한
+ * 행까지 함께 지워지는 문제가 있었음), 부품을 구분하는 부품코드/
+ * 부품명까지 같이 넣어 키를 더 좁힙니다. 열 번호가 아니라 헤더 이름
+ * 으로 찾은 keyColIndexes(findRowKeyColumnIndexes_ 참고)를 받으므로,
+ * ERP 다운로드 포맷이 바뀌어 열 순서가 달라져도 그대로 매칭됩니다.
  **************************************************************/
-function rowKey_(row) {
-  return [
-    normalizeText_(row[4]),  // E열 접수번호
-    normalizeText_(row[5]),  // F열 순번
-    normalizeText_(row[9]),  // J열 고객명
-    normalizeText_(row[11]), // L열 부품코드
-    normalizeText_(row[13])  // N열 부품명
-  ].join("||");
+const ROW_KEY_COLUMN_LABELS = ["접수번호", "순번", "고객명", "부품코드", "부품명"];
+
+function findRowKeyColumnIndexes_(header, sheetNameForError) {
+  return ROW_KEY_COLUMN_LABELS.map(function(label) {
+    const idx = findHeaderIndexLenient_(header, label);
+    if (idx === -1) {
+      throw new Error(
+        "'" + (sheetNameForError || "") + "'에서 '" + label + "' 열을 찾을 수 없습니다.\n\n" +
+        "헤더(1행)에 이 이름이 정확히 들어있는지 확인해 주세요."
+      );
+    }
+    return idx;
+  });
+}
+
+function rowKey_(row, keyColIndexes) {
+  return keyColIndexes.map(function(idx) {
+    return normalizeText_(row[idx]);
+  }).join("||");
 }
 
 
-function buildKeySet_(values) {
+function buildKeySet_(values, keyColIndexes) {
   const set = new Set();
   for (let i = 1; i < values.length; i++) {
-    set.add(rowKey_(values[i]));
+    set.add(rowKey_(values[i], keyColIndexes));
   }
   return set;
 }
@@ -496,21 +523,24 @@ function deleteAddedEntriesAction_(factoryLabel, rows) {
 
 
 /**************************************************************
- * rowKey_(E열 접수번호+F열 순번+J열 고객명+L열 부품코드+N열 부품명)로
- * sheet에서 rows에 해당하는 행을 찾아 지우고, 나머지 내용으로 시트를
- * 다시 씁니다. "삭제" 버튼 액션이 씁니다. 지운 행 수를 반환합니다.
+ * rowKey_(접수번호+순번+고객명+부품코드+부품명, 헤더 이름으로 찾은 열
+ * 기준)로 sheet에서 rows에 해당하는 행을 찾아 지우고, 나머지 내용으로
+ * 시트를 다시 씁니다. "삭제" 버튼 액션이 씁니다. 지운 행 수를
+ * 반환합니다.
  **************************************************************/
 function removeRowsByKey_(sheet, rows) {
-  const keysToRemove = new Set(rows.map(rowKey_));
   const allValues = readAllValues_(sheet);
   const header = allValues.length ? allValues[0] : [];
+  const keyColIndexes = header.length ? findRowKeyColumnIndexes_(header, sheet.getName()) : [];
+
+  const keysToRemove = new Set(rows.map(function(row) { return rowKey_(row, keyColIndexes); }));
 
   const remainingRows = [];
   let removedCount = 0;
 
   for (let i = 1; i < allValues.length; i++) {
     const row = allValues[i];
-    if (keysToRemove.has(rowKey_(row))) {
+    if (keysToRemove.has(rowKey_(row, keyColIndexes))) {
       removedCount++;
     } else {
       remainingRows.push(row);
