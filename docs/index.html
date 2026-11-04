@@ -614,6 +614,7 @@
         <div class="factory-tabs">
           <button type="button" id="dailyReceiptStatusManualBtn">일일접수현황 메뉴얼</button>
           <button type="button" id="dailyRecoveryStatusManualBtn">일일회수현황 메뉴얼</button>
+          <button type="button" id="dailyServiceInputManualBtn">서비스투입 메뉴얼</button>
           <button type="button" id="dailyServiceShipmentManualBtn">서비스출고건 확인 메뉴얼</button>
         </div>
         <div id="dailyReceiptStatusManualSubRow" class="factory-tabs" hidden>
@@ -626,6 +627,11 @@
           <button type="button" id="dailyRecoveryStatusVideoBtn">영상확인</button>
         </div>
         <div id="dailyRecoveryStatusVideoPanel" class="daily-video-inline-panel" hidden></div>
+        <div id="dailyServiceInputManualSubRow" class="factory-tabs" hidden>
+          <button type="button" id="dailyServiceInputManualOpenBtn">메뉴얼</button>
+          <button type="button" id="dailyServiceInputVideoBtn">영상확인</button>
+        </div>
+        <div id="dailyServiceInputVideoPanel" class="daily-video-inline-panel" hidden></div>
         <div id="dailyServiceShipmentManualSubRow" class="factory-tabs" hidden>
           <button type="button" id="dailyServiceShipmentManualOpenBtn">메뉴얼</button>
           <button type="button" id="dailyServiceShipmentVideoBtn">영상확인</button>
@@ -1429,11 +1435,16 @@
         dailyRecoveryStatusManualOpenBtn: document.getElementById("dailyRecoveryStatusManualOpenBtn"),
         dailyRecoveryStatusVideoBtn: document.getElementById("dailyRecoveryStatusVideoBtn"),
         dailyRecoveryStatusVideoPanel: document.getElementById("dailyRecoveryStatusVideoPanel"),
+        dailyServiceInputManualSubRow: document.getElementById("dailyServiceInputManualSubRow"),
+        dailyServiceInputManualOpenBtn: document.getElementById("dailyServiceInputManualOpenBtn"),
+        dailyServiceInputVideoBtn: document.getElementById("dailyServiceInputVideoBtn"),
+        dailyServiceInputVideoPanel: document.getElementById("dailyServiceInputVideoPanel"),
         dailyServiceShipmentManualSubRow: document.getElementById("dailyServiceShipmentManualSubRow"),
         dailyServiceShipmentManualOpenBtn: document.getElementById("dailyServiceShipmentManualOpenBtn"),
         dailyServiceShipmentVideoBtn: document.getElementById("dailyServiceShipmentVideoBtn"),
         dailyServiceShipmentVideoPanel: document.getElementById("dailyServiceShipmentVideoPanel"),
         dailyRecoveryStatusManualBtn: document.getElementById("dailyRecoveryStatusManualBtn"),
+        dailyServiceInputManualBtn: document.getElementById("dailyServiceInputManualBtn"),
         dailyServiceShipmentManualBtn: document.getElementById("dailyServiceShipmentManualBtn"),
         monthlyConfigPanelBody: document.getElementById("monthlyConfigPanelBody"),
         monthlyPageStatusLine: document.getElementById("monthlyPageStatusLine"),
@@ -3039,6 +3050,16 @@ ERP 유형별하자내역조회 부분에서 자료를 검색해야 합니다.
           } else {
             youtubeFrame.removeAttribute("src"); // src 제거로 재생 중지
           }
+        });
+      }
+
+      // 다른 메뉴얼 탭으로 전환할 때 이전 탭에 열려 있던 영상확인
+      // 패널이 그대로 남아 보이지 않도록 닫아줍니다(영상도 정지).
+      function closeDailyManualVideoPanel_(panel) {
+        if (!panel || panel.hidden) return;
+        panel.hidden = true;
+        panel.querySelectorAll(".daily-video-inline-youtube").forEach(function(frame) {
+          frame.removeAttribute("src");
         });
       }
 
@@ -7403,9 +7424,10 @@ ERP 유형별하자내역조회 부분에서 자료를 검색해야 합니다.
       // 서로 배타적인 탭입니다 — 하나를 누르면 그것만 활성화되고
       // 그 아래 메뉴얼/영상확인 서브 버튼도 그 버튼 것만 보입니다.
       const dailyManualExclusiveTabs_ = [
-        { btn: el.dailyReceiptStatusManualBtn, panel: el.dailyReceiptStatusManualSubRow },
-        { btn: el.dailyRecoveryStatusManualBtn, panel: el.dailyRecoveryStatusManualSubRow },
-        { btn: el.dailyServiceShipmentManualBtn, panel: el.dailyServiceShipmentManualSubRow }
+        { btn: el.dailyReceiptStatusManualBtn, panel: el.dailyReceiptStatusManualSubRow, videoPanel: el.dailyReceiptStatusVideoPanel },
+        { btn: el.dailyRecoveryStatusManualBtn, panel: el.dailyRecoveryStatusManualSubRow, videoPanel: el.dailyRecoveryStatusVideoPanel },
+        { btn: el.dailyServiceInputManualBtn, panel: el.dailyServiceInputManualSubRow, videoPanel: el.dailyServiceInputVideoPanel },
+        { btn: el.dailyServiceShipmentManualBtn, panel: el.dailyServiceShipmentManualSubRow, videoPanel: el.dailyServiceShipmentVideoPanel }
       ];
       dailyManualExclusiveTabs_.forEach(function(tab) {
         tab.btn.addEventListener("click", function() {
@@ -7414,6 +7436,7 @@ ERP 유형별하자내역조회 부분에서 자료를 검색해야 합니다.
             const isThisOne = other === tab && willActivate;
             other.btn.classList.toggle("active", isThisOne);
             other.panel.hidden = !isThisOne;
+            if (!isThisOne) closeDailyManualVideoPanel_(other.videoPanel);
           });
         });
       });
@@ -7429,6 +7452,12 @@ ERP 유형별하자내역조회 부분에서 자료를 검색해야 합니다.
       });
       el.dailyRecoveryStatusVideoBtn.addEventListener("click", function() {
         toggleDailyManualVideoPanel_(el.dailyRecoveryStatusVideoPanel, "일일회수현황 영상확인");
+      });
+      el.dailyServiceInputManualOpenBtn.addEventListener("click", function() {
+        showWorkManualPopup_("서비스투입 메뉴얼");
+      });
+      el.dailyServiceInputVideoBtn.addEventListener("click", function() {
+        toggleDailyManualVideoPanel_(el.dailyServiceInputVideoPanel, "서비스투입 영상확인");
       });
       el.dailyServiceShipmentManualOpenBtn.addEventListener("click", function() {
         showWorkManualPopup_("서비스출고건 확인 메뉴얼");
