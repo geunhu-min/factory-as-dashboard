@@ -1043,9 +1043,27 @@ function updateSummarySheetForWeek_(weekLabel, factoryRawRows) {
     return normalizeText_(row[22]) === "미회수";
   });
 
-  let addedCount = 0;
-  let block1End = null;
+  // 충주1/충주2 블록 사이에 끼워뒀던 빈 여백 행(SUMMARY_GAP_ROWS)은 매번
+  // 통째로 지우고 아래 2단계에서 필요할 때만 다시 끼웁니다. 여백을
+  // 지우지 않고 그대로 둔 채 매번 "1공장 블록 끝"을 다시 찾아 거기에
+  // 새 여백을 또 끼우면, 재실행할 때마다 빈 행이 계속 늘어납니다
+  // (이번 주차 데이터를 한 번 떼어냈다가 다시 넣는 과정에서, 하필 그
+  // 제조자의 시트 내 데이터 전부가 이번 주차뿐이면 떼어낸 직후에는
+  // "이 제조자가 원래 없었다"처럼 보여서 매번 새 여백을 끼우게 됨).
+  // 빈 여백은 어차피 데이터가 없어 지워도 잃을 정보가 없으므로, 안전하게
+  // 전부 지우고 필요한 만큼만 새로 끼웁니다.
+  removeMatchingRows_(sheet, function(row) {
+    return row.every(function(cell) { return normalizeText_(cell) === ""; });
+  });
 
+  let addedCount = 0;
+  const combinedByFactory = {};
+
+  // 1단계: 두 공장 모두 "이번 주차 기존 행"을 먼저 떼어내고, 새로 들어온
+  // 행과 합쳐 정렬까지만 해둡니다(아직 시트에 다시 넣지 않음). 떼어내는
+  // 동안 시트의 행 번호가 계속 바뀌므로, 두 공장을 다 떼어낸 뒤에
+  // 한꺼번에 넣어야 서로의 삽입 위치(anchor)가 떼어내는 중간 상태를
+  // 보고 어긋나는 일이 없습니다.
   ["1공장", "2공장"].forEach(function(factoryLabel) {
     const manufacturer = MANUFACTURER_BY_FACTORY_LABEL[factoryLabel];
     const incoming = factoryRawRows[factoryLabel] || [];
@@ -1080,27 +1098,51 @@ function updateSummarySheetForWeek_(weekLabel, factoryRawRows) {
       return incomingByKey.get(rowMatchKey_(row)) || row;
     });
 
-    const combined = groupAndSortRows_(existingUpdated.concat(newOnly));
+    combinedByFactory[factoryLabel] = groupAndSortRows_(existingUpdated.concat(newOnly));
+  });
 
-    if (combined.length) {
-      const anchor = findLastRowIndexByManufacturer_(sheet, manufacturer);
-      let insertAfter;
+  // 2단계: 떼어내기가 모두 끝난 지금의 시트 상태를 기준으로 삽입 위치를
+  // 새로 계산해서 1공장 → 2공장 순서로 넣습니다. anchor를 매번 지금
+  // 시트에서 다시 찾기 때문에(1단계에서 미리 구해둔 값을 재사용하지
+  // 않음), 1공장 분량을 먼저 넣고 나서 2공장을 넣어도 위치가 어긋나지
+  // 않습니다.
+  let block1End = null;
 
-      if (anchor !== -1) {
-        insertAfter = anchor;
-      } else if (factoryLabel === "2공장") {
-        const gapBase = block1End !== null ? block1End : sheet.getLastRow();
+  ["1공장", "2공장"].forEach(function(factoryLabel) {
+    const manufacturer = MANUFACTURER_BY_FACTORY_LABEL[factoryLabel];
+    const combined = combinedByFactory[factoryLabel];
+
+    if (!combined.length) {
+      return;
+    }
+
+    const anchor = findLastRowIndexByManufacturer_(sheet, manufacturer);
+    let insertAfter;
+
+    if (anchor !== -1) {
+      insertAfter = anchor;
+    } else if (factoryLabel === "2공장") {
+      // 충주2가 지금 이 시점 시트에 정말로 하나도 없을 때만(1단계에서
+      // 다 떼어낸 뒤에도 자리가 없을 때만) 충주1 블록 끝에 여백을 끼워
+      // 구분해줍니다. 충주1도 없으면 띄울 블록 자체가 없다는 뜻이니
+      // 여백 없이 바로 이어 붙입니다.
+      const existingFactory1Anchor = findLastRowIndexByManufacturer_(sheet, MANUFACTURER_BY_FACTORY_LABEL["1공장"]);
+      const gapBase = block1End !== null ? block1End : existingFactory1Anchor;
+
+      if (gapBase !== null && gapBase !== -1) {
         sheet.insertRowsAfter(gapBase, SUMMARY_GAP_ROWS);
         insertAfter = gapBase + SUMMARY_GAP_ROWS;
       } else {
         insertAfter = sheet.getLastRow();
       }
+    } else {
+      insertAfter = sheet.getLastRow();
+    }
 
-      const blockEnd = insertRowsAt_(sheet, insertAfter, combined, columnCount);
+    const blockEnd = insertRowsAt_(sheet, insertAfter, combined, columnCount);
 
-      if (factoryLabel === "1공장") {
-        block1End = blockEnd;
-      }
+    if (factoryLabel === "1공장") {
+      block1End = blockEnd;
     }
   });
 

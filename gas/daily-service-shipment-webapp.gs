@@ -226,40 +226,47 @@ function cleanServiceShipmentListAction_() {
     }
   });
 
-  // 같은 자재(자재코드+자재색상)가 포장라인/계획량/최초포장일 없이 다시
-  // 나오면(재투입 건), 시트1에서 바로 위쪽에 있던 같은 자재의 값을
-  // 그대로 채워 넣어서 원래 건과 같은 그룹으로 묶입니다.
+  // ERP 원본은 같은 자재(자재코드+자재색상)의 포장라인/계획량을 그룹 첫
+  // 행에만 적어두고, 그 아래 같은 자재의 추가 부품이동카드 행은 포장라인/
+  // 계획량 칸을 비워둔 채 최초포장일/부품이동카드번호만 자기 값으로
+  // 채워 보냅니다. 세 칸을 통째로 다 비어야만 채워 넣던 예전 로직은
+  // 이런 행(최초포장일은 있고 포장라인/계획량만 빈 경우)을 놓쳐서
+  // 포장라인이 빈 채로 남고, 정렬 1순위인 포장라인이 ""라 전체 맨 위로
+  // 올라가 버렸습니다. 이제 포장라인/계획량/최초포장일을 각각 따로
+  // 보고, 비어 있는 칸만 바로 위쪽 같은 자재의 마지막 값으로 채웁니다.
   const packagingLinePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("포장라인");
   const planQtyPos = CLEAN_FIXED_COLUMN_LABELS.indexOf("계획량");
   const firstPackagingDatePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("최초포장일");
   const materialCodePos = CLEAN_FIXED_COLUMN_LABELS.indexOf("자재코드");
   const materialColorPos = CLEAN_FIXED_COLUMN_LABELS.indexOf("자재색상");
+  const cardNumberPos = CLEAN_FIXED_COLUMN_LABELS.indexOf("부품이동카드번호");
 
   const lastKnownPlanByMaterial = {};
 
   allRows.forEach(function(values) {
     const materialKey = normalizeText_(values[materialCodePos]) + "||" + normalizeText_(values[materialColorPos]);
-    const isMissingPlan =
-      normalizeText_(values[packagingLinePos]) === "" && normalizeText_(values[firstPackagingDatePos]) === "";
+    const known = lastKnownPlanByMaterial[materialKey] || {};
 
-    if (isMissingPlan) {
-      const known = lastKnownPlanByMaterial[materialKey];
-      if (known) {
-        values[packagingLinePos] = known.line;
-        values[planQtyPos] = known.qty;
-        values[firstPackagingDatePos] = known.date;
-      }
-    } else {
-      lastKnownPlanByMaterial[materialKey] = {
-        line: values[packagingLinePos],
-        qty: values[planQtyPos],
-        date: values[firstPackagingDatePos]
-      };
+    if (normalizeText_(values[packagingLinePos]) === "" && known.line !== undefined) {
+      values[packagingLinePos] = known.line;
     }
+    if (normalizeText_(values[planQtyPos]) === "" && known.qty !== undefined) {
+      values[planQtyPos] = known.qty;
+    }
+    if (normalizeText_(values[firstPackagingDatePos]) === "" && known.date !== undefined) {
+      values[firstPackagingDatePos] = known.date;
+    }
+
+    if (normalizeText_(values[packagingLinePos]) !== "") known.line = values[packagingLinePos];
+    if (normalizeText_(values[planQtyPos]) !== "") known.qty = values[planQtyPos];
+    if (normalizeText_(values[firstPackagingDatePos]) !== "") known.date = values[firstPackagingDatePos];
+
+    lastKnownPlanByMaterial[materialKey] = known;
   });
 
-  // 1차 포장라인(오름차순) 2차 최초포장일(오래된순)로 정렬
-  sortServiceShipmentRows_(allRows, packagingLinePos, firstPackagingDatePos);
+  // 1차 포장라인(오름차순) 2차 최초포장일(오래된순) 3차 부품이동카드번호
+  // (같은 최초포장일+자재코드일 때만, 카드번호 속 날짜+일련번호 오름차순)로 정렬
+  sortServiceShipmentRows_(allRows, packagingLinePos, firstPackagingDatePos, materialCodePos, cardNumberPos);
 
   // Route1부터 순서대로 보면서, 값이 있는 마지막 Route 열까지만 남깁니다
   // (예: Route1~2만 값이 있으면 Route3~5는 결과 열 자체에서 뺌).
@@ -438,9 +445,11 @@ function applyFirstPackagingDateOverdueColors_(sheet, startRow, valueRows, dateC
 /**************************************************************
  * 1차 포장라인(오름차순, 한글/숫자 섞여도 자연스럽게) 2차 최초포장일
  * (오래된 날짜가 먼저 오도록)로 정렬합니다. 값이 없는 최초포장일은
- * 맨 뒤로 보냅니다.
+ * 맨 뒤로 보냅니다. 포장라인/최초포장일까지 같고 자재코드도 같은
+ * 품목끼리는 3차로 부품이동카드번호(예: C20261020928 → 날짜 20261020
+ * + 일련번호 928)를 오름차순 비교해 순서를 정합니다.
  **************************************************************/
-function sortServiceShipmentRows_(rows, packagingLinePos, dateColPos) {
+function sortServiceShipmentRows_(rows, packagingLinePos, dateColPos, materialCodePos, cardNumberPos) {
   rows.sort(function(a, b) {
     const lineCompare = normalizeText_(a[packagingLinePos])
       .localeCompare(normalizeText_(b[packagingLinePos]), "ko", { numeric: true, sensitivity: "base" });
@@ -449,11 +458,29 @@ function sortServiceShipmentRows_(rows, packagingLinePos, dateColPos) {
     const dateA = a[dateColPos] instanceof Date ? a[dateColPos].getTime() : NaN;
     const dateB = b[dateColPos] instanceof Date ? b[dateColPos].getTime() : NaN;
 
-    if (isNaN(dateA) && isNaN(dateB)) return 0;
-    if (isNaN(dateA)) return 1;
-    if (isNaN(dateB)) return -1;
-    return dateA - dateB;
+    if (isNaN(dateA) && !isNaN(dateB)) return 1;
+    if (!isNaN(dateA) && isNaN(dateB)) return -1;
+    if (!isNaN(dateA) && dateA !== dateB) return dateA - dateB;
+
+    if (normalizeText_(a[materialCodePos]) === normalizeText_(b[materialCodePos])) {
+      const cardA = extractServiceShipmentCardNumber_(a[cardNumberPos]);
+      const cardB = extractServiceShipmentCardNumber_(b[cardNumberPos]);
+      if (!isNaN(cardA) && !isNaN(cardB) && cardA !== cardB) return cardA - cardB;
+    }
+
+    return 0;
   });
+}
+
+/**************************************************************
+ * 부품이동카드번호(예: "C20261020928")에서 숫자 부분만 뽑아 하나의
+ * 정수로 반환합니다. 앞 8자리가 날짜(yyyyMMdd), 뒤 나머지가 일련번호라
+ * 숫자 그대로 비교하면 날짜가 먼저, 같은 날짜면 일련번호 순으로
+ * 자연스럽게 정렬됩니다. 숫자를 찾을 수 없으면 NaN을 반환합니다.
+ **************************************************************/
+function extractServiceShipmentCardNumber_(value) {
+  const match = normalizeText_(value).match(/\d+/);
+  return match ? Number(match[0]) : NaN;
 }
 
 

@@ -1127,6 +1127,12 @@ function saveRowsAction_(sheet, rows) {
   const conflicts = [];
   let updatedCount = 0;
 
+  // 회의자료 시트는 금액/패널티를 화면에서 고쳐 저장할 때, 그 행의
+  // 일일합계(R열)도 같이 다시 계산해서 써야 합니다 — 안 그러면 금액만
+  // 바뀌고 일일합계는 예전 값 그대로 남습니다(요약행 합계는 아래
+  // recomputeMeetingMaterialSummaryRow_로 따로 맞춤).
+  const isMeetingMaterialSheet = sheet.getName() === MEETING_MATERIAL_SHEET_NAME;
+
   rows.forEach(function(row) {
     const rowIndex = Number(row.rowIndex);
 
@@ -1150,9 +1156,22 @@ function saveRowsAction_(sheet, rows) {
     }
 
     const newValues = normalizeRowLength_(row.values || [], lastColumn);
+
+    if (isMeetingMaterialSheet &&
+        normalizeText_(newValues[0]) !== MEETING_MATERIAL_SUMMARY_LABEL &&
+        newValues.length > MEETING_MATERIAL_DAILY_TOTAL_COLUMN_INDEX) {
+      const amount = Number(String(newValues[MEETING_MATERIAL_AMOUNT_COLUMN_INDEX]).replace(/,/g, "")) || 0;
+      const penalty = Number(String(newValues[MEETING_MATERIAL_PENALTY_COLUMN_INDEX]).replace(/,/g, "")) || 0;
+      newValues[MEETING_MATERIAL_DAILY_TOTAL_COLUMN_INDEX] = amount + penalty;
+    }
+
     sheet.getRange(rowIndex, 1, 1, lastColumn).setValues([newValues]);
     updatedCount++;
   });
+
+  if (isMeetingMaterialSheet && updatedCount > 0) {
+    recomputeMeetingMaterialSummaryRow_(sheet);
+  }
 
   const latest = readSheetObject_(sheet);
 

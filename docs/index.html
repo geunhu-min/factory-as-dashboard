@@ -2387,6 +2387,73 @@
         const companyColIndex = findHeaderIndex_(header, "회사");
         const categoryColIndex = findHeaderIndex_(header, "구분");
 
+        // 회의자료 표에서 금액 칸을 고치면 그 행의 일일합계(금액+패널티)와
+        // 맨 아래 일일합계 요약행(금액/패널티/일일합계 합계)도 바로 같이
+        // 바뀌어 보이게 하기 위한 열 위치(회의자료가 아닌 다른 표에는
+        // 이 열들이 없어서 전부 -1이 되고, 아래 recalcDailyMeetingAmountTotals_는
+        // 그 경우 아무 것도 하지 않음).
+        const dailyAmountColIndex_ = findHeaderIndex_(header, "금액");
+        const dailyPenaltyColIndex_ = findHeaderIndex_(header, "패널티");
+        const dailyTotalColIndex_ = findHeaderIndex_(header, "일일합계");
+
+        // 금액/패널티 칸을 고친 직후, 그 행의 일일합계와 맨 아래 요약행의
+        // 금액/패널티/일일합계 합계를 다시 계산해서 화면에만 바로 반영합니다
+        // (표 전체를 다시 그리면 편집 중 포커스/커서가 끊기므로, 이미 그려진
+        // <td>를 직접 찾아 textContent만 갱신 — 실제 저장은 평소대로 "저장"
+        // 버튼을 눌러야 반영되고, 그때 서버에서도 같은 계산을 다시 해서 맞춤).
+        function recalcDailyMeetingAmountTotals_(editedRowPos) {
+          if (dailyAmountColIndex_ === -1 || dailyPenaltyColIndex_ === -1 || dailyTotalColIndex_ === -1) return;
+
+          function toAmountNumber_(value) {
+            return Number(String(value === null || value === undefined ? "" : value).replace(/,/g, "")) || 0;
+          }
+
+          const editedRow = dailyCurrentRows[editedRowPos];
+
+          if (editedRow && editedRow.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT) {
+            const rowTotal = toAmountNumber_(editedRow.values[dailyAmountColIndex_]) +
+              toAmountNumber_(editedRow.values[dailyPenaltyColIndex_]);
+            editedRow.values[dailyTotalColIndex_] = rowTotal;
+
+            const tr = dailyRowTrByPos_[editedRowPos];
+            const td = tr && tr.dailyTdByCol_ && tr.dailyTdByCol_[dailyTotalColIndex_];
+            if (td) td.textContent = String(rowTotal);
+          }
+
+          let amountTotal = 0;
+          let penaltyTotal = 0;
+          let summaryRowPos = -1;
+
+          dailyCurrentRows.forEach(function(row, pos) {
+            if (row.values[0] === MEETING_MATERIAL_SUMMARY_LABEL_TEXT) {
+              summaryRowPos = pos;
+              return;
+            }
+            amountTotal += toAmountNumber_(row.values[dailyAmountColIndex_]);
+            penaltyTotal += toAmountNumber_(row.values[dailyPenaltyColIndex_]);
+          });
+
+          if (summaryRowPos === -1) return;
+
+          const summaryRow = dailyCurrentRows[summaryRowPos];
+          summaryRow.values[dailyAmountColIndex_] = amountTotal;
+          summaryRow.values[dailyPenaltyColIndex_] = penaltyTotal;
+          summaryRow.values[dailyTotalColIndex_] = amountTotal + penaltyTotal;
+
+          const summaryTr = dailyRowTrByPos_[summaryRowPos];
+          if (summaryTr && summaryTr.dailyTdByCol_) {
+            if (summaryTr.dailyTdByCol_[dailyAmountColIndex_]) {
+              summaryTr.dailyTdByCol_[dailyAmountColIndex_].textContent = String(amountTotal);
+            }
+            if (summaryTr.dailyTdByCol_[dailyPenaltyColIndex_]) {
+              summaryTr.dailyTdByCol_[dailyPenaltyColIndex_].textContent = String(penaltyTotal);
+            }
+            if (summaryTr.dailyTdByCol_[dailyTotalColIndex_]) {
+              summaryTr.dailyTdByCol_[dailyTotalColIndex_].textContent = String(amountTotal + penaltyTotal);
+            }
+          }
+        }
+
         // 부품명 칸은 부품코드 칸 너비에 맞추고, 나머지 narrow 칸은 접수번호
         // 칸 너비에 맞춤(applyNarrowColumnWidths_ 참고). 품목명칭 칸은
         // 접수번호 칸의 2배 너비로 따로 맞춤(applyContentFitRelativeWidth_ 참고).
@@ -2408,6 +2475,7 @@
           if (isSummaryRow) tr.classList.add("daily-summary-row");
           if (!isSummaryRow) tr.classList.toggle("row-active", dailyIsRowActive_(rowPos));
           dailyRowTrByPos_[rowPos] = tr;
+          tr.dailyTdByCol_ = {};
 
           if (!isSummaryRow) {
             // 행 어디를 클릭하든(체크박스 포함) 그 행을 "마지막으로 클릭한
@@ -2497,6 +2565,8 @@
               });
             }
 
+            tr.dailyTdByCol_[colIndex] = td;
+
             if (isCellEditable) {
               td.addEventListener("input", function() {
                 // textContent는 <br>/줄바꿈을 무시하고 그냥 이어붙여버려서
@@ -2504,6 +2574,10 @@
                 // 화면에 보이는 줄바꿈 그대로 가져오는 innerText를 씁니다.
                 row.values[colIndex] = td.innerText;
                 tr.classList.toggle("dirty", isDailyRowDirty_(row));
+
+                if (colIndex === dailyAmountColIndex_ || colIndex === dailyPenaltyColIndex_) {
+                  recalcDailyMeetingAmountTotals_(rowPos);
+                }
               });
 
               // 클릭해서 들어가거나 Tab으로 다음 칸으로 넘어가도(둘 다
@@ -4711,7 +4785,7 @@ A/S자재 입고계획확정 에서 찾아서 발주취소 요청을 하셔야 �
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          const updatedNote = data.updatedCount ? ", 하자내역 변경 " + data.updatedCount + "건 수정" : "";
+          const updatedNote = data.updatedCount ? ", 내용 변경 " + data.updatedCount + "건 수정" : "";
           const skippedNote = data.skippedCount ? " (중복 " + data.skippedCount + "건 제외)" : "";
           setDailyStatus_("접수데이터에 " + data.addedCount + "건 누적저장했습니다" + updatedNote + "." + skippedNote, "ok");
         } catch (error) {
