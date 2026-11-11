@@ -27,6 +27,14 @@
  *   반환합니다(나중에 "데이터 교체" 같은 버튼을 새 탭에서 열 때 쓸 수
  *   있도록 미리 준비해둔 것 — 화면 쪽에는 스프레드시트 ID를 저장해두지
  *   않으므로 매번 물어봄).
+ * - doGet action="packagingKeys": "포장일확인(회의자료)" 버튼 전용 —
+ *   sheet(="회의자료"), date(연-월-일) 파라미터를 받아 A열 접수일자가
+ *   그 날짜와 같은 행만 이 스프레드시트 안에서 미리 걸러서, F열
+ *   부품코드/G열 색상/H열 생산로트/I열 고객명/M열 하자내역만 뽑아
+ *   반환합니다(daily-receipt-webapp.gs의 같은 이름 액션과 열 위치가
+ *   동일 — 회의자료 열 순서가 접수데이터 A~R열과 그대로 같아서).
+ *   아직 "접수데이터 누적저장"을 누르기 전, 당일 회의자료 기준으로
+ *   포장실적상세와 미리 대조하고 싶을 때 씁니다.
  * - doPost action="save": 화면에서 수정한 행을 저장합니다. 행마다
  *   loaded(불러왔을 때 값)와 values(수정한 값)를 같이 보내면, 저장
  *   직전 시트의 실제 값과 loaded를 비교해서 그 사이에 다른 곳에서
@@ -133,6 +141,11 @@ function doGet(e) {
 
     if (action === "spreadsheetUrl") {
       return jsonOutput_({ url: SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    }
+
+    if (action === "packagingKeys") {
+      const sheet = resolveSheet_(params.sheet, params.gid);
+      return jsonOutput_(packagingKeysForDateAction_(sheet, params.date));
     }
 
     return jsonOutput_({ error: "알 수 없는 action입니다: " + action });
@@ -1106,6 +1119,42 @@ function readSheetObject_(sheet) {
   }
 
   return { sheet: sheet.getName(), gid: sheet.getSheetId(), header: header, rows: rows };
+}
+
+
+/**************************************************************
+ * "포장일확인(회의자료)" 버튼 전용. A열 접수일자가 dateValue("yyyy-MM-dd")와
+ * 같은 행만 이 시트(회의자료) 안에서 걸러서, F열 부품코드/G열 색상/H열
+ * 생산로트/I열 고객명/M열 하자내역만 뽑아 반환합니다. daily-receipt-webapp.gs의
+ * packagingKeysForDateAction_과 완전히 같은 로직 — 회의자료 열 순서가
+ * 접수데이터(시트1) A~R열과 그대로 같아서 열 위치도 동일합니다. 맨 아래
+ * "일일합계" 요약행은 A열 값이 날짜 형식이 아니라 dateValue와 절대
+ * 같아질 수 없으므로 별도 제외 처리 없이도 자동으로 걸러집니다.
+ **************************************************************/
+function packagingKeysForDateAction_(sheet, dateValue) {
+  const lastRow = sheet.getLastRow();
+  const lastColumn = sheet.getLastColumn();
+
+  if (lastRow < 2 || lastColumn < 1) {
+    return { keys: [] };
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+  const keys = [];
+
+  values.forEach(function(row) {
+    if (formatDateOnly_(row[0]) !== dateValue) return;
+
+    keys.push({
+      partCode: normalizeText_(row[5]),    // F열 부품코드
+      color: normalizeText_(row[6]),       // G열 색상
+      lot: normalizeText_(row[7]),         // H열 생산로트
+      customerName: normalizeText_(row[8]), // I열 고객명
+      defect: normalizeText_(row[12])      // M열 하자내역
+    });
+  });
+
+  return { keys: keys };
 }
 
 

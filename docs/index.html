@@ -744,6 +744,7 @@
       <div id="dailyPackagingActions" class="toolbar factory-actions">
         <button type="button" id="dailyPackagingReplaceBtn">포장실적상세 데이터 교체</button>
         <button type="button" id="dailyPackagingDateCheckBtn">포장일확인</button>
+        <button type="button" id="dailyPackagingDateCheckMeetingBtn">포장일확인(회의자료)</button>
         <button id="dailyPackagingDownloadBtn">포장일엑셀다운로드</button>
       </div>
 
@@ -1513,6 +1514,7 @@
         dailyPackagingActions: document.getElementById("dailyPackagingActions"),
         dailyPackagingReplaceBtn: document.getElementById("dailyPackagingReplaceBtn"),
         dailyPackagingDateCheckBtn: document.getElementById("dailyPackagingDateCheckBtn"),
+        dailyPackagingDateCheckMeetingBtn: document.getElementById("dailyPackagingDateCheckMeetingBtn"),
         dailyPackagingDownloadBtn: document.getElementById("dailyPackagingDownloadBtn"),
         dailyStatusLine: document.getElementById("dailyStatusLine"),
         dailyTableWrap: document.getElementById("dailyTableWrap"),
@@ -4909,12 +4911,26 @@ A/S자재 입고계획확정 에서 찾아서 발주취소 요청을 하셔야 �
         }
       }
 
-      async function checkDailyPackagingDate() {
-        const receiptUrl = el.dailyReceiptWebappUrl.value.trim();
+      // source가 "meeting"이면 아직 "접수데이터 누적저장"을 누르기 전인
+      // 일일접수현황의 "회의자료" 시트를 기준으로, 지정 안 하면(기본)
+      // 평소처럼 "접수데이터" 쪽을 기준으로 포장실적상세와 대조합니다.
+      // 회의자료는 그날 작업 중에도 계속 채워지므로, 최종 누적저장 전에
+      // 중간중간 포장 여부를 미리 확인하고 싶을 때 씁니다. 두 경로 모두
+      // 같은 18개 열 구성을 쓰므로(부품코드/색상/생산로트/고객명/하자내역
+      // 위치가 동일), 대조 로직 자체는 완전히 같습니다.
+      async function checkDailyPackagingDate(source) {
+        const useMeeting = source === "meeting";
+        const keysSourceLabel = useMeeting ? "회의자료" : "접수데이터";
+        const keysSheetName = useMeeting ? MEETING_MATERIAL_SHEET_NAME : DAILY_SOURCE_SHEET_NAME;
+        const keysUrl = (useMeeting ? el.dailyReceiptStatusWebappUrl : el.dailyReceiptWebappUrl).value.trim();
         const packagingUrl = el.dailyPackagingWebappUrl.value.trim();
+        const triggerBtn = useMeeting ? el.dailyPackagingDateCheckMeetingBtn : el.dailyPackagingDateCheckBtn;
 
-        if (!receiptUrl) {
-          setDailyStatus_("접수데이터 웹 앱 URL을 먼저 입력하고 저장하세요.", "error");
+        if (!keysUrl) {
+          setDailyStatus_(
+            (useMeeting ? "일일접수현황" : "접수데이터") + " 웹 앱 URL을 먼저 입력하고 저장하세요.",
+            "error"
+          );
           return;
         }
 
@@ -4926,19 +4942,19 @@ A/S자재 입고계획확정 에서 찾아서 발주취소 요청을 하셔야 �
         const dateValue = await pickDailyPackagingDate("어떤 접수일자를 확인할까요?", true);
         if (!dateValue) return;
 
-        setDailyStatus_(dateValue + " 기준 포장 실적 확인 중...", "");
-        el.dailyPackagingDateCheckBtn.disabled = true;
+        setDailyStatus_(dateValue + " 기준 " + keysSourceLabel + " 포장 실적 확인 중...", "");
+        triggerBtn.disabled = true;
 
         try {
-          // 1) 접수데이터 웹앱에서 그 날짜에 해당하는 부품코드/색상/생산로트/
-          //    하자내역만 가볍게 받아옵니다(시트 전체를 내려받지 않음 —
-          //    접수데이터가 누적되면서 매우 커져도 이 응답은 그날 건수만큼만).
-          const keysRequestUrl = receiptUrl + (receiptUrl.includes("?") ? "&" : "?") +
-            "action=packagingKeys&sheet=" + encodeURIComponent(DAILY_SOURCE_SHEET_NAME) +
+          // 1) 접수데이터(또는 회의자료) 웹앱에서 그 날짜에 해당하는 부품코드/
+          //    색상/생산로트/하자내역만 가볍게 받아옵니다(시트 전체를
+          //    내려받지 않음 — 누적되면서 매우 커져도 이 응답은 그날 건수만큼만).
+          const keysRequestUrl = keysUrl + (keysUrl.includes("?") ? "&" : "?") +
+            "action=packagingKeys&sheet=" + encodeURIComponent(keysSheetName) +
             "&date=" + encodeURIComponent(dateValue);
           const keysResponse = await fetch(keysRequestUrl);
           const keysData = await keysResponse.json();
-          if (keysData.error) throw new Error("접수데이터: " + keysData.error);
+          if (keysData.error) throw new Error(keysSourceLabel + ": " + keysData.error);
 
           // 2) 그 키 목록을 포장실적상세 웹앱에 그대로 넘겨서, 대조/정렬/
           //    시트2 쓰기까지 전부 그 서버 쪽에서 한 번에 처리합니다
@@ -4966,7 +4982,7 @@ A/S자재 입고계획확정 에서 찾아서 발주취소 요청을 하셔야 �
           dailyCheckedRowPositions = new Set();
           setDailyStatus_("포장일확인 실패: " + error.message, "error");
         } finally {
-          el.dailyPackagingDateCheckBtn.disabled = false;
+          triggerBtn.disabled = false;
         }
       }
 
@@ -7390,7 +7406,8 @@ A/S자재 입고계획확정 에서 찾아서 발주취소 요청을 하셔야 �
         uploadDailyRecoveryStatusImage_(file);
       });
       el.dailyPackagingReplaceBtn.addEventListener("click", replaceDailyPackagingData);
-      el.dailyPackagingDateCheckBtn.addEventListener("click", checkDailyPackagingDate);
+      el.dailyPackagingDateCheckBtn.addEventListener("click", function() { checkDailyPackagingDate(); });
+      el.dailyPackagingDateCheckMeetingBtn.addEventListener("click", function() { checkDailyPackagingDate("meeting"); });
       el.dailyPackagingDownloadBtn.addEventListener("click", downloadDailyPackagingExcel);
       el.line4PhotoDownloadBtn.addEventListener("click", downloadLine4DefectPhotosExcel_);
       // 정리시트/퍼시스/일룸 등 하위 탭과 유상마감다운로드 버튼들은
