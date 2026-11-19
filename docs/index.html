@@ -2106,6 +2106,12 @@
           // (회의자료 등). 이 열만 contentEditable이 되므로 Tab 이동도
           // 자연스럽게 이 열들 사이에서만 됨.
           editableColumnLabels: (options && options.editableColumnLabels) || null,
+          // 지정하면(예: 회의자료의 구분/접수번호/순번/고객명) 이 이름의
+          // 열만 editable이 true여도 수정 못 하게 막습니다(그 외 열은
+          // 평소처럼 전부 수정 가능 — editableColumnLabels와 반대로
+          // "막을 열만" 콕 집어 지정하는 용도). 지정 안 하면(null) 이 제한
+          // 없음.
+          nonEditableColumnLabels: (options && options.nonEditableColumnLabels) || null,
           sortFilterEnabled: !!(options && options.sortFilterEnabled),
           // 지정하면(예: 추가건 확인) 이 이름의 열만, 이 순서대로 보여주고
           // 나머지는 숨깁니다. 지정 안 하면(null) 기존처럼 전체 열을 원래
@@ -2287,6 +2293,11 @@
         // null로 두고, 아래에서 "전체 열 다 수정 가능"으로 처리합니다.
         const editableColIndexes_ = dailyTableOptions_.editableColumnLabels
           ? dailyTableOptions_.editableColumnLabels
+              .map(function(label) { return findHeaderIndex_(header, label); })
+              .filter(function(i) { return i !== -1; })
+          : null;
+        const nonEditableColIndexes_ = dailyTableOptions_.nonEditableColumnLabels
+          ? dailyTableOptions_.nonEditableColumnLabels
               .map(function(label) { return findHeaderIndex_(header, label); })
               .filter(function(i) { return i !== -1; })
           : null;
@@ -2516,7 +2527,8 @@
             const cellValue = row.values[colIndex];
             const td = document.createElement("td");
             const isCellEditable = editable && !isSummaryRow &&
-              (editableColIndexes_ ? editableColIndexes_.indexOf(colIndex) !== -1 : true);
+              (editableColIndexes_ ? editableColIndexes_.indexOf(colIndex) !== -1 : true) &&
+              (nonEditableColIndexes_ ? nonEditableColIndexes_.indexOf(colIndex) === -1 : true);
             td.contentEditable = isCellEditable ? "true" : "false";
 
             const isDateCol = dateColIndexes.indexOf(colIndex) !== -1 || looksLikeIsoDateTime_(cellValue);
@@ -3612,7 +3624,11 @@ A/S자재 입고설정에서 조회하시면 됩니다.
             return row.values[0] !== MEETING_MATERIAL_SUMMARY_LABEL_TEXT;
           }).length;
 
-          renderDailyTable_(data.header || [], meetingMaterialRows, { checkable: true, editable: true });
+          renderDailyTable_(data.header || [], meetingMaterialRows, {
+            checkable: true,
+            editable: true,
+            nonEditableColumnLabels: ["구분", "접수번호", "순번", "고객명"]
+          });
           dailyMeetingMaterialOrderDirty = false;
           setDailyStatus_(MEETING_MATERIAL_SHEET_NAME + " " + meetingMaterialRealCount + "건 불러왔습니다.", "ok");
         } catch (error) {
@@ -4653,7 +4669,11 @@ A/S자재 입고설정에서 조회하시면 됩니다.
           const data = await response.json();
           if (data.error) throw new Error(data.error);
 
-          renderDailyTable_(data.header || [], data.rows || [], { checkable: true, editable: true });
+          renderDailyTable_(data.header || [], data.rows || [], {
+            checkable: true,
+            editable: true,
+            nonEditableColumnLabels: ["구분", "접수번호", "순번", "고객명"]
+          });
 
           const conflictCount = (data.conflicts || []).length;
           const message = data.updatedCount + "건 저장했습니다." +
